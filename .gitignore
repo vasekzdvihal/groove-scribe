@@ -24,3 +24,9 @@ www/
 /android/
 /ios/
 .gradle/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

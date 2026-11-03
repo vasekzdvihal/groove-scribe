@@ -1055,6 +1055,19 @@ function GrooveWriter() {
         win.focus();
         break;
 
+      case 'library':
+        win = window.open('./profile.html', '_blank');
+        win.focus();
+        break;
+
+      case 'saveToLibrary': {
+        const grooveUrl = get_FullURLForPage();
+        const search = grooveUrl.slice(grooveUrl.indexOf('?'));
+        win = window.open('./profile.html?save=' + encodeURIComponent(search), '_blank');
+        win.focus();
+        break;
+      }
+
       case 'undo':
         root.undoCommand();
         break;

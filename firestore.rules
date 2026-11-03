@@ -1,0 +1,88 @@
+rules_version = '2';
+
+// Every document is private to its owner. Sharing is not built yet: lessons and
+// grooves are top-level with an ownerId so it can be added without a migration.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsExisting() {
+      return signedIn() && resource.data.ownerId == request.auth.uid;
+    }
+
+    function ownerIdIsCaller() {
+      return signedIn() && request.resource.data.ownerId == request.auth.uid;
+    }
+
+    function ownerIdUnchanged() {
+      return request.resource.data.ownerId == resource.data.ownerId;
+    }
+
+    function createdAtUnchanged() {
+      return request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function isShortString(value, maxLength) {
+      return value is string && value.size() <= maxLength;
+    }
+
+    match /users/{uid} {
+      function validProfile() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['displayName', 'photoURL', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['displayName', 'createdAt', 'updatedAt'])
+          && isShortString(data.displayName, 200)
+          && (!('photoURL' in data) || data.photoURL == null || isShortString(data.photoURL, 2000))
+          && data.updatedAt == request.time;
+      }
+
+      allow read, delete: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && validProfile() && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && request.auth.uid == uid
+        && validProfile() && createdAtUnchanged();
+    }
+
+    match /lessons/{lessonId} {
+      function validLesson() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['ownerId', 'name', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['ownerId', 'name', 'createdAt', 'updatedAt'])
+          && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+          && data.updatedAt == request.time;
+      }
+
+      allow read, delete: if ownsExisting();
+      allow create: if ownerIdIsCaller()
+        && validLesson() && request.resource.data.createdAt == request.time;
+      allow update: if ownsExisting() && ownerIdUnchanged()
+        && validLesson() && createdAtUnchanged();
+    }
+
+    match /grooves/{grooveId} {
+      function callerOwnsLesson(lessonId) {
+        return get(/databases/$(database)/documents/lessons/$(lessonId)).data.ownerId
+          == request.auth.uid;
+      }
+
+      function validGroove() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['ownerId', 'lessonId', 'title', 'query', 'createdAt', 'updatedAt'])
+          && data.keys().hasAll(['ownerId', 'lessonId', 'title', 'query', 'createdAt', 'updatedAt'])
+          && isShortString(data.title, 200)
+          && isShortString(data.query, 8000)
+          && data.query.matches('[?].+')
+          && (data.lessonId == null || (data.lessonId is string && callerOwnsLesson(data.lessonId)))
+          && data.updatedAt == request.time;
+      }
+
+      allow read, delete: if ownsExisting();
+      allow create: if ownerIdIsCaller()
+        && validGroove() && request.resource.data.createdAt == request.time;
+      allow update: if ownsExisting() && ownerIdUnchanged()
+        && validGroove() && createdAtUnchanged();
+    }
+  }
+}

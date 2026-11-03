@@ -16,6 +16,7 @@ js/jsmidgen.js
 js/unmute.js
 js/share-button.min.js
 js/*.min.js
+js/vendor/
 css/share-button.min.css
 *.min.css
 MIDI.js/

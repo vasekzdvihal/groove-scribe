@@ -1,0 +1,162 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f4;
+  --surface: #ffffff;
+  --text: #1d2327;
+  --muted: #5a646b;
+  --border: #c9ced1;
+  --accent: #1b6fa8;
+  --accent-text: #ffffff;
+  --danger: #a32020;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17191b;
+    --surface: #222528;
+    --text: #eceef0;
+    --muted: #a7b0b6;
+    --border: #41474c;
+    --accent: #63b1e6;
+    --accent-text: #0d1a23;
+    --danger: #f08a8a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font:
+    16px/1.5 system-ui,
+    sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+#account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+#account img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 {
+  margin: 8px 0 16px;
+  font-size: 28px;
+}
+
+h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+
+.panel,
+.lesson {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+form.panel {
+  display: grid;
+  gap: 8px;
+}
+
+label {
+  font-weight: 600;
+}
+
+input,
+select,
+button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+
+button[type='submit'],
+#signIn {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+.lesson-header,
+.groove {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.groove-list {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.groove {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+
+.groove a {
+  flex: 1 1 200px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  margin: 12px 0 0;
+  color: var(--muted);
+}
+
+#message {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}

@@ -17,6 +17,7 @@ const OUT = join(repoRoot, 'www');
 // The app entry + app-wired pages, plus every asset dir they load.
 const ITEMS = [
   'index.html',
+  'profile.html',
   'GrooveEmbed.html',
   'gscribe_help.html',
   'gscribe_about.html',

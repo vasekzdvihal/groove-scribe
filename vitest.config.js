@@ -23,6 +23,7 @@ export default defineConfig({
         'js/jsmidgen.js',
         'js/share-button.min.js',
         'js/*.min.js',
+        'js/vendor/**',
       ],
     },
   },
