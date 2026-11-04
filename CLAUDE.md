@@ -1,7 +1,7 @@
 # GrooveScribe — project guide for Claude
 
-Browser-based drum-notation editor. Runs entirely client-side (no server, no
-build step). A groove is encoded in the URL, rendered to sheet music as SVG
+Browser-based drum-notation editor. Runs client-side with no build step. Accounts
+and saved grooves use Firebase; the editor itself still works without it. A groove is encoded in the URL, rendered to sheet music as SVG
 (via the vendored `abc2svg`) and played back as MIDI (via `jsmidgen` +
 `MIDI.js` soundfonts).
 
@@ -17,13 +17,15 @@ build step). A groove is encoded in the URL, rendered to sheet music as SVG
 
 | Command                | Expectation                                                                                                                                                                 |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **697 pass**                                                                                                                                            |
+| `npm test`             | Vitest unit suite — **725 pass**                                                                                                                                            |
 | `npm run test:e2e`     | Playwright golden-master — **71 pass**. Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
 | `npm run lint`         | ESLint — **0 errors** (~82 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                               |
-| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc — ~296 known errors baseline; changes should be typecheck-**neutral**                                                                      |
+| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc — ~254 known errors baseline; changes should be typecheck-**neutral**                                                                      |
 | `npm run knip`         | no unused exports/files                                                                                                                                                     |
 | `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                    |
 | `npm run check`        | lint + typecheck + format:check + test in one shot                                                                                                                          |
+| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                  |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                               |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -80,6 +82,25 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
   `groove_display/`). Legacy source is loaded via `tests/helpers/` shims. See `tests/README.md`.
 - `tests-e2e/` — Playwright (Chromium). `golden-master.spec.js` snapshots SVG+MIDI for a
   groove corpus; `fixtures.js` blocks non-localhost requests for hermetic runs.
+
+### Accounts and library (`js/cloud/`)
+
+- Firebase project `groove-scribe-zdvihal`. Deploy with `npm run deploy`. Firestore is in `eur3`.
+- The library is a slide-in panel in the editor (`libraryPanel.js`, `css/library-panel.css`).
+  `main.js` passes it a small `editor` object, so the panel never touches editor internals.
+  `profile.html` only redirects to `index.html#library`.
+- The Firebase SDK loads when the user first opens the panel. The editor page load and the embed
+  pages never download it.
+- A saved groove is its URL query string. `grooveLink.js` keeps only known groove parameters.
+- `lessons` and `grooves` are top-level documents with an `ownerId`, private to the owner in
+  `firestore.rules`. This lets sharing arrive later without a data migration.
+- `js/vendor/firebase.js` is generated: run `npm run vendor:firebase` after a Firebase bump, and
+  add new SDK functions to `scripts/firebase-entry.js`.
+- `index.html?emulator=1` on localhost uses the emulators. Tests sign in with an emulator
+  credential because the emulator popup loads external scripts and sometimes hangs.
+- Golden-master baselines are Linux-only. On macOS Playwright writes new `*-chromium-darwin*`
+  files and reports a failure. To verify there, compare those files with the Linux baselines
+  using `cmp`, then delete them. Never commit them.
 
 ## Conventions & gotchas
 

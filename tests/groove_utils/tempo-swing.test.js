@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { newGrooveUtils } from '../helpers/legacyLoader.js';
 
@@ -354,11 +355,10 @@ describe('GrooveUtils MIDI player HTML & base locations', () => {
     // groove_utils.js self-locates via import.meta.url (the module-safe
     // replacement for document.currentScript.src) and goes up two directories
     // from js/groove_utils.js to the app root. Under the test loader that URL is
-    // a file:// path ending in the repo directory.
+    // a file:// path ending in the repo directory, whatever that directory is named.
     it('getGrooveUtilsBaseLocation derives the app root from the module URL', () => {
       const base = gu.getGrooveUtilsBaseLocation();
-      expect(base.endsWith('/')).toBe(true);
-      expect(base.endsWith('GrooveScribe/')).toBe(true);
+      expect(base).toBe(pathToFileURL(process.cwd() + '/').href);
       // No longer the dead hardcoded Google Drive fallback.
       expect(base).not.toContain('googledrive.com');
     });

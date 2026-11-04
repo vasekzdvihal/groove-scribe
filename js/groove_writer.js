@@ -3566,6 +3566,7 @@ function GrooveWriter() {
 
     if (
       myGrooveData.notesPerMeasure != class_notes_per_measure ||
+      myGrooveData.timeDivision != class_time_division ||
       class_number_of_measures != myGrooveData.numberOfMeasures
     ) {
       class_number_of_measures = myGrooveData.numberOfMeasures;

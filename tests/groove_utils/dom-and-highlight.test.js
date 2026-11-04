@@ -18,6 +18,9 @@ describe('GrooveUtils context menu handling', () => {
   let gu;
   beforeEach(async () => {
     gu = await newGrooveUtils();
+    // showContextMenu starts a 100ms timer. With real timers it can fire after the
+    // test environment has closed, and then `document` is not defined.
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
@@ -84,7 +87,6 @@ describe('GrooveUtils context menu handling', () => {
     });
 
     it('wires up document.onclick after a 100ms delay, making a document click close the menu', () => {
-      vi.useFakeTimers();
       document.body.innerHTML = '<div id="ctxMenu" style="display:none;"></div>';
       const menu = document.getElementById('ctxMenu');
 

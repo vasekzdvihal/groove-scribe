@@ -56,6 +56,7 @@ export default [
       'js/unmute.js',
       'js/share-button.min.js',
       'js/*.min.js',
+      'js/vendor/**',
     ],
   },
 
@@ -111,16 +112,30 @@ export default [
       'js/grooves.js',
       'js/groove_display.js',
       'js/main.js',
+      'js/cloud/**/*.js',
     ],
     languageOptions: {
       sourceType: 'module',
     },
   },
 
+  // assertSucceeds and assertFails are the assertions in the security-rules tests.
+  {
+    files: ['tests-rules/**/*.js'],
+    rules: { 'sonarjs/assertions-in-tests': 'off' },
+  },
+
   // Test suite + build config: modern ESM, Node + Vitest environment. Covers the
   // Vitest suite (tests/), the Playwright suite (tests-e2e/), and *.config.js.
   {
-    files: ['tests/**/*.js', 'tests-e2e/**/*.js', '*.config.js'],
+    files: [
+      'tests/**/*.js',
+      'tests-e2e/**/*.js',
+      'tests-rules/**/*.js',
+      'tests-cloud/**/*.js',
+      'scripts/**/*.js',
+      '*.config.js',
+    ],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',

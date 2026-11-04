@@ -20,7 +20,11 @@
     "knip": "knip",
     "check": "npm run lint && npm run typecheck && npm run format:check && npm run test",
     "build:www": "node scripts/build-www.mjs",
-    "cap:sync": "npm run build:www && cap sync"
+    "cap:sync": "npm run build:www && cap sync",
+    "vendor:firebase": "node scripts/vendor-firebase.mjs",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-groovescribe 'vitest run --config vitest.rules.config.js'",
+    "test:cloud": "firebase emulators:exec --only auth,firestore --project demo-groovescribe 'playwright test --config playwright.cloud.config.js'",
+    "deploy": "firebase deploy --only hosting,firestore"
   },
   "license": "GPL-2.0-or-later",
   "devDependencies": {
@@ -28,11 +32,15 @@
     "@capacitor/cli": "6.2.1",
     "@capacitor/ios": "6.2.1",
     "@eslint/js": "^9.39.5",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@playwright/test": "^1.61.1",
     "@vitest/coverage-v8": "^3.2.4",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-sonarjs": "^4.1.0",
+    "firebase": "^13.2.0",
+    "firebase-tools": "^15.34.2",
     "globals": "^17.7.0",
     "jsdom": "^26.1.0",
     "knip": "^6.26.0",
