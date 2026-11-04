@@ -85,7 +85,11 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 
 ### Accounts and library (`js/cloud/`)
 
-- Firebase project `groove-scribe-zdvihal`. Deploy with `npm run deploy`. Firestore is in `eur3`.
+- Firebase project `groove-scribe-zdvihal`. Firestore is in `eur3`.
+- A push to `master` that passes the tests deploys through `.github/workflows/ci-deploy.yml`.
+  There is no stored secret: `scripts/setup-deploy.sh` lets only this repo's `master` deploy.
+  `npm run deploy` still works by hand. Keep the Playwright image version in the workflow equal to
+  `@playwright/test` in `package-lock.json`, or the golden master runs on a different browser.
 - The library is a slide-in panel in the editor (`libraryPanel.js`, `css/library-panel.css`).
   `main.js` passes it a small `editor` object, so the panel never touches editor internals.
   `profile.html` only redirects to `index.html#library`.
