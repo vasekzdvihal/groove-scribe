@@ -18,7 +18,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: 'python3 -m http.server 8001 --bind 127.0.0.1',
-    url: 'http://localhost:8001/profile.html',
+    url: 'http://localhost:8001/index.html',
     reuseExistingServer: !process.env.CI,
     timeout: 30_000,
   },

@@ -25,7 +25,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                    |
 | `npm run check`        | lint + typecheck + format:check + test in one shot                                                                                                                          |
 | `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                  |
-| `npm run test:cloud`   | Library page in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                               |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -83,17 +83,20 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - `tests-e2e/` — Playwright (Chromium). `golden-master.spec.js` snapshots SVG+MIDI for a
   groove corpus; `fixtures.js` blocks non-localhost requests for hermetic runs.
 
-### Accounts and library (`js/cloud/`, `profile.html`)
+### Accounts and library (`js/cloud/`)
 
 - Firebase project `groove-scribe-zdvihal`. Deploy with `npm run deploy`. Firestore is in `eur3`.
-- Only `profile.html` loads Firebase. The editor sends a groove there with
-  `profile.html?save=<query>`, so the editor and the embed pages keep no Firebase dependency.
+- The library is a slide-in panel in the editor (`libraryPanel.js`, `css/library-panel.css`).
+  `main.js` passes it a small `editor` object, so the panel never touches editor internals.
+  `profile.html` only redirects to `index.html#library`.
+- The Firebase SDK loads when the user first opens the panel. The editor page load and the embed
+  pages never download it.
 - A saved groove is its URL query string. `grooveLink.js` keeps only known groove parameters.
 - `lessons` and `grooves` are top-level documents with an `ownerId`, private to the owner in
   `firestore.rules`. This lets sharing arrive later without a data migration.
 - `js/vendor/firebase.js` is generated: run `npm run vendor:firebase` after a Firebase bump, and
   add new SDK functions to `scripts/firebase-entry.js`.
-- `profile.html?emulator=1` on localhost uses the emulators. Tests sign in with an emulator
+- `index.html?emulator=1` on localhost uses the emulators. Tests sign in with an emulator
   credential because the emulator popup loads external scripts and sometimes hangs.
 - Golden-master baselines are Linux-only. On macOS Playwright writes new `*-chromium-darwin*`
   files and reports a failure. To verify there, compare those files with the Linux baselines

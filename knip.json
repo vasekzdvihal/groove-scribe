@@ -3,7 +3,6 @@
   "entry": [
     "index.html",
     "profile.html",
-    "js/cloud/profilePage.js",
     "scripts/*.{js,mjs}",
     "tests/**/*.test.js",
     "tests-e2e/**/*.spec.js",

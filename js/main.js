@@ -10,6 +10,7 @@
 import { GrooveWriter } from './groove_writer.js';
 import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
+import { initLibraryPanel } from './cloud/libraryPanel.js';
 
 // Inline HTML handlers (onclick="myGrooveWriter.…") and other consumers still
 // reference these as globals, so expose them on window.
@@ -74,6 +75,24 @@ for (let m = 1; m <= myGrooveWriter.numberOfMeasures(); m++) {
 fillContainer('measureContainer', gridHTML);
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
+
+// The library panel needs a Google sign-in popup, which the native app shell does not
+// support yet, and GrooveDB authoring has its own save flow.
+if (!utils.grooveDBAuthoring && !window.Capacitor) {
+  initLibraryPanel({
+    // Read now: the editor rewrites the URL on load.
+    search: window.location.search,
+    editor: {
+      openGroove(query) {
+        utils.stopMIDI_playback();
+        myGrooveWriter.loadNewGroove(query);
+      },
+      currentQuery: () =>
+        utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
+      currentTitle: () => document.getElementById('tuneTitle').value.trim(),
+    },
+  });
+}
 
 // Initialize the notes/player once the page has fully loaded (matches the
 // original window.onload handler).

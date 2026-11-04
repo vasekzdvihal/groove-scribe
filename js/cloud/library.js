@@ -34,7 +34,7 @@ export function createLibrary(sdk, db, uid) {
     },
 
     listLessons: () => listOwned(lessons, 'name', 'asc'),
-    listGrooves: () => listOwned(grooves, 'updatedAt', 'desc'),
+    listGrooves: () => listOwned(grooves, 'createdAt', 'asc'),
 
     async createLesson(name) {
       const ref = await sdk.addDoc(lessons, {
