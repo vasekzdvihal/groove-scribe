@@ -1,0 +1,86 @@
+name: CI and deploy
+
+# Runs the tests on every pull request and on every push to master.
+# A push to master that passes all tests deploys Hosting and the Firestore rules and indexes.
+# "Run workflow" in the Actions tab on master runs the tests and deploys again.
+#
+# The deploy has no stored secret. GitHub proves its identity to Google, and Google accepts
+# only this repository's master branch. scripts/setup-deploy.sh created the Google side.
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run knip
+      - run: npm test
+
+  e2e:
+    name: Golden master
+    runs-on: ubuntu-latest
+    # The same image as the committed Linux baselines. Keep the version equal to
+    # @playwright/test in package-lock.json.
+    container: mcr.microsoft.com/playwright:v1.61.1-noble
+    steps:
+      - uses: actions/checkout@v7
+      - run: npm ci
+      - run: npm run test:e2e
+
+  cloud:
+    name: Security rules and library panel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:rules
+      - run: npm run test:cloud
+
+  deploy:
+    name: Deploy to Firebase
+    needs: [checks, e2e, cloud]
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/392258124104/locations/global/workloadIdentityPools/github/providers/groove-scribe
+          service_account: github-deploy@groove-scribe-zdvihal.iam.gserviceaccount.com
+      - run: npm run deploy -- --non-interactive
