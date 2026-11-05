@@ -265,6 +265,11 @@
   margin-left: auto;
 }
 
+/* Bars that do not fit go to the next line, so that nobody scrolls sideways to reach them. */
+#RightHandContent #musicalInput {
+  white-space: normal;
+}
+
 /* Playback bar. */
 #midiPlayer {
   position: static;

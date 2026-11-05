@@ -1,7 +1,11 @@
 // The library panel in the editor: Google sign-in, lessons, and saved grooves.
 //
-// This module is small and loads with the editor. The Firebase SDK loads only when
-// the user opens the panel, so people who open a shared link never download it.
+// On a wide screen the panel stays next to the music until the user hides it. On a narrow
+// screen it slides over the editor, and picking a groove closes it.
+//
+// This module is small and loads with the editor. The Firebase SDK loads only when the panel
+// opens. It opens by itself only for people who were signed in on this device or who left it
+// open, so people who open a shared link never download the SDK.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
@@ -14,6 +18,9 @@ const LINK_ERRORS = {
 };
 const LAST_LESSON_KEY = 'grooveScribe.lastLesson';
 const USER_KEY = 'grooveScribe.user';
+const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
+// Keep the same width in css/library-panel.css.
+const DOCKED_QUERY = '(min-width: 1100px)';
 const UNFILED = 'unfiled';
 
 const PANEL_HTML = `
@@ -139,6 +146,23 @@ function rememberUser(user) {
   }
 }
 
+function readKeepOpen() {
+  try {
+    const saved = localStorage.getItem(KEEP_OPEN_KEY);
+    return saved === null ? Boolean(readRememberedUser()) : saved === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function writeKeepOpen(keepOpen) {
+  try {
+    localStorage.setItem(KEEP_OPEN_KEY, String(keepOpen));
+  } catch {
+    /* the choice lasts until the page closes */
+  }
+}
+
 function avatarContent(user) {
   const initial = element('span', {
     className: 'userInitial',
@@ -177,7 +201,7 @@ function clearLibrary() {
   showMessage('');
 }
 
-function startLibrary({ library, isActive, editor, closePanel }) {
+function startLibrary({ library, isActive, editor, afterPick }) {
   let lessons = [];
   let grooves = [];
   let currentGrooveId = null;
@@ -245,7 +269,7 @@ function startLibrary({ library, isActive, editor, closePanel }) {
         selectLesson(lessonKey);
         render();
         editor.openGroove(groove.query, name);
-        closePanel();
+        afterPick();
       },
       { className: 'lp-open' }
     );
@@ -408,7 +432,7 @@ function startLibrary({ library, isActive, editor, closePanel }) {
 }
 
 // Connect to Firebase, and return the sign-out action.
-async function startCloud(search, editor, closePanel) {
+async function startCloud(search, editor, afterPick) {
   const resolved = resolveCloudConfig({ hostname: location.hostname, search });
   if (!resolved) {
     showMessage('Accounts are not set up on this site yet.');
@@ -448,7 +472,7 @@ async function startCloud(search, editor, closePanel) {
       library,
       isActive: () => activeUid === user.uid,
       editor,
-      closePanel,
+      afterPick,
     });
     if (activeUid !== user.uid) return;
     byId('lpLoading').hidden = true;
@@ -460,7 +484,7 @@ async function startCloud(search, editor, closePanel) {
 }
 
 /**
- * Add the Library button and the slide-in panel to the editor.
+ * Add the Library button and the panel to the editor.
  *
  * @param {object} options
  * @param {string} options.search  The URL query at page start, before the editor rewrites it.
@@ -486,22 +510,39 @@ export function initLibraryPanel({ search, editor }) {
   panel.setAttribute('aria-labelledby', 'lpTitle');
   document.body.append(backdrop, panel);
 
+  const docked = window.matchMedia(DOCKED_QUERY);
+  let keepOpen = readKeepOpen();
   let started = null;
 
   function setOpen(isOpen) {
     panel.classList.toggle('open', isOpen);
     backdrop.classList.toggle('open', isOpen);
+    document.body.classList.toggle('library-open', isOpen);
     panel.inert = !isOpen;
     toggle.setAttribute('aria-expanded', String(isOpen));
+    toggle.setAttribute('aria-label', isOpen ? 'Hide library' : 'Open library');
+    // A docked panel changes the width of the music, and the music draws to that width.
+    window.dispatchEvent(new Event('resize'));
+  }
+
+  function rememberDockedChoice(isOpen) {
+    if (!docked.matches) return;
+    keepOpen = isOpen;
+    writeKeepOpen(isOpen);
   }
 
   function closePanel() {
+    // A docked panel is not a dialog. Focus stays on the page, so space still plays.
+    const moveFocus = !docked.matches || panel.contains(document.activeElement);
+    rememberDockedChoice(false);
     setOpen(false);
-    toggle.focus();
+    if (moveFocus) toggle.focus();
   }
 
   function connect() {
-    started ??= startCloud(search, editor, closePanel).catch((error) => {
+    started ??= startCloud(search, editor, () => {
+      if (!docked.matches) closePanel();
+    }).catch((error) => {
       started = null;
       byId('lpLoading').hidden = true;
       reportFailure(error);
@@ -511,9 +552,17 @@ export function initLibraryPanel({ search, editor }) {
   }
 
   function openPanel() {
+    rememberDockedChoice(true);
     setOpen(true);
-    byId('lpClose').focus();
+    if (!docked.matches) byId('lpClose').focus();
     connect();
+  }
+
+  // Turning a tablet changes the mode. A docked panel comes back when the tablet turns back.
+  function followScreenWidth() {
+    const isOpen = docked.matches && keepOpen;
+    setOpen(isOpen);
+    if (isOpen) connect();
   }
 
   async function signOut() {
@@ -528,7 +577,10 @@ export function initLibraryPanel({ search, editor }) {
   renderUserMenu(readRememberedUser());
   byId('userMenuSignIn').addEventListener('click', openPanel);
   byId('userMenuSignOut').addEventListener('click', signOut);
-  toggle.addEventListener('click', openPanel);
+  toggle.addEventListener('click', () => {
+    if (panel.classList.contains('open')) closePanel();
+    else openPanel();
+  });
   byId('lpClose').addEventListener('click', closePanel);
   backdrop.addEventListener('click', closePanel);
   // The editor has document-wide hotkeys, such as space for play. Keep them out of the panel.
@@ -537,10 +589,14 @@ export function initLibraryPanel({ search, editor }) {
   document.addEventListener(
     'keydown',
     (event) => {
-      if (event.key === 'Escape' && panel.classList.contains('open')) closePanel();
+      if (event.key === 'Escape' && panel.classList.contains('open') && !docked.matches) {
+        closePanel();
+      }
     },
     true
   );
 
+  docked.addEventListener('change', followScreenWidth);
   if (location.hash === '#library') openPanel();
+  else if (docked.matches && keepOpen) followScreenWidth();
 }
