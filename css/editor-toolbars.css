@@ -1,0 +1,708 @@
+/* The editor's bars: a top bar, a tool toolbar, and a playback bar at the bottom.
+   This file overrides the older layout rules in groove_writer_orange.css and
+   groove_display_orange.css, which other pages still load. */
+:root {
+  --bar-top-height: 56px;
+  --bar-tools-height: 52px;
+  --bar-playback-height: 76px;
+  --bar-text: #eef2f4;
+  --bar-dim: #b4c0c7;
+  --bar-tools-bg: #2a3238;
+  --bar-playback-bg: #222a2f;
+  --bar-line: #46525a;
+  --bar-selected: #2484c0;
+  --bar-danger: #a8261a;
+  --touch-size: 44px;
+}
+
+#TopNav,
+#ToolBar,
+#PlaybackBar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  z-index: 998;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0 12px;
+  color: var(--bar-text);
+}
+
+#TopNav {
+  top: 0;
+  height: var(--bar-top-height);
+  gap: 12px;
+  border-bottom: 0;
+}
+
+#ToolBar {
+  top: var(--bar-top-height);
+  height: var(--bar-tools-height);
+  overflow-x: auto;
+  background: var(--bar-tools-bg);
+  border-bottom: 1px solid #000;
+}
+
+#PlaybackBar {
+  bottom: 0;
+  height: var(--bar-playback-height);
+  gap: 8px;
+  background: var(--bar-playback-bg);
+  border-top: 1px solid #000;
+}
+
+#logoTextUpperLeft {
+  flex: none;
+  padding: 0;
+  line-height: 0;
+}
+
+#logoTextUpperLeft img {
+  height: 34px;
+}
+
+#upperLeft,
+#upperRight {
+  flex: none;
+  float: none;
+  display: block;
+  margin: 0;
+}
+
+#grooveTitleDisplay {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Buttons. A tool is block or none, because view mode writes display on .edit-block.
+   The inner span does the layout. */
+.tool {
+  flex: none;
+  height: var(--touch-size);
+  min-width: var(--touch-size);
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tool-in {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  padding: 0 10px;
+  white-space: nowrap;
+}
+
+.tool:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tool:focus-visible,
+.metronomeButton:focus-visible,
+.tempoStep:focus-visible,
+#helpAnchor:focus-visible,
+.tool-popover button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
+.tool-filled {
+  background: var(--bar-line);
+}
+
+.tool-filled:hover {
+  background: #58666f;
+}
+
+.tool-primary {
+  background: var(--bar-selected);
+  color: #fff;
+  font-weight: 700;
+}
+
+.tool-primary:hover {
+  background: #2d97da;
+}
+
+.tool-caret .tool-in::after {
+  margin-top: 4px;
+  border: 4px solid transparent;
+  border-top-color: currentColor;
+  content: '';
+}
+
+.tool-sep {
+  flex: none;
+  width: 1px;
+  height: 28px;
+  margin: 0 8px;
+  background: var(--bar-line);
+}
+
+.tool-grow {
+  flex: 1;
+}
+
+#advancedEditSlot:empty {
+  display: none;
+}
+
+/* A control that is on: toms shown, stickings shown, permutation active, advanced edit on. */
+.tool.ClickToHide,
+.tool.buttonSelected {
+  background: var(--bar-selected);
+  color: #fff;
+}
+
+#permutationAnchor {
+  color: var(--bar-dim);
+  cursor: not-allowed;
+}
+
+#permutationAnchor.enabled {
+  color: inherit;
+  cursor: pointer;
+}
+
+#permutationAnchor.buttonSelected {
+  color: #fff;
+}
+
+#timeSigLabel {
+  color: inherit;
+  font-size: inherit;
+  font-weight: 700;
+  margin: 0;
+}
+
+#timeSigLabel sup,
+#timeSigLabel sub {
+  font-size: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
+}
+
+/* Avatar and account menu. */
+#helpAnchor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: var(--touch-size);
+  height: var(--touch-size);
+  padding: 0 10px;
+  color: inherit;
+  font: inherit;
+  font-size: 15px;
+  background: none;
+  border: 0;
+  border-radius: 22px;
+  cursor: pointer;
+}
+
+#helpAnchor:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#helpAnchor .fa-question-circle {
+  font-size: 24px;
+}
+
+#helpAnchor.signedIn {
+  width: var(--touch-size);
+  padding: 0;
+  overflow: hidden;
+  background: var(--bar-selected);
+}
+
+#helpAnchor.signedIn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.userInitial {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+#userMenuName {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+/* Music area. */
+#RightHandContent {
+  position: fixed;
+  top: calc(var(--bar-top-height) + var(--bar-tools-height));
+  right: 0;
+  bottom: var(--bar-playback-height);
+  left: 0;
+  width: auto;
+  height: auto;
+  background: #fff;
+}
+
+#RightHandContent .fullWidthEle {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+/* Playback bar. */
+#midiPlayer {
+  position: static;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: auto;
+  background: none;
+  border: 0;
+}
+
+#midiPlayer .playerControl {
+  background: none;
+}
+
+#midiPlayer .playerControlsRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+  padding: 0;
+}
+
+#midiPlayer .midiPlayImage {
+  width: 56px;
+  height: 56px;
+  margin: 0;
+  background: var(--bar-selected);
+  font-size: 24px;
+  line-height: 56px;
+}
+
+#midiPlayer .midiPlayImage:hover {
+  background: #2d97da;
+}
+
+#midiPlayer .MIDIPlayTime {
+  flex: none;
+  width: 64px;
+  margin: 0;
+  padding: 0;
+  color: var(--bar-text);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  line-height: normal;
+}
+
+#midiPlayer .tempoAndProgress {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: auto;
+}
+
+#midiPlayer .tempoRow {
+  align-items: center;
+  gap: 6px;
+  height: auto;
+}
+
+#midiPlayer .tempoLabel,
+#metronomeLabel {
+  flex: none;
+  display: block;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  color: var(--bar-dim);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+#midiPlayer .tempoTextField {
+  flex: none;
+  width: 44px;
+  height: var(--touch-size);
+  margin: 0;
+  color: var(--bar-text);
+  background: none;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tempoStep {
+  flex: none;
+  width: var(--touch-size);
+  height: var(--touch-size);
+  padding: 0;
+  color: inherit;
+  background: var(--bar-line);
+  border: 0;
+  border-radius: 6px;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tempoStep:hover {
+  background: #58666f;
+}
+
+#midiPlayer .tempoInput,
+#swingPopover .swingInput {
+  height: var(--touch-size);
+  min-width: 60px;
+  margin: 0 6px;
+}
+
+#midiPlayer input[type='range'],
+#swingPopover input[type='range'] {
+  background: none;
+}
+
+#midiPlayer input[type='range']::-webkit-slider-thumb,
+#swingPopover input[type='range']::-webkit-slider-thumb {
+  width: 28px;
+  height: 28px;
+  margin-top: -10px;
+  background: #dce3e7;
+  border: 1px solid #14191c;
+}
+
+#midiPlayer input[type='range']::-moz-range-thumb,
+#swingPopover input[type='range']::-moz-range-thumb {
+  width: 28px;
+  height: 28px;
+  background: #dce3e7;
+  border: 1px solid #14191c;
+}
+
+#metronomeContainer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#metronomeChoices {
+  display: inline-flex;
+  padding: 2px;
+  background: var(--bar-line);
+  border-radius: 6px;
+}
+
+.metronomeButton {
+  height: 40px;
+  min-width: var(--touch-size);
+  margin: 0;
+  padding: 0 8px;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.metronomeButton:hover,
+.metronomeButton.buttonSelected:hover,
+.metronomeButton.selected:hover {
+  font-weight: inherit;
+  transform: none;
+}
+
+.metronomeButton.buttonSelected {
+  background: var(--bar-selected);
+}
+
+.metronomeButton.Options {
+  width: var(--touch-size);
+  height: var(--touch-size);
+  padding: 0;
+  font-size: 20px;
+}
+
+.metronomeButton.Options:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.metronomeButton.Options.selected {
+  color: #68c2ff;
+  background: none;
+}
+
+/* Popovers. */
+.tool-popover {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  padding: 6px 0;
+  color: #14191c;
+  font-family: 'Lato', Calibri, sans-serif;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.tool-popover[hidden] {
+  display: none;
+}
+
+.tool-popover button {
+  width: 100%;
+  min-height: var(--touch-size);
+  padding: 0 16px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.tool-popover button:hover {
+  background: #e7ecef;
+}
+
+.tool-popover button .fa {
+  width: 22px;
+}
+
+.tool-popover .subdivision.buttonSelected {
+  color: #fff;
+  font-weight: 700;
+  background: var(--bar-selected);
+}
+
+.tool-popover .subdivision.disabled {
+  color: #9aa4aa;
+  background: none;
+  pointer-events: none;
+}
+
+.tool-popover .tool-danger {
+  color: var(--bar-danger);
+}
+
+#sheetMusicTextFields {
+  width: 320px;
+  padding: 8px 16px 10px;
+  text-align: left;
+  background: none;
+  border: 0;
+}
+
+.sheetMusicTextField {
+  display: block;
+  margin: 8px 0 3px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sheetMusicInputField {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--touch-size);
+  padding: 0 10px;
+  font: inherit;
+  border: 1px solid #9aa4aa;
+  border-radius: 6px;
+}
+
+#KeyButton {
+  display: block;
+  float: none;
+  margin-top: 8px;
+  padding: 0;
+  font-size: 15px;
+  text-align: left;
+}
+
+#KeyButton .hiddenCheckbox {
+  display: none;
+}
+
+#KeyButton input:not(:checked) + #LegendLabel {
+  color: inherit;
+}
+
+#LegendLabel {
+  display: block;
+  margin: 0;
+  padding: 12px 10px;
+  background: #e7ecef;
+  border: 0;
+  border-radius: 6px;
+}
+
+#KeyButton input:checked + #LegendLabel {
+  color: #fff;
+  background: var(--bar-selected);
+}
+
+#swingPopover {
+  width: 320px;
+  padding: 10px 12px;
+}
+
+#swingPopover .swingRow {
+  align-items: center;
+  gap: 8px;
+  height: auto;
+}
+
+#swingPopover .swingLabel {
+  width: auto;
+  padding: 0;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+#swingPopover .swingOutput {
+  width: 72px;
+  padding: 0;
+  color: inherit;
+  font-size: 14px;
+}
+
+/* The older menus match the popovers, with larger touch targets. */
+.noteContextMenu > ul.list,
+#grooveListWrapper {
+  z-index: 1000;
+  background: #fff;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.noteContextMenu > ul.list {
+  padding: 6px 0;
+}
+
+.noteContextMenu > ul.list li,
+.grooveListLI {
+  min-height: 24px;
+  padding: 10px 14px;
+  border-bottom: 0;
+  cursor: pointer;
+}
+
+.noteContextMenu > ul.list li:hover,
+.grooveListLI:hover {
+  background: #e7ecef;
+}
+
+.grooveListUL {
+  background: #fff;
+}
+
+#grooveListWrapper {
+  height: min(440px, 60vh);
+}
+
+#undoButton {
+  font-size: inherit;
+}
+
+#stickingsButton:before,
+#stickingsButton.ClickToHide:before {
+  content: none;
+}
+
+#totalPlayTime {
+  bottom: calc(var(--bar-playback-height) + 4px);
+  color: #55636d;
+}
+
+#totalPlayTime .totalTimeNum {
+  color: #14191c;
+}
+
+/* Portrait tablets. */
+@media (max-width: 1000px) {
+  .tool-label,
+  #metronomeLabel,
+  #midiPlayer .tempoLabel {
+    display: none;
+  }
+
+  .tool-sep {
+    margin: 0 4px;
+  }
+
+  .tool-in {
+    padding: 0 8px;
+  }
+
+  #midiPlayer .MIDIPlayTime {
+    width: 52px;
+    font-size: 18px;
+  }
+
+  /* Portrait has no room for the tempo slider next to the click buttons. */
+  #midiPlayer .tempoInput {
+    display: none;
+  }
+
+  #midiPlayer .tempoAndProgress {
+    flex: none;
+  }
+
+  #midiPlayer {
+    flex: none;
+  }
+
+  #PlaybackBar {
+    justify-content: space-between;
+  }
+
+  #ToolBar .tool-sep {
+    display: none;
+  }
+
+  #ToolBar {
+    padding: 0 6px;
+    font-size: 14px;
+  }
+
+  #ToolBar .tool-in {
+    gap: 3px;
+    padding: 0 4px;
+  }
+}
+
+@media print {
+  #RightHandContent {
+    position: static;
+    height: auto;
+    background: none;
+  }
+
+  .tool-popover {
+    display: none !important;
+  }
+}

@@ -111,6 +111,7 @@ export default [
       'js/groove_writer.js',
       'js/grooves.js',
       'js/groove_display.js',
+      'js/editorChrome.js',
       'js/main.js',
       'js/cloud/**/*.js',
     ],

@@ -30,3 +30,6 @@ www/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log
+
+# Playwright baselines are made on Linux only; a Mac run writes its own copies.
+tests-e2e/**/*-chromium-darwin.*

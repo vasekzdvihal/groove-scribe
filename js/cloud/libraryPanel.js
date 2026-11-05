@@ -13,6 +13,7 @@ const LINK_ERRORS = {
   'too-long': 'This groove is too long to save.',
 };
 const LAST_LESSON_KEY = 'grooveScribe.lastLesson';
+const USER_KEY = 'grooveScribe.user';
 const UNFILED = 'unfiled';
 
 const PANEL_HTML = `
@@ -61,7 +62,6 @@ const PANEL_HTML = `
       </details>
     </section>
   </div>
-  <footer id="lpAccount" hidden></footer>
 `;
 
 const byId = (id) => document.getElementById(id);
@@ -120,23 +120,56 @@ function lessonOptions(lessons, selectedId) {
   ];
 }
 
-function renderAccount(user, onSignOut) {
-  const photo = user.photoURL
-    ? [element('img', { src: user.photoURL, alt: '', referrerPolicy: 'no-referrer' })]
-    : [];
-  byId('lpAccount').replaceChildren(
-    ...photo,
-    element('span', { textContent: user.displayName || user.email || 'Signed in' }),
-    button('Sign out', onSignOut)
-  );
-  byId('lpAccount').hidden = false;
+// The top bar shows the user before the Firebase SDK loads, so people who open a shared
+// link never download it. The name and photo are kept on this device from the last visit.
+function readRememberedUser() {
+  try {
+    return JSON.parse(localStorage.getItem(USER_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function rememberUser(user) {
+  try {
+    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
+    else localStorage.removeItem(USER_KEY);
+  } catch {
+    // Without storage the avatar appears only after the panel has opened.
+  }
+}
+
+function avatarContent(user) {
+  const initial = element('span', {
+    className: 'userInitial',
+    textContent: (user.name || '?').charAt(0).toUpperCase(),
+  });
+  if (!user.photoURL) return [initial];
+  const photo = element('img', { src: user.photoURL, alt: '', referrerPolicy: 'no-referrer' });
+  // Show the initial if the photo cannot load, for example when offline.
+  photo.addEventListener('error', () => photo.replaceWith(initial), { once: true });
+  return [photo];
+}
+
+function renderUserMenu(user) {
+  const anchor = byId('helpAnchor');
+  anchor.classList.toggle('signedIn', Boolean(user));
+  if (user) {
+    anchor.replaceChildren(...avatarContent(user));
+    anchor.setAttribute('aria-label', 'User menu');
+  } else {
+    anchor.replaceChildren(element('i', { className: 'fa fa-user' }), ' Sign in');
+    anchor.setAttribute('aria-label', 'Sign in and help');
+  }
+  byId('userMenuName').textContent = user?.name ?? '';
+  byId('userMenuName').hidden = !user;
+  byId('userMenuSignOut').hidden = !user;
+  byId('userMenuSignIn').hidden = Boolean(user);
 }
 
 // Remove everything that belongs to the previous user.
 function clearLibrary() {
   byId('lpLibrary').hidden = true;
-  byId('lpAccount').hidden = true;
-  byId('lpAccount').replaceChildren();
   byId('lpLessons').replaceChildren();
   byId('lpSaveLesson').replaceChildren();
   byId('lpLinkLesson').replaceChildren();
@@ -211,7 +244,7 @@ function startLibrary({ library, isActive, editor, closePanel }) {
         currentGrooveId = groove.id;
         selectLesson(lessonKey);
         render();
-        editor.openGroove(groove.query);
+        editor.openGroove(groove.query, name);
         closePanel();
       },
       { className: 'lp-open' }
@@ -374,11 +407,12 @@ function startLibrary({ library, isActive, editor, closePanel }) {
   return act();
 }
 
+// Connect to Firebase, and return the sign-out action.
 async function startCloud(search, editor, closePanel) {
   const resolved = resolveCloudConfig({ hostname: location.hostname, search });
   if (!resolved) {
     showMessage('Accounts are not set up on this site yet.');
-    return;
+    return null;
   }
   byId('lpLoading').hidden = false;
   const { sdk, auth, db } = await connectCloud(resolved);
@@ -396,12 +430,17 @@ async function startCloud(search, editor, closePanel) {
 
   sdk.onAuthStateChanged(auth, async (user) => {
     activeUid = user?.uid ?? null;
+    const shownUser = user && {
+      name: user.displayName || user.email || 'Signed in',
+      photoURL: user.photoURL,
+    };
+    rememberUser(shownUser);
+    renderUserMenu(shownUser);
     clearLibrary();
     byId('lpLoading').hidden = true;
     byId('lpSignedOut').hidden = Boolean(user);
     if (!user) return;
 
-    renderAccount(user, () => sdk.signOut(auth).catch(reportFailure));
     const library = createLibrary(sdk, db, user.uid);
     byId('lpLoading').hidden = false;
     // Attach the form handlers before the library becomes visible.
@@ -416,6 +455,8 @@ async function startCloud(search, editor, closePanel) {
     byId('lpLibrary').hidden = false;
     library.saveProfile(user).catch(reportFailure);
   });
+
+  return { signOut: () => sdk.signOut(auth) };
 }
 
 /**
@@ -430,10 +471,12 @@ export function initLibraryPanel({ search, editor }) {
   const toggle = element('button', {
     id: 'libraryToggle',
     type: 'button',
-    className: 'rightButtons',
+    className: 'tool tool-filled',
     ariaLabel: 'Open library',
   });
-  toggle.append(element('i', { className: 'fa fa-bars' }), ' Library');
+  const toggleContent = element('span', { className: 'tool-in' });
+  toggleContent.append(element('i', { className: 'fa fa-bars' }), 'Library');
+  toggle.append(toggleContent);
   toggle.setAttribute('aria-expanded', 'false');
   toggle.setAttribute('aria-controls', 'libraryPanel');
   byId('upperLeft').prepend(toggle);
@@ -457,16 +500,34 @@ export function initLibraryPanel({ search, editor }) {
     toggle.focus();
   }
 
-  function openPanel() {
-    setOpen(true);
-    byId('lpClose').focus();
+  function connect() {
     started ??= startCloud(search, editor, closePanel).catch((error) => {
       started = null;
       byId('lpLoading').hidden = true;
       reportFailure(error);
+      return null;
     });
+    return started;
   }
 
+  function openPanel() {
+    setOpen(true);
+    byId('lpClose').focus();
+    connect();
+  }
+
+  async function signOut() {
+    const cloud = await connect();
+    try {
+      await cloud?.signOut();
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  renderUserMenu(readRememberedUser());
+  byId('userMenuSignIn').addEventListener('click', openPanel);
+  byId('userMenuSignOut').addEventListener('click', signOut);
   toggle.addEventListener('click', openPanel);
   byId('lpClose').addEventListener('click', closePanel);
   backdrop.addEventListener('click', closePanel);

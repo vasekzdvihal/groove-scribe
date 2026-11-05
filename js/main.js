@@ -10,6 +10,7 @@
 import { GrooveWriter } from './groove_writer.js';
 import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
+import { initPlaybackControls, initPopovers } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
 
 // Inline HTML handlers (onclick="myGrooveWriter.…") and other consumers still
@@ -48,20 +49,20 @@ function fillContainer(id, html) {
   if (el) el.innerHTML = html;
 }
 
-// Conditional left-nav buttons.
+// Conditional toolbar buttons.
 if (!utils.grooveDBAuthoring) {
   replaceSlot(
     'viewEditSwitchSlot',
-    '<span class="left-button" onclick="myGrooveWriter.swapViewEditMode();">' +
-      '<span class="left-button-content"><span id="view-edit-switch">Switch to EDIT mode</span></span></span>'
+    '<button type="button" class="tool" onclick="myGrooveWriter.swapViewEditMode();">' +
+      '<span class="tool-in"><span id="view-edit-switch">Edit mode</span></span></button>'
   );
 }
 if (utils.is_touch_device()) {
   replaceSlot(
     'advancedEditSlot',
-    '<span class="left-button edit-block" id="advancedEditAnchor" ' +
+    '<button type="button" class="tool edit-block" id="advancedEditAnchor" ' +
       'onclick="event.preventDefault(); myGrooveWriter.toggleAdvancedEdit()">' +
-      '<span class="left-button-content">Advanced Edit</span></span>'
+      '<span class="tool-in">Advanced</span></button>'
   );
 }
 
@@ -83,9 +84,9 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
     editor: {
-      openGroove(query) {
+      openGroove(query, name) {
         utils.stopMIDI_playback();
-        myGrooveWriter.loadNewGroove(query);
+        myGrooveWriter.loadNewGroove(query, name);
       },
       currentQuery: () =>
         utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
@@ -94,8 +95,11 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
   });
 }
 
+initPopovers();
+
 // Initialize the notes/player once the page has fully loaded (matches the
 // original window.onload handler).
 window.addEventListener('load', function () {
   myGrooveWriter.runsOnPageLoad();
+  initPlaybackControls(utils);
 });
