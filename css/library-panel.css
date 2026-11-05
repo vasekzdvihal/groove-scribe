@@ -52,20 +52,6 @@
   display: block;
 }
 
-#libraryToggle {
-  position: relative;
-  margin-left: 10px;
-  font: inherit;
-  background: none;
-}
-
-/* A larger touch area. The top bar is too tight for a taller button. */
-#libraryToggle::after {
-  position: absolute;
-  inset: -14px -6px;
-  content: '';
-}
-
 /* The summary marker is drawn by ::before. */
 #libraryPanel summary::-webkit-details-marker {
   display: none;
@@ -264,31 +250,6 @@
 
 #libraryPanel label {
   font-weight: 600;
-}
-
-#lpAccount {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-top: 1px solid var(--lp-border);
-}
-
-#lpAccount[hidden] {
-  display: none;
-}
-
-#lpAccount img {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-}
-
-#lpAccount span {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 /* The editor page has no viewport tag, so a phone lays it out about 980 px wide. */

@@ -15,17 +15,17 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 ### Verify loop (run after every change; all must stay green)
 
-| Command                | Expectation                                                                                                                                                                 |
-| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **725 pass**                                                                                                                                            |
-| `npm run test:e2e`     | Playwright golden-master — **71 pass**. Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
-| `npm run lint`         | ESLint — **0 errors** (~82 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                               |
-| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc — ~254 known errors baseline; changes should be typecheck-**neutral**                                                                      |
-| `npm run knip`         | no unused exports/files                                                                                                                                                     |
-| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                    |
-| `npm run check`        | lint + typecheck + format:check + test in one shot                                                                                                                          |
-| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                  |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                               |
+| Command                | Expectation                                                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`             | Vitest unit suite — **724 pass**                                                                                                                                                   |
+| `npm run test:e2e`     | Playwright golden-master and UI — **94 pass**. Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
+| `npm run lint`         | ESLint — **0 errors** (~83 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                      |
+| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc — ~254 known errors baseline; changes should be typecheck-**neutral**                                                                             |
+| `npm run knip`         | no unused exports/files                                                                                                                                                            |
+| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                           |
+| `npm run check`        | lint + typecheck + format:check + test in one shot                                                                                                                                 |
+| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                         |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                      |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -74,6 +74,7 @@ Pure / low-coupling core (extracted from the two big files, imported back):
   Reads the ambient global `document`; caller state injected via ctx/callbacks.
 
 Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` etc.),
+`editorChrome.js` (popovers, BPM buttons and swing in the editor's bars),
 `grooves.js` (built-in groove library).
 
 ### Tests
@@ -112,6 +113,12 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
   `eslint.config.js` (else "import/export only allowed with sourceType: module").
   App source is otherwise treated as classic scripts. `tsconfig.json` `include` lists
   only the big files; small modules are checked transitively.
+- **Editor bars:** `css/editor-toolbars.css` overrides older rules that other pages still load.
+  View mode writes `display: block` or `none` on every `.edit-block`, so a `.edit-block` button
+  must not need another display value: put its layout on an inner `.tool-in` span. The player
+  markup is shared with the embeds, so `initPlaybackControls` changes it in the editor only.
+- **Golden master width:** the SVG scales to `#svgTarget` width. The spec pins a 1208 px wide
+  window, so the baselines stay valid when bars change. Change that value only to re-baseline.
 - **Native modules run deferred**, so parse-time `document.write` is gone — DOM is built
   in `main.js` / inline module scripts. Use `import.meta.url` (not `document.currentScript`,
   which is null in modules) for locating the script's own path.

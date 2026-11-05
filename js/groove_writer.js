@@ -740,15 +740,18 @@ function GrooveWriter() {
     if (contextMenu) {
       var anchorPoint = document.getElementById('metronomeOptionsAnchor');
 
-      if (anchorPoint) {
-        var anchorPos = getTagPosition(anchorPoint);
-        contextMenu.style.top = anchorPos.y + anchorPoint.offsetHeight + 'px';
-        contextMenu.style.left = anchorPos.x + anchorPoint.offsetWidth - 150 + 'px';
-      }
-
-      root.myGrooveUtils.showContextMenu(contextMenu);
+      if (anchorPoint) showMenuAboveAnchor(contextMenu, anchorPoint);
+      else root.myGrooveUtils.showContextMenu(contextMenu);
     }
   };
+
+  // Open a menu above a control in the playback bar, which sits at the bottom of the screen.
+  function showMenuAboveAnchor(contextMenu, anchorPoint) {
+    root.myGrooveUtils.showContextMenu(contextMenu);
+    var anchorRect = anchorPoint.getBoundingClientRect();
+    contextMenu.style.top = Math.max(0, anchorRect.top - contextMenu.offsetHeight) + 'px';
+    contextMenu.style.left = Math.max(0, anchorRect.right - contextMenu.offsetWidth) + 'px';
+  }
 
   // the user has clicked on the permutation menu
   root.permutationAnchorClick = function (event) {
@@ -761,7 +764,7 @@ function GrooveWriter() {
       if (anchorPoint) {
         var anchorPos = getTagPosition(anchorPoint);
         contextMenu.style.top = anchorPos.y + anchorPoint.offsetHeight + 'px';
-        contextMenu.style.left = anchorPos.x + anchorPoint.offsetWidth - 150 + 'px';
+        contextMenu.style.left = anchorPos.x + 'px';
       }
       root.myGrooveUtils.showContextMenu(contextMenu);
     }
@@ -776,7 +779,7 @@ function GrooveWriter() {
       if (anchorPoint) {
         var anchorPos = getTagPosition(anchorPoint);
         contextMenu.style.top = anchorPos.y + anchorPoint.offsetHeight + 'px';
-        contextMenu.style.left = anchorPos.x + anchorPoint.offsetWidth - 283 + 'px';
+        contextMenu.style.left = anchorPos.x + 'px';
       }
       root.myGrooveUtils.showContextMenu(contextMenu);
     }
@@ -797,18 +800,16 @@ function GrooveWriter() {
     }
   };
 
-  // the user has clicked on the stickings menu (at bottom)
+  // the user has clicked on the stickings menu
   root.stickingsAnchorClick = function (event) {
     var contextMenu = document.getElementById('stickingsContextMenu');
     if (contextMenu) {
       var anchorPoint = document.getElementById('stickingsButton');
 
       if (anchorPoint) {
-        if (!event) event = window.event;
-        if (event.clientX || event.clientY) {
-          contextMenu.style.top = event.clientY - 100 + 'px';
-          contextMenu.style.left = event.clientX - 150 + 'px';
-        }
+        var anchorPos = getTagPosition(anchorPoint);
+        contextMenu.style.top = anchorPos.y + anchorPoint.offsetHeight + 'px';
+        contextMenu.style.left = anchorPos.x + 'px';
       }
       root.myGrooveUtils.showContextMenu(contextMenu);
     }
@@ -912,14 +913,10 @@ function GrooveWriter() {
           );
         else contextMenu = document.getElementById('metronomeOptionsOffsetClickContextMenu');
         if (contextMenu) {
-          var anchorPoint = document.getElementById('metronomeOptionsContextMenuOffTheOne');
+          var anchorPoint = document.getElementById('metronomeOptionsAnchor');
 
-          if (anchorPoint) {
-            var anchorPos = getTagPosition(anchorPoint);
-            contextMenu.style.top = anchorPos.y + anchorPoint.offsetHeight + 'px';
-            contextMenu.style.left = anchorPos.x + anchorPoint.offsetWidth - 150 + 'px';
-          }
-          root.myGrooveUtils.showContextMenu(contextMenu);
+          if (anchorPoint) showMenuAboveAnchor(contextMenu, anchorPoint);
+          else root.myGrooveUtils.showContextMenu(contextMenu);
         }
         break;
 
@@ -1053,14 +1050,6 @@ function GrooveWriter() {
       case 'about':
         win = window.open('./gscribe_about.html', '_blank');
         win.focus();
-        break;
-
-      case 'undo':
-        root.undoCommand();
-        break;
-
-      case 'redo':
-        root.redoCommand();
         break;
 
       default:
@@ -2393,6 +2382,16 @@ function GrooveWriter() {
     return fullABC;
   }
 
+  var grooveNameWhenUntitled = '';
+  function showGrooveTitle() {
+    var display = document.getElementById('grooveTitleDisplay');
+    if (!display) return;
+    display.textContent =
+      document.getElementById('tuneTitle').value.trim() ||
+      grooveNameWhenUntitled ||
+      'Untitled groove';
+  }
+
   // this is called by a bunch of places anytime we modify the musical notes on the page
   // this will recreate the ABC code and will then use the ABC to rerender the sheet music
   // on the page.
@@ -2403,6 +2402,8 @@ function GrooveWriter() {
       renderWidth = svgTarget.offsetWidth - 100;
       renderWidth = Math.floor(renderWidth * 0.8); // reduce width by 20% (This actually makes the notes bigger, because we scale up everything to max width)
     }
+
+    showGrooveTitle();
 
     var fullABC = generate_ABC(renderWidth);
 
@@ -2621,8 +2622,10 @@ function GrooveWriter() {
     return newStateIsOn;
   }
 
+  // Returns true if the elements are now visible.
   function showHideCSS_ClassVisibility(className, force, showElseHide) {
     var myElements = document.querySelectorAll(className);
+    var isVisible = false;
     for (var i = 0; i < myElements.length; i++) {
       var stickings = myElements[i];
 
@@ -2634,7 +2637,9 @@ function GrooveWriter() {
         if (stickings.style.visibility == 'visible') stickings.style.visibility = 'hidden';
         else stickings.style.visibility = 'visible';
       }
+      isVisible = stickings.style.visibility == 'visible';
     }
+    return isVisible;
   }
 
   // clear all the notes on all measures
@@ -2791,14 +2796,14 @@ function GrooveWriter() {
     if (root.myGrooveUtils.viewMode) {
       showHideCSS_ClassDisplay('.edit-block', true, true, 'block'); // show
 
-      if (view_edit_button) view_edit_button.innerHTML = 'Switch to VIEW mode';
+      if (view_edit_button) view_edit_button.innerHTML = 'View mode';
       root.myGrooveUtils.viewMode = false;
 
       if (!dontUpdateURL) root.updateCurrentURL();
     } else {
       showHideCSS_ClassDisplay('.edit-block', true, false, 'block'); // hide
 
-      if (view_edit_button) view_edit_button.innerHTML = 'Switch to EDIT mode';
+      if (view_edit_button) view_edit_button.innerHTML = 'Edit mode';
       root.myGrooveUtils.viewMode = true;
       if (!dontUpdateURL) root.updateCurrentURL();
     }
@@ -2817,7 +2822,7 @@ function GrooveWriter() {
       root.swapViewEditMode(true);
 
     // set the background and text color of the current subdivision
-    selectButton(document.getElementById('subdivision_' + class_notes_per_measure + 'ths'));
+    showDivisionAsSelected(class_notes_per_measure);
 
     // add html for the midi player
     root.myGrooveUtils.AddMidiPlayerToPage('midiPlayer', class_time_division);
@@ -3601,7 +3606,9 @@ function GrooveWriter() {
     updateSheetMusic();
   }
 
-  root.loadNewGroove = function (encodedURLData) {
+  // nameWhenUntitled names the groove in the top bar when its URL has no title.
+  root.loadNewGroove = function (encodedURLData, nameWhenUntitled) {
+    grooveNameWhenUntitled = nameWhenUntitled || '';
     set_Default_notes(encodedURLData);
   };
 
@@ -3674,7 +3681,7 @@ function GrooveWriter() {
     unselectButton(document.getElementById('subdivision_' + oldDivision + 'ths'));
 
     // highlight the new div
-    selectButton(document.getElementById('subdivision_' + class_time_division + 'ths'));
+    showDivisionAsSelected(class_time_division);
 
     // This may disable or enable the menu
     setupPermutationMenu();
@@ -3687,6 +3694,13 @@ function GrooveWriter() {
 
     // enable or disable swing
     root.myGrooveUtils.swingEnabled(root.myGrooveUtils.doesDivisionSupportSwing(newDivision));
+  }
+
+  function showDivisionAsSelected(division) {
+    var divisionButton = document.getElementById('subdivision_' + division + 'ths');
+    selectButton(divisionButton);
+    var label = document.getElementById('divisionMenuLabel');
+    if (label && divisionButton) label.textContent = divisionButton.textContent;
   }
 
   root.expandAuthoringViewWhenNecessary = function (numNotesPerMeasure, numberOfMeasures) {

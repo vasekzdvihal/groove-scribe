@@ -8,6 +8,16 @@
 
 		<meta name="apple-mobile-web-app-capable" content="yes">
 		<meta name="mobile-web-app-capable" content="yes">
+		<script>
+			// Tablets and computers lay out at their real size. Phones keep the old wide
+			// layout until they get a layout of their own.
+			if (Math.min(screen.width, screen.height) >= 600) {
+				var viewportMeta = document.createElement('meta');
+				viewportMeta.name = 'viewport';
+				viewportMeta.content = 'width=device-width, initial-scale=1';
+				document.head.appendChild(viewportMeta);
+			}
+		</script>
 		<link rel="icon" sizes="192x192" href="images/gscribe-icon-192.png">
 		<link rel="icon" sizes="96x96" href="images/gscribe-icon-96.png">
 		<link rel="apple-touch-icon" href="images/apple-touch-icon.png">
@@ -26,6 +36,7 @@
 	    <link rel="stylesheet" type="text/css" href="css/groove_writer_orange.css">
 	    <link rel="stylesheet" type="text/css" href="css/library-panel.css">
 		<link rel="stylesheet" type="text/css" href="css/groove_display_orange.css">
+		<link rel="stylesheet" type="text/css" href="css/editor-toolbars.css">
 		<link href='https://fonts.googleapis.com/css?family=Lato:400,700,300' rel='stylesheet' type='text/css'>
 
 		<!--   Other peoples JS libraries    -->
@@ -66,44 +77,82 @@
 
 	<div id="GrooveWriter">
 		<div class="nonPrintable">
-			<div id="LeftHandNav">
-				<span id="divisionButtonContainer">
-					<span id="logoInSubdivision" class="left-button-content"><img src="images/GScribe_Logo_lone_g.svg"></span>
-					<span class="left-button edit-block" id="timeLabel" onclick="myGrooveWriter.timeSigPopupOpen();"><span class="left-button-content"><span><span id="timeSigLabel" class="buttonFraction"><sup>4</sup>/<sub>4</sub></span><span id="timeSubLabel">TIME</span></span></span></span>
-					<span class="left-button subdivision edit-block" id="subdivision_8ths"  onclick="myGrooveWriter.changeDivision(8);"><span class="left-button-content"><span><span class="buttonFraction"><sup>1</sup>/<sub>8</sub></span>NOTES</span></span></span>
-					<span class="left-button subdivision edit-block" id="subdivision_16ths" onclick="myGrooveWriter.changeDivision(16);"><span class="left-button-content"><span><span class="buttonFraction"><sup>1</sup>/<sub>16</sub></span>NOTES</span></span></span>
-					<span class="left-button subdivision edit-block" id="subdivision_32ths" onclick="myGrooveWriter.changeDivision(32);"><span class="left-button-content"><span><span class="buttonFraction"><sup>1</sup>/<sub>32</sub></span>NOTES</span></span></span>
-					<span class="left-button subdivision edit-block" id="subdivision_12ths" onclick="myGrooveWriter.changeDivision(12);"><span class="left-button-content"><span><span class="buttonFraction"><sup>1</sup>/<sub>8</sub></span>TRIPLETS</span></span></span>
-					<span class="left-button subdivision edit-block" id="subdivision_24ths" onclick="myGrooveWriter.changeDivision(24);"><span class="left-button-content"><span><span class="buttonFraction"><sup>1</sup>/<sub>16</sub></span>TRIPLETS</span></span></span>
-					<span class="left-button subdivision edit-block" id="subdivision_48ths" onclick="myGrooveWriter.changeDivision(48);"><span class="left-button-content"><span>MIXED<br>Division</span></span></span>
-
-					<!-- Populated by js/main.js after load (was document.write). -->
-					<span id="viewEditSwitchSlot"></span>
-					<span id="advancedEditSlot"></span>
-
-					<span class="left-button edit-block" id="undoButton" onclick="myGrooveWriter.undoCommand();"><span class="left-button-content"><i class="fa fa-undo"></i>&nbsp;&nbsp;Undo</span></span>
-				</span>
-
-			</div>
-			<div id="TopNav" class="fullWidthEle">
-				<span id="logoTextUpperLeft"><img src="images/GScribe_Logo_word_stack.svg"></span>
-				<span id="upperLeft">
-					<span id="metronomeContainer">
-						<span id="metronomeLabel">METRONOME:</span>
-						<span class="metronomeButton" id="metronomeOff" onclick="myGrooveWriter.setMetronomeFrequency(0);">OFF</span>
-						<span class="metronomeButton" id="metronome4ths" onclick="myGrooveWriter.setMetronomeFrequency(4);">4th</span>
-						<span class="metronomeButton" id="metronome8ths" onclick="myGrooveWriter.setMetronomeFrequency(8);">8th</span>
-						<span class="metronomeButton" id="metronome16ths" onclick="myGrooveWriter.setMetronomeFrequency(16);">16th</span>
-						<span class="metronomeButton Options grooveDB_hidden" id="metronomeOptionsAnchor" onclick="myGrooveWriter.metronomeOptionsAnchorClick(event);">Options</span>
-					</span>
-				</span>
+			<div id="TopNav">
+				<span id="logoTextUpperLeft"><img src="images/GScribe_Logo_word_stack.svg" alt="Groove Scribe"></span>
+				<!-- The library button is added by js/cloud/libraryPanel.js. -->
+				<span id="upperLeft"></span>
+				<span id="grooveTitleDisplay"></span>
 				<span id="upperRight">
-					<span class="rightButtons grooveDB_hidden" id="permutationAnchor" onclick="myGrooveWriter.permutationAnchorClick(event);"><i class="fa fa-bars"></i> Permutations</span>
-					<span class="rightButtons" id="groovesAnchor" onclick="myGrooveWriter.groovesAnchorClick(event);"><i class="fa fa-bars"></i> Grooves</span>
-					<span class="rightButtons" id="helpAnchor" onclick="myGrooveWriter.helpAnchorClick(event);"><i class="fa fa-bars"></i> Help</span>
+					<button type="button" id="helpAnchor" aria-label="Help" onclick="myGrooveWriter.helpAnchorClick(event);"><i class="fa fa-question-circle"></i></button>
 				</span>
 			</div>
-			<div id="midiPlayer" class="fullWidthEle"><!-- space for the midiplayer to be attached by the javascript --></div>
+
+			<div id="ToolBar" role="toolbar" aria-label="Editing tools">
+				<button type="button" class="tool tool-filled edit-block" id="timeLabel" aria-label="Time signature" onclick="myGrooveWriter.timeSigPopupOpen();"><span class="tool-in"><span id="timeSigLabel"><sup>4</sup>/<sub>4</sub></span></span></button>
+				<button type="button" class="tool tool-filled tool-caret edit-block" id="divisionMenuButton" aria-label="Note division" data-popover="divisionPopover"><span class="tool-in"><span id="divisionMenuLabel">1/16 notes</span></span></button>
+				<span class="tool-sep edit-block"></span>
+				<button type="button" class="tool edit-block" id="undoButton" aria-label="Undo" onclick="myGrooveWriter.undoCommand();"><span class="tool-in"><i class="fa fa-undo"></i><span class="tool-label">Undo</span></span></button>
+				<button type="button" class="tool edit-block" id="redoButton" aria-label="Redo" onclick="myGrooveWriter.redoCommand();"><span class="tool-in"><i class="fa fa-repeat"></i><span class="tool-label">Redo</span></span></button>
+				<span class="tool-sep edit-block"></span>
+				<button type="button" class="tool tool-caret grooveDB_hidden" id="permutationAnchor" onclick="myGrooveWriter.permutationAnchorClick(event);"><span class="tool-in">Permutations</span></button>
+				<button type="button" class="tool tool-caret" id="groovesAnchor" onclick="myGrooveWriter.groovesAnchorClick(event);"><span class="tool-in">Grooves</span></button>
+				<span class="tool-sep"></span>
+				<button type="button" class="tool edit-block" id="showHideTomsButton" onclick="event.preventDefault(); myGrooveWriter.showHideToms(false, false);"><span class="tool-in">Toms</span></button>
+				<button type="button" class="tool tool-caret grooveDB_hidden" id="stickingsButton" onclick="myGrooveWriter.stickingsAnchorClick();"><span class="tool-in">Stickings</span></button>
+				<!-- Populated by js/main.js after load (was document.write). -->
+				<span id="advancedEditSlot"></span>
+				<span class="tool-grow"></span>
+				<button type="button" class="tool tool-caret edit-block grooveDB_hidden" id="detailsButton" data-popover="detailsPopover"><span class="tool-in">Details</span></button>
+				<span id="viewEditSwitchSlot"></span>
+			</div>
+
+			<div id="PlaybackBar">
+				<div id="midiPlayer"><!-- space for the midiplayer to be attached by the javascript --></div>
+				<span class="tool-sep"></span>
+				<span id="metronomeContainer">
+					<span id="metronomeLabel">Click</span>
+					<span id="metronomeChoices">
+						<button type="button" class="metronomeButton" id="metronomeOff" onclick="myGrooveWriter.setMetronomeFrequency(0);">Off</button>
+						<button type="button" class="metronomeButton" id="metronome4ths" onclick="myGrooveWriter.setMetronomeFrequency(4);">4th</button>
+						<button type="button" class="metronomeButton" id="metronome8ths" onclick="myGrooveWriter.setMetronomeFrequency(8);">8th</button>
+						<button type="button" class="metronomeButton" id="metronome16ths" onclick="myGrooveWriter.setMetronomeFrequency(16);">16th</button>
+					</span>
+					<button type="button" class="metronomeButton Options grooveDB_hidden" id="metronomeOptionsAnchor" aria-label="Metronome options" onclick="myGrooveWriter.metronomeOptionsAnchorClick(event);"><i class="fa fa-cog"></i></button>
+				</span>
+				<span class="tool-sep"></span>
+				<button type="button" class="tool tool-caret" id="swingButton" data-popover="swingPopover"><span class="tool-in"><span id="swingButtonLabel">Swing</span></span></button>
+				<button type="button" class="tool tool-primary grooveDB_hidden" id="shareSaveButton" aria-label="Share" onclick="event.preventDefault(); myGrooveWriter.show_FullURLPopup();"><span class="tool-in"><i class="fa fa-share"></i><span class="tool-label">Share</span></span></button>
+				<button type="button" class="tool" id="moreButton" aria-label="More actions" data-popover="morePopover"><span class="tool-in"><i class="fa fa-ellipsis-h"></i></span></button>
+			</div>
+
+			<div class="tool-popover" id="divisionPopover" hidden>
+				<button type="button" class="subdivision edit-block" id="subdivision_8ths" data-popover-close onclick="myGrooveWriter.changeDivision(8);">1/8 notes</button>
+				<button type="button" class="subdivision edit-block" id="subdivision_16ths" data-popover-close onclick="myGrooveWriter.changeDivision(16);">1/16 notes</button>
+				<button type="button" class="subdivision edit-block" id="subdivision_32ths" data-popover-close onclick="myGrooveWriter.changeDivision(32);">1/32 notes</button>
+				<button type="button" class="subdivision edit-block" id="subdivision_12ths" data-popover-close onclick="myGrooveWriter.changeDivision(12);">1/8 triplets</button>
+				<button type="button" class="subdivision edit-block" id="subdivision_24ths" data-popover-close onclick="myGrooveWriter.changeDivision(24);">1/16 triplets</button>
+				<button type="button" class="subdivision edit-block" id="subdivision_48ths" data-popover-close onclick="myGrooveWriter.changeDivision(48);">Mixed division</button>
+			</div>
+
+			<div class="tool-popover" id="detailsPopover" hidden>
+				<div id="sheetMusicTextFields" class="grooveDB_hidden edit-block">
+					<label class="sheetMusicTextField" for="tuneTitle">Title</label>
+					<input class="sheetMusicInputField" id="tuneTitle" onchange="myGrooveWriter.refresh_ABC();" type="text">
+					<label class="sheetMusicTextField" for="tuneAuthor">Author</label>
+					<input class="sheetMusicInputField" id="tuneAuthor" onchange="myGrooveWriter.refresh_ABC();" type="text">
+					<label class="sheetMusicTextField" for="tuneComments">Comment</label>
+					<input class="sheetMusicInputField" id="tuneComments" onchange="myGrooveWriter.refresh_ABC();" type="text">
+					<span id="KeyButton"><input type="checkbox" class="hiddenCheckbox" id="showLegend" onclick="myGrooveWriter.refresh_ABC();"><label id="LegendLabel" for="showLegend"><i class="fa fa-key"></i> Show the note key</label></span>
+				</div>
+			</div>
+
+			<div class="tool-popover" id="swingPopover" hidden><!-- js/editorChrome.js moves the swing row of the player here. --></div>
+
+			<div class="tool-popover" id="morePopover" hidden>
+				<button type="button" class="grooveDB_hidden" id="printButton" data-popover-close onclick="myGrooveWriter.printMusic();"><i class="fa fa-print"></i> Print</button>
+				<button type="button" class="grooveDB_hidden" id="downloadButton" data-popover-close onclick="myGrooveWriter.DownloadAnchorClick();"><i class="fa fa-download"></i> Download</button>
+				<button type="button" class="tool-danger edit-block" id="clearAllNotesButton" data-popover-close onclick="event.preventDefault(); myGrooveWriter.clearAllNotes();"><i class="fa fa-trash"></i> Clear all notes</button>
+			</div>
 		</div>
 
 		<div id="RightHandContent">
@@ -127,27 +176,11 @@
 				<div class="warnings" id="diverr">
 				</div>
 
-				<div id="sheetMusicTextFields" class="fullWidthEle grooveDB_hidden edit-block">
-					<span class="sheetMusicTextField"><b>Title:</b> <input class="sheetMusicInputField" id="tuneTitle" onchange="myGrooveWriter.refresh_ABC();" type="text"></span>
-					<span class="sheetMusicTextField"><b>Author:</b> <input class="sheetMusicInputField" id="tuneAuthor" onchange="myGrooveWriter.refresh_ABC();"  type="text"></span>
-					<span class="sheetMusicTextField"><b>Comment:</b> <input class="sheetMusicInputField" id="tuneComments" onchange="myGrooveWriter.refresh_ABC();"  type="text"></span>
-					<span id='KeyButton'><input type="checkbox" class="hiddenCheckbox" id="showLegend" onclick="myGrooveWriter.refresh_ABC();"><label id="LegendLabel" for="showLegend"><i class="fa fa-key"></i></label></span>
-				</div>
-
 				<div id="musicalInput" class="fullWidthEle edit-block">
 					<!-- The clickable note grid is built by js/main.js (was document.write). -->
 					<div id="measureContainer"></div>
 				</div>
 
-
-				<div id="bottomButtonRow" class="fullWidthEle">
-					<span class="pageBottomButton edit-block" id="clearAllNotesButton" onclick="event.preventDefault(); myGrooveWriter.clearAllNotes();"><span class="bottomButtonIcon"><i class="fa fa-trash fa-2x"></i></span><span class="bottomButtonLabel">CLEAR ALL</span></span>
-					<span class="pageBottomButton edit-block" id="showHideTomsButton" onclick="event.preventDefault(); myGrooveWriter.showHideToms(false, false);"><span class="bottomButtonIcon"><i id="icon-tom1" class="fa fa-circle"></i><i id="icon-tom2" class="fa fa-circle-o"></i><i id="icon-tom3" class="fa fa-circle-o"></i></span><span class="bottomButtonLabel">TOMS</span></span>
-					<span class=" grooveDB_hidden pageBottomButton" id="stickingsButton" onclick="myGrooveWriter.stickingsAnchorClick();"><span class="bottomButtonLabel">STICKINGS</span></span>
-					<span class=" grooveDB_hidden pageBottomButton" id="downloadButton" onclick="myGrooveWriter.DownloadAnchorClick();"><span class="bottomButtonIcon"><i class="fa fa-download fa-2x"></i></span><span class="bottomButtonLabel">DOWNLOAD</span></span>
-					<span class=" grooveDB_hidden pageBottomButton" id="printButton" onclick="myGrooveWriter.printMusic();"><span class="bottomButtonIcon"><i class="fa fa-print fa-2x"></i></span><span class="bottomButtonLabel">PRINT</span></span>
-					<span class=" grooveDB_hidden pageBottomButton" id="shareSaveButton" onclick="event.preventDefault(); myGrooveWriter.show_FullURLPopup();"><span class="bottomButtonIcon"><i class="fa fa-share fa-2x"></i></span><span class="bottomButtonLabel">SHARE</span></span>
-				</div>
 
 				<div id="midiTextOutput">
 				</div>
@@ -346,10 +379,11 @@
 		</div>
 		<div class="noteContextMenu">
 			<ul id="helpContextMenu" class="list">
-				<li onclick='myGrooveWriter.helpMenuPopupClick("undo");'>Undo (Ctrl-Z)</li>
-				<li onclick='myGrooveWriter.helpMenuPopupClick("redo");'>Redo (Ctrl-Y)</li>
+				<li id="userMenuName" hidden></li>
+				<li id="userMenuSignIn" hidden>Sign in</li>
 				<li onclick='myGrooveWriter.helpMenuPopupClick("help");'>Help</li>
 				<li onclick='myGrooveWriter.helpMenuPopupClick("about");'>About</li>
+				<li id="userMenuSignOut" hidden>Sign out</li>
 			</ul>
 		</div>
 		<div class="noteContextMenu">

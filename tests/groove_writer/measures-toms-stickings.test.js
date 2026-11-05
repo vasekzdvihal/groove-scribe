@@ -179,21 +179,16 @@ describe('showHideToms', () => {
     expect(gw.grooveDataFromClickableUI().showToms).toBe(false);
   });
 
-  // BUG (observed): showHideCSS_ClassVisibility (the helper showHideToms uses
-  // for the ".toms-container"/".tom-label" classes) has no `return` statement,
-  // so it always yields `undefined`. showHideToms treats that as falsy, so it
-  // always takes the "hide" branch when updating the button's class list --
-  // the button's "ClickToHide" class is never added, regardless of whether
-  // toms are actually shown or hidden. This does not affect the toms rows
-  // themselves (their visibility is set directly inside the loop before the
-  // missing return), only the button's own CSS-class bookkeeping.
-  it('never adds "ClickToHide" to showHideTomsButton, even when toms are shown (missing return in showHideCSS_ClassVisibility)', () => {
+  it('marks showHideTomsButton as on while the toms are shown', () => {
     const btn = document.getElementById('showHideTomsButton');
     expect(btn.className).not.toContain('ClickToHide');
 
-    gw.showHideToms(true, true, true); // force show
-    expect(gw.grooveDataFromClickableUI().showToms).toBe(true); // toms are genuinely shown...
-    expect(btn.className).not.toContain('ClickToHide'); // ...but the button class never updates
+    gw.showHideToms(true, true, true);
+    expect(gw.grooveDataFromClickableUI().showToms).toBe(true);
+    expect(btn.className).toContain('ClickToHide');
+
+    gw.showHideToms(true, false, true);
+    expect(btn.className).not.toContain('ClickToHide');
   });
 });
 

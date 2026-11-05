@@ -17,6 +17,10 @@ import { loadGroove, getSvg, getMidi } from './helpers.js';
 // To re-baseline intentionally: `npm run test:e2e -- --update-snapshots`.
 
 test.describe('golden master: rendered SVG + generated MIDI', () => {
+  // The sheet music scales to the width of #svgTarget. The baselines were made with it
+  // 1208 px wide, so keep that width, whatever the bars around the music do.
+  test.use({ viewport: { width: 1208, height: 720 } });
+
   for (const g of allGrooves) {
     test(`groove ${g.name}`, async ({ page }) => {
       await loadGroove(page, grooveUrl(g.url));

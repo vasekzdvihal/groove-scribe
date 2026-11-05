@@ -443,17 +443,6 @@ describe('help menu', () => {
     openSpy.mockRestore();
   });
 
-  it('helpMenuPopupClick("undo"/"redo") delegate to undoCommand/redoCommand', () => {
-    gw.undoCommand = vi.fn();
-    gw.redoCommand = vi.fn();
-
-    gw.helpMenuPopupClick('undo');
-    gw.helpMenuPopupClick('redo');
-
-    expect(gw.undoCommand).toHaveBeenCalledTimes(1);
-    expect(gw.redoCommand).toHaveBeenCalledTimes(1);
-  });
-
   it('helpMenuPopupClick with an unrecognized type logs and does not throw', () => {
     expect(() => gw.helpMenuPopupClick('bogus')).not.toThrow();
   });

@@ -38,11 +38,9 @@ test.describe('grid editing', () => {
   test('undo reverts an edit and redo re-applies it', async ({ page }) => {
     await page.click('#hi-hat0');
     expect((await grooveData(page)).hhOn).toBe(1);
-    // force: the undo button is visually overlapped by the division-button
-    // container at this viewport; we still want to fire its click handler.
-    await page.click('#undoButton', { force: true });
+    await page.click('#undoButton');
     expect((await grooveData(page)).hhOn).toBe(0);
-    await page.evaluate(() => window.myGrooveWriter.redoCommand());
+    await page.click('#redoButton');
     expect((await grooveData(page)).hhOn).toBe(1);
   });
 });
@@ -50,8 +48,10 @@ test.describe('grid editing', () => {
 test.describe('division & structure', () => {
   test('changing the subdivision updates notes-per-measure', async ({ page }) => {
     expect((await grooveData(page)).notesPerMeasure).toBe(16);
+    await page.click('#divisionMenuButton');
     await page.click('#subdivision_8ths');
     expect((await grooveData(page)).notesPerMeasure).toBe(8);
+    await page.click('#divisionMenuButton');
     await page.click('#subdivision_12ths');
     const gd = await grooveData(page);
     expect(gd.notesPerMeasure).toBe(12);
@@ -113,6 +113,7 @@ test.describe('export', () => {
   test('the ABC source is generated and the download menu opens', async ({ page }) => {
     const abc = await page.inputValue('#ABCsource');
     expect(abc).toContain('X:');
+    await page.click('#moreButton');
     await page.click('#downloadButton');
     await expect(page.locator('#downloadContextMenu')).toBeVisible();
   });

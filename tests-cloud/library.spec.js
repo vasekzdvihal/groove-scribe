@@ -29,7 +29,14 @@ async function signIn(page, email) {
     const idToken = JSON.stringify({ sub: address, email: address, email_verified: true });
     await sdk.signInWithCredential(sdk.getAuth(), sdk.GoogleAuthProvider.credential(idToken));
   }, email);
-  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  await expect(page.locator('#lpLibrary')).toBeVisible();
+}
+
+async function signOut(page) {
+  await page.getByRole('button', { name: 'Close library' }).click();
+  await page.locator('#helpAnchor').click();
+  await page.locator('#userMenuSignOut').click();
+  await expect(page.locator('#helpAnchor')).toContainText('Sign in');
 }
 
 async function signedInPanel(page, email = 'ana@example.com') {
@@ -180,9 +187,10 @@ test('a short link gets a clear message and saves nothing', async ({ page }) => 
 test('one user cannot see another user library', async ({ page }) => {
   await signedInPanel(page);
   await addLink(page, QUERY, 'Paradiddle');
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  await signOut(page);
   await expect(page.getByRole('button', { name: 'Paradiddle', exact: true })).toHaveCount(0);
 
+  await openPanel(page);
   await signIn(page, 'bob@example.com');
   await expect(page.getByText('Your library is empty.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Paradiddle', exact: true })).toHaveCount(0);
@@ -247,8 +255,51 @@ test('picking a groove stops playback', async ({ page }) => {
 
 test('keys pressed in the panel do not trigger editor hotkeys', async ({ page }) => {
   await signedInPanel(page);
-  await page.getByRole('button', { name: 'Sign out' }).focus();
+  await page.getByRole('button', { name: 'Close library' }).focus();
   await page.keyboard.down(' ');
   const isPlaying = await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
   expect(isPlaying).toBe(false);
+});
+
+test('the top bar shows the user on the next visit without loading Firebase', async ({ page }) => {
+  await signedInPanel(page);
+  await page.getByRole('button', { name: 'Close library' }).click();
+  await expect(page.locator('#helpAnchor')).toHaveClass(/signedIn/);
+
+  const sdkRequests = [];
+  page.on('request', (request) => {
+    if (request.url().includes('vendor/firebase.js')) sdkRequests.push(request.url());
+  });
+  await openEditor(page);
+  await expect(page.locator('#helpAnchor')).toHaveClass(/signedIn/);
+  await expect(page.locator('#helpAnchor .userInitial')).toHaveText('A');
+
+  await page.locator('#helpAnchor').click();
+  await expect(page.locator('#userMenuName')).toHaveText('ana@example.com');
+  expect(sdkRequests).toEqual([]);
+
+  // Sign out loads Firebase, and the top bar then shows the signed-out state.
+  await page.locator('#userMenuSignOut').click();
+  await expect(page.locator('#helpAnchor')).toContainText('Sign in');
+  await openEditor(page);
+  await expect(page.locator('#helpAnchor')).toContainText('Sign in');
+});
+
+test('the sign-in item of the top bar menu opens the panel', async ({ page }) => {
+  await openEditor(page);
+  await page.locator('#helpAnchor').click();
+  await page.locator('#userMenuSignIn').click();
+  await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+});
+
+test('the top bar shows the library name of a groove without a title', async ({ page }) => {
+  await signedInPanel(page);
+  await addLink(
+    page,
+    '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|',
+    'No title'
+  );
+  await page.getByRole('button', { name: 'No title', exact: true }).click();
+  await expect(page.locator('#grooveTitleDisplay')).toHaveText('No title');
+  await expect(page.locator('#tuneTitle')).toHaveValue('');
 });
