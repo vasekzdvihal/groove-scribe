@@ -63,6 +63,9 @@ async function addLink(page, query, title) {
 
 test.beforeEach(({ request }) => clearEmulators(request));
 
+// The panel slides over the editor on this width. The tests at the end cover the docked panel.
+test.use({ viewport: { width: 1000, height: 800 } });
+
 test('the editor does not load Firebase until the panel opens', async ({ page }) => {
   const sdkRequests = [];
   page.on('request', (request) => {
@@ -302,4 +305,122 @@ test('the top bar shows the library name of a groove without a title', async ({ 
   await page.getByRole('button', { name: 'No title', exact: true }).click();
   await expect(page.locator('#grooveTitleDisplay')).toHaveText('No title');
   await expect(page.locator('#tuneTitle')).toHaveValue('');
+});
+
+test.describe('docked on a wide screen', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  const musicLeft = (page) =>
+    page.locator('#RightHandContent').evaluate((node) => node.getBoundingClientRect().left);
+  const svgWidth = (page) =>
+    page
+      .locator('#svgTarget svg')
+      .first()
+      .evaluate((node) => node.getBoundingClientRect().width);
+
+  test('a first visit stays closed and does not load Firebase', async ({ page }) => {
+    const sdkRequests = [];
+    page.on('request', (request) => {
+      if (request.url().includes('vendor/firebase.js')) sdkRequests.push(request.url());
+    });
+    await openEditor(page);
+    await expect(page.locator('#libraryPanel')).toBeHidden();
+    expect(await musicLeft(page)).toBe(0);
+    expect(sdkRequests).toEqual([]);
+  });
+
+  test('the panel sits next to the music and redraws it to fit', async ({ page }) => {
+    await openEditor(page);
+    const wideSvg = await svgWidth(page);
+    await openPanel(page);
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    expect(await musicLeft(page)).toBe(300);
+    await expect.poll(() => svgWidth(page)).toBeLessThan(wideSvg);
+    await expect(page.locator('#libraryBackdrop')).toBeHidden();
+
+    await page.getByRole('button', { name: 'Hide library' }).click();
+    await expect(page.locator('#libraryPanel')).toBeHidden();
+    expect(await musicLeft(page)).toBe(0);
+    await expect.poll(() => svgWidth(page)).toBe(wideSvg);
+  });
+
+  test('picking a groove keeps the panel open and space plays it', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    await page.keyboard.press(' ');
+    await page.waitForFunction(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('Escape does not hide it', async ({ page }) => {
+    await openEditor(page);
+    await openPanel(page);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('it comes back after a reload until the user hides it', async ({ page }) => {
+    await signedInPanel(page);
+    await page.reload();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Hide library' }).click();
+    await page.reload();
+    await page.waitForSelector('#svgTarget svg');
+    await expect(page.locator('#libraryPanel')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Open library' })).toBeVisible();
+  });
+
+  test('a signed-in user gets it open by default', async ({ page }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem('grooveScribe.user', JSON.stringify({ name: 'Ana' }))
+    );
+    await openEditor(page);
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('turning a tablet hides it and turning back restores it', async ({ page }) => {
+    await openEditor(page);
+    await openPanel(page);
+    await page.setViewportSize({ width: 820, height: 1180 });
+    await expect(page.locator('#libraryPanel')).toBeHidden();
+    await expect(page.locator('#libraryBackdrop')).toBeHidden();
+    expect(await musicLeft(page)).toBe(0);
+
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    expect(await musicLeft(page)).toBe(300);
+  });
+
+  test('bars that do not fit next to the panel go to the next line', async ({ page }) => {
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await openEditor(
+      page,
+      EDITOR + '&Measures=2&H=|x-x-x-x-|x-x-x-x-|&S=|--O---O-|--O---O-|&K=|o---o---|o---o---|'
+    );
+    await openPanel(page);
+    const grid = page.locator('#musicalInput');
+    expect(await grid.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+    const tops = await page
+      .locator('.staff-container')
+      .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().top));
+    expect(tops[1]).toBeGreaterThan(tops[0]);
+  });
+
+  test('toolbar menus open above the panel', async ({ page }) => {
+    await openEditor(page);
+    await openPanel(page);
+    await page.locator('#divisionMenuButton').click();
+    const popover = page.locator('#divisionPopover');
+    await expect(popover).toBeVisible();
+    const onTop = await popover.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + 10, rect.top + 10);
+      return node.contains(hit);
+    });
+    expect(onTop).toBe(true);
+  });
 });

@@ -117,6 +117,9 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
   View mode writes `display: block` or `none` on every `.edit-block`, so a `.edit-block` button
   must not need another display value: put its layout on an inner `.tool-in` span. The player
   markup is shared with the embeds, so `initPlaybackControls` changes it in the editor only.
+- **Library panel:** from 1100 px wide it docks next to the music and moves `#RightHandContent`. It
+  opens by itself only for people who were signed in on the device or left it open, so a shared
+  link never loads the Firebase SDK. Below 1100 px it slides over the editor.
 - **Golden master width:** the SVG scales to `#svgTarget` width. The spec pins a 1208 px wide
   window, so the baselines stay valid when bars change. Change that value only to re-baseline.
 - **Native modules run deferred**, so parse-time `document.write` is gone — DOM is built

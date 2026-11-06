@@ -1,4 +1,9 @@
-/* The slide-in library panel in the editor. */
+/* The library panel in the editor. On a wide screen it stays next to the music.
+   On a narrow screen it slides over the editor. */
+:root {
+  --library-width: 300px;
+}
+
 #libraryPanel {
   --lp-bg: #22262a;
   --lp-surface: #2d3237;
@@ -250,6 +255,34 @@
 
 #libraryPanel label {
   font-weight: 600;
+}
+
+#libraryToggle[aria-expanded='true'] {
+  background: var(--bar-selected);
+}
+
+/* Keep the same width as DOCKED_QUERY in js/cloud/libraryPanel.js. */
+@media (min-width: 1100px) {
+  #libraryPanel {
+    top: calc(var(--bar-top-height) + var(--bar-tools-height));
+    bottom: var(--bar-playback-height);
+    z-index: 997;
+    width: var(--library-width);
+    transition: none;
+  }
+
+  #libraryPanel.open {
+    transition: none;
+    box-shadow: none;
+  }
+
+  #libraryBackdrop.open {
+    display: none;
+  }
+
+  body.library-open #RightHandContent {
+    left: var(--library-width);
+  }
 }
 
 /* The editor page has no viewport tag, so a phone lays it out about 980 px wide. */
