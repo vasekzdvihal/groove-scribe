@@ -7,6 +7,19 @@ const config = JSON.parse(readFileSync(join(process.cwd(), 'firebase.json'), 'ut
 const rules = config.hosting.headers ?? [];
 
 /**
+ * Does a Hosting `source` match a served path? The site root `/` is special:
+ * the Hosting emulator matches it only against the literal source `/` and the
+ * catch-all `**`, not against `**` + `/` + a name pattern (picomatch would).
+ * @param {string} source
+ * @param {string} servedPath
+ */
+function matches(source, servedPath) {
+  if (servedPath === '/') return source === '/' || source === '**';
+  if (source === '/') return false;
+  return picomatch(source.replace(/^\//, ''))(servedPath.replace(/^\//, ''));
+}
+
+/**
  * Headers Firebase Hosting would send for a served path. Hosting applies every
  * matching `source` rule, so we merge all of them in order. Sources are globs
  * with extglob support, matched against the path without its leading slash.
@@ -14,10 +27,9 @@ const rules = config.hosting.headers ?? [];
  * @returns {Record<string, string>}
  */
 function headersFor(servedPath) {
-  const path = servedPath.replace(/^\//, '');
   const merged = {};
   for (const rule of rules) {
-    if (!picomatch(rule.source.replace(/^\//, ''))(path)) continue;
+    if (!matches(rule.source, servedPath)) continue;
     for (const { key, value } of rule.headers) merged[key] = value;
   }
   return merged;
@@ -25,12 +37,12 @@ function headersFor(servedPath) {
 
 const EMBED = 'GrooveEmbed.html';
 const pages = [
+  '/',
   'index.html',
   '/index.html',
   'gscribe_help.html',
   'gscribe_about.html',
   'profile.html',
-  'html_examples_and_tests/grooveDBTest.html',
 ];
 
 describe('Firebase Hosting security headers', () => {
