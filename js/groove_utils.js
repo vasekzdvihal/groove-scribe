@@ -1517,7 +1517,7 @@ function GrooveUtils() {
 
       if (swingInput) {
         swing = parseInt(swingInput.value, 10);
-        if (swing < 0 || swing > 60) swing = 0;
+        if (!(swing >= 0 && swing <= 60)) swing = 0; // also catches NaN from an empty slider
       }
     }
 
@@ -1551,6 +1551,7 @@ function GrooveUtils() {
     } else {
       root.swingUpdateText(event.target.value);
       updateRangeSlider('swingInput' + root.grooveUtilsUniqueIndex);
+      if (root.swingChangeCallback) root.swingChangeCallback(event.target.value);
     }
   };
 

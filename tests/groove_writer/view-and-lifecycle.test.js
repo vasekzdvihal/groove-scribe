@@ -529,5 +529,13 @@ describe('GrooveWriter view & lifecycle', () => {
       expect(gw.myGrooveUtils.tempoChangeCallback).toBe(gw.tempoChangeCallback);
       delete globalThis.MIDI;
     });
+
+    it('wires root.myGrooveUtils.swingChangeCallback to the same debounced URL update', async () => {
+      const gw = await setup();
+      gw.runsOnPageLoad();
+
+      expect(gw.myGrooveUtils.swingChangeCallback).toBe(gw.tempoChangeCallback);
+      delete globalThis.MIDI;
+    });
   });
 });

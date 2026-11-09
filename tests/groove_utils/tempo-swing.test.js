@@ -255,10 +255,7 @@ describe('GrooveUtils tempo & swing controls', () => {
   });
 
   describe('swingEnabled', () => {
-    it('enabling swing with no prior slider value produces "NaN%" (parseInt("") is NaN, and NaN is neither < 0 nor > 60)', () => {
-      // This documents an existing quirk: swingEnabled(true) calls
-      // swingUpdateText(root.getSwing()), and getSwing() parses whatever is
-      // currently in the (empty) swingInput element.
+    it('enabling swing with no prior slider value shows 0%, not NaN%', () => {
       document.body.innerHTML =
         '<input id="swingInput' +
         gu.grooveUtilsUniqueIndex +
@@ -269,7 +266,7 @@ describe('GrooveUtils tempo & swing controls', () => {
       gu.swingEnabled(true);
       expect(gu.swingIsEnabled).toBe(true);
       expect(document.getElementById('swingOutput' + gu.grooveUtilsUniqueIndex).innerHTML).toBe(
-        'NaN%'
+        '0%'
       );
     });
 
@@ -309,6 +306,22 @@ describe('GrooveUtils tempo & swing controls', () => {
       expect(document.getElementById('swingOutput' + gu.grooveUtilsUniqueIndex).innerHTML).toBe(
         '25%'
       );
+    });
+
+    it('tells the writer through swingChangeCallback so the URL gets the new swing', () => {
+      const calls = [];
+      gu.swingChangeCallback = (swing) => calls.push(swing);
+      gu.swingIsEnabled = true;
+      gu.swingUpdateEvent({ target: { value: '25' } });
+      expect(calls).toEqual(['25']);
+    });
+
+    it('does not call swingChangeCallback when swing is disabled', () => {
+      const calls = [];
+      gu.swingChangeCallback = (swing) => calls.push(swing);
+      gu.swingIsEnabled = false;
+      gu.swingUpdateEvent({ target: { value: '25' } });
+      expect(calls).toEqual([]);
     });
 
     it('resets the slider to 0 (ignoring the event value) when swing is disabled', () => {

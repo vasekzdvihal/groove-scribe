@@ -2957,6 +2957,8 @@ function GrooveWriter() {
 
     // get updates when the tempo changes
     root.myGrooveUtils.tempoChangeCallback = root.tempoChangeCallback;
+    // the swing slider changes the URL too, and uses the same debounce
+    root.myGrooveUtils.swingChangeCallback = root.tempoChangeCallback;
   };
 
   // called right before the midi reloads for the next replay
