@@ -44,6 +44,7 @@
     "globals": "^17.7.0",
     "jsdom": "^26.1.0",
     "knip": "^6.26.0",
+    "picomatch": "^4.0.7",
     "prettier": "^3.9.5",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
