@@ -52,9 +52,10 @@ Android APK. Shipping to stores / real iOS devices additionally needs:
   permanent once published).
 - [`scripts/build-www.mjs`](scripts/build-www.mjs) — assembles `www/` (the
   Capacitor web-dir) from the runtime files only: `index.html`, the app-wired
-  pages, and `js/ css/ MIDI.js/ soundfont/ images/ font-awesome/`. It excludes
-  `node_modules`, the test suites, and the `html_examples_and_tests/` pages. The
-  full bundle is ~16 MB (mostly soundfonts).
+  pages, `js/ css/ MIDI.js/ images/ font-awesome/`, and the two `gunshot`
+  soundfonts the app loads. It excludes `node_modules`, the test suites, and the
+  `html_examples_and_tests/` pages. The full bundle is ~5 MB. The build fails if
+  `www/` holds a `.wav` file or a soundfont the app does not load.
 
 ## Building locally (optional)
 

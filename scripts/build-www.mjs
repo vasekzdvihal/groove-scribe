@@ -1,20 +1,35 @@
-// Assemble the Capacitor web-dir (www/) from the app's runtime files.
+// Assemble www/ from the app's runtime files. www/ is what ships: Firebase Hosting
+// deploys it and Capacitor copies it into the native iOS/Android projects.
 //
-// Capacitor copies `webDir` into the native iOS/Android projects, so www/ must
-// contain exactly what the app needs at runtime — and NOT node_modules, the
-// test suites, dev config, or the example/test HTML pages. We deliberately list
-// the runtime assets rather than copying the repo root.
+// www/ must contain only what the app needs at runtime, and NOT node_modules, the
+// test suites, dev config, or the example/test HTML pages. We deliberately list the
+// runtime assets rather than copying the repo root.
 //
-// Run via `npm run build:www` (invoked by the CI workflow before `cap sync`).
+// Run via `npm run build:www`. Firebase `predeploy` and `cap:sync` run this script,
+// so each one builds a fresh www/ and enforces checkWwwContents.
 
-import { rmSync, mkdirSync, cpSync, existsSync } from 'node:fs';
+import {
+  rmSync,
+  mkdirSync,
+  cpSync,
+  existsSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(repoRoot, 'www');
 
-// The app entry + app-wired pages, plus every asset dir they load.
+// The app loads exactly one instrument, 'gunshot' (see oneTimeInitializeMidi in
+// js/groove_utils.js). That file holds every drum sample and the metronome.
+// MIDI.loadPlugin picks -ogg when the browser plays Ogg and -mp3 when it does not
+// (Safari), so both must ship.
+const SOUNDFONTS = ['soundfont/gunshot-ogg.js', 'soundfont/gunshot-mp3.js'];
+
+// The app entry + app-wired pages, plus every asset they load.
 const ITEMS = [
   'index.html',
   'profile.html',
@@ -24,25 +39,58 @@ const ITEMS = [
   'js',
   'css',
   'MIDI.js',
-  'soundfont',
+  ...SOUNDFONTS,
   'images',
   'font-awesome',
 ];
 
-// Every listed item is a required runtime asset. Fail loudly if any is missing
-// rather than shipping a silently incomplete www/ (which would build a broken
-// mobile app that still "succeeds" in CI). Validate before touching www/.
-const missing = ITEMS.filter((item) => !existsSync(join(repoRoot, item)));
-if (missing.length > 0) {
-  console.error(`build-www: missing required runtime asset(s): ${missing.join(', ')}`);
-  process.exit(1);
+/**
+ * Finds files that must not ship: .wav files, and anything in soundfont/ the app does not load.
+ * @param {string} dir the assembled tree
+ * @returns {string[]} one problem per file, sorted by path; empty when the tree is clean
+ */
+export function checkWwwContents(dir) {
+  const files = readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((path) => statSync(join(dir, path)).isFile())
+    .sort();
+  const problems = [];
+  for (const path of files) {
+    if (/\.wav$/i.test(path)) {
+      problems.push(`${path}: .wav files must not ship`);
+    } else if (path.startsWith('soundfont/') && !SOUNDFONTS.includes(path)) {
+      problems.push(`${path}: the app does not load this soundfont`);
+    }
+  }
+  return problems;
 }
 
-rmSync(OUT, { recursive: true, force: true });
-mkdirSync(OUT, { recursive: true });
+function main() {
+  // Every listed item is a required runtime asset. Fail loudly if any is missing
+  // rather than shipping a silently incomplete www/ (which would build a broken
+  // mobile app that still "succeeds" in CI). Validate before touching www/.
+  const missing = ITEMS.filter((item) => !existsSync(join(repoRoot, item)));
+  if (missing.length > 0) {
+    console.error(`build-www: missing required runtime asset(s): ${missing.join(', ')}`);
+    process.exit(1);
+  }
 
-for (const item of ITEMS) {
-  cpSync(join(repoRoot, item), join(OUT, item), { recursive: true });
+  rmSync(OUT, { recursive: true, force: true });
+  mkdirSync(OUT, { recursive: true });
+
+  for (const item of ITEMS) {
+    cpSync(join(repoRoot, item), join(OUT, item), { recursive: true });
+  }
+
+  const problems = checkWwwContents(OUT);
+  if (problems.length > 0) {
+    for (const problem of problems) console.error(`build-www: ${problem}`);
+    process.exit(1);
+  }
+
+  console.log(`Assembled www/ with ${ITEMS.length} runtime items.`);
 }
 
-console.log(`Assembled www/ with ${ITEMS.length} runtime items.`);
+// realpathSync: Node gives this module its real path, but keeps a symlinked argv[1] as typed.
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
+  main();
+}
