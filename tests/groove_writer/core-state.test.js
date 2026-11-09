@@ -256,18 +256,13 @@ describe('GrooveWriter core state & undo/redo', () => {
       expect(stack).toEqual(['a']);
     });
 
-    // BUG/QUIRK: the dedup check `newURL == class_undo_stack[class_undo_stack.length-1]`
-    // always compares against the writer's *internal* undo stack, never against the
-    // `ourStack` argument that was actually passed in. When called with a stack other
-    // than the internal undo stack (e.g. a plain array, or the redo stack) the dedup
-    // is checked against the wrong array, so back-to-back identical pushes are NOT
-    // deduplicated in that case (they only get deduplicated when ourStack IS the
-    // internal undo stack, as happens via AddFullURLToUndoStack -- see below).
-    it('does NOT dedupe consecutive identical values when pushed to an arbitrary stack (dedup checks the wrong array)', () => {
+    it('dedupes consecutive identical values on whichever stack it is given', () => {
       const stack = [];
-      gw.AddItemToUndoOrRedoStack('a', stack);
-      gw.AddItemToUndoOrRedoStack('a', stack); // internal class_undo_stack is still [], so 'a' != undefined -> pushes again
-      expect(stack).toEqual(['a', 'a']);
+      expect(gw.AddItemToUndoOrRedoStack('a', stack)).toBe(true);
+      expect(gw.AddItemToUndoOrRedoStack('a', stack)).toBe(false);
+      expect(stack).toEqual(['a']);
+      expect(gw.AddItemToUndoOrRedoStack('b', stack)).toBe(true);
+      expect(stack).toEqual(['a', 'b']);
     });
 
     it('caps the stack at 40 entries, dropping the oldest (shift, not pop)', () => {

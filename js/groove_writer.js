@@ -2097,7 +2097,7 @@ function GrooveWriter() {
   root.AddItemToUndoOrRedoStack = function (newURL, ourStack, noClear) {
     if (!ourStack) return false;
 
-    if (newURL == class_undo_stack[class_undo_stack.length - 1]) {
+    if (newURL == ourStack[ourStack.length - 1]) {
       //debugPrintUndoRedoStack();
       return false; // no change, so don't push
     }
