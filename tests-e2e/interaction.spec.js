@@ -306,7 +306,7 @@ test.describe('known bugs', () => {
   test.fixme('a permutation survives a restore', async ({ page }) => {
     await open(page);
     await page.click('#permutationAnchor');
-    await page.locator('#permutationContextMenu li').nth(1).click();
+    await page.locator('#permutationContextMenu li').filter({ hasText: 'Kick' }).click();
     await expect(page.locator('#PermutationOptions')).toHaveClass(/displayed/);
     await page.reload();
     await page.waitForSelector('#svgTarget svg');
