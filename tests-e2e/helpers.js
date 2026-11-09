@@ -61,7 +61,8 @@ export function midiNotesFromDataUrl(dataUrl) {
     const status = bytes[at++];
     if (status === 0xff) {
       at += 1; // meta type
-      at += readVarLength();
+      const length = readVarLength();
+      at += length;
     } else if (status >= 0x90 && status < 0xa0) {
       if (bytes[at + 1] > 0) notes.push({ tick, note: bytes[at] });
       at += 2;
