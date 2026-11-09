@@ -121,6 +121,12 @@ function GrooveWriter() {
       class_note_value_per_measure,
     ].join('/');
   }
+  // The [T2, T3] arrays that belong to the current bar layout, or null.
+  // A changed bar layout drops them for good.
+  function keptTomLanes() {
+    if (class_kept_toms && class_kept_toms.layout !== tomLayoutKey()) class_kept_toms = null;
+    return class_kept_toms ? class_kept_toms.lanes : null;
+  }
   var class_metronome_auto_speed_up_active = false;
   var class_metronome_count_in_active = false;
   var class_metronome_count_in_is_playing = false;
@@ -1631,6 +1637,7 @@ function GrooveWriter() {
         noteValuePerMeasure: class_note_value_per_measure,
         stickingsVisible: isStickingsVisible(),
         tomsVisible: isTomsVisible(),
+        keptTomLanes: keptTomLanes(),
       }
     );
   }
@@ -1900,11 +1907,11 @@ function GrooveWriter() {
       }
     }
 
-    // Toms 2 and 3 come from the kept lanes. A changed bar layout drops them for good.
-    if (class_kept_toms && class_kept_toms.layout !== tomLayoutKey()) class_kept_toms = null;
-    if (class_kept_toms && isTomsVisible()) {
-      myGrooveData.toms_array[1] = class_kept_toms.lanes[0].slice();
-      myGrooveData.toms_array[2] = class_kept_toms.lanes[1].slice();
+    // Toms 2 and 3 come from the kept lanes.
+    var keptLanes = keptTomLanes();
+    if (keptLanes && isTomsVisible()) {
+      myGrooveData.toms_array[1] = keptLanes[0].slice();
+      myGrooveData.toms_array[2] = keptLanes[1].slice();
     }
 
     return myGrooveData;

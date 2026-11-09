@@ -1,6 +1,6 @@
 import { test, expect } from './fixtures.js';
-import { grooveUrl } from './corpus.js';
-import { loadGroove } from './helpers.js';
+import { allGrooves, grooveUrl } from './corpus.js';
+import { getMidi, loadGroove, midiNotesFromDataUrl } from './helpers.js';
 
 // Interaction tests: real clicks on the grid and the real toolbar, each step
 // asserting the exact groove URL the editor writes back with history.replaceState.
@@ -841,5 +841,132 @@ test.describe('known bugs', () => {
     await expect.poll(() => query(page)).not.toContain('T3=');
     await page.click('#undoButton');
     await expectQuery(page, withToms);
+  });
+});
+
+test.describe('toms 2 and 3 play and show', () => {
+  const T1 = 48;
+  const T2 = 47;
+  const T3 = 45;
+  const T4 = 43;
+  const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
+  const allFour = `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('o', 3)}`;
+
+  // The MIDI the Play button sends to the player: the URL given to loadMIDIFromURL.
+  async function midiFromPlayButton(page) {
+    await page.evaluate(() => {
+      const gu = window.myGrooveWriter.myGrooveUtils;
+      const realLoad = gu.loadMIDIFromURL;
+      window.playedMidi = [];
+      gu.loadMIDIFromURL = function (url) {
+        window.playedMidi.push(url);
+        return realLoad.call(this, url);
+      };
+    });
+    // The button gets its click handler when the soundfont has loaded.
+    await expect(page.locator('[id^="midiPlayImage"]')).toHaveClass(/Stopped/, { timeout: 15000 });
+    await page.click('[id^="midiPlayImage"]');
+    await expect
+      .poll(() => page.evaluate(() => window.playedMidi.length), { timeout: 15000 })
+      .toBeGreaterThan(0);
+    const url = await page.evaluate(() => window.playedMidi[0]);
+    await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.stopMIDI_playback());
+    return url;
+  }
+
+  // The MIDI file behind the "Download MIDI file" menu item.
+  async function midiFromSaveMenu(page) {
+    await page.click('#moreButton');
+    await page.click('#downloadButton');
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      // The click starts a data: navigation that ends as a download, so do not wait for it.
+      page
+        .locator('#downloadContextMenu li', { hasText: 'Download MIDI file' })
+        .click({ noWaitAfter: true }),
+    ]);
+    return download.url(); // MIDISaveAs navigates to this data: URL
+  }
+
+  const notesOf = (dataUrl) => midiNotesFromDataUrl(dataUrl).map((n) => n.note);
+
+  // The note heads of the rendered sheet music, as their distinct heights and their count.
+  async function noteHeads(page) {
+    return page.evaluate(() => {
+      const heads = [...document.querySelectorAll('#svgTarget use')].filter(
+        (use) => use.getAttribute('xlink:href') === '#hd'
+      );
+      return {
+        count: heads.length,
+        heights: new Set(heads.map((use) => use.getAttribute('y'))).size,
+      };
+    });
+  }
+
+  test('the Play button sends notes for all four toms', async ({ page }) => {
+    await open(page, START + allFour);
+    const notes = notesOf(await midiFromPlayButton(page));
+    expect(notes).toEqual(expect.arrayContaining([T1, T2, T3, T4]));
+  });
+
+  test('the Play button sends the MIDI of the golden master', async ({ page }) => {
+    await open(page, allGrooves.find((g) => g.name.includes('all four voices')).url);
+    const golden = await getMidi(page);
+    const played = await midiFromPlayButton(page);
+    expect(midiNotesFromDataUrl(played)).toEqual(midiNotesFromDataUrl(golden));
+    expect(played).toBe(golden);
+  });
+
+  test('the saved MIDI file holds notes for all four toms', async ({ page }) => {
+    await open(page, START + allFour);
+    const notes = notesOf(await midiFromSaveMenu(page));
+    expect(notes).toEqual(expect.arrayContaining([T1, T2, T3, T4]));
+  });
+
+  test('the sheet music draws all four toms', async ({ page }) => {
+    await open(page, START + allFour);
+    await expect.poll(() => noteHeads(page)).toEqual({ count: 4, heights: 4 });
+  });
+
+  // Each kept tom shares a position with a grid tom, so its tick must equal the grid tom's.
+  for (const { name, div, slot, at } of [
+    { name: '1/8 notes', div: 8, slot: 8, at: [3, 1] },
+    { name: '1/8 triplets', div: 12, slot: 12, at: [5, 7] },
+  ]) {
+    test(`on ${name}, toms 2 and 3 play in the right place of every measure`, async ({ page }) => {
+      const row = (measure, index) =>
+        Array.from({ length: 2 }, (_, m) =>
+          '-'
+            .repeat(index)
+            .padEnd(slot, '-')
+            .split('')
+            .map((c, i) => (m === measure && i === index ? 'o' : c))
+            .join('')
+        ).join('|');
+      const q =
+        `?TimeSig=4/4&Div=${div}&Tempo=80&Measures=2` +
+        `&H=|${row(9, 0)}|&S=|${row(9, 0)}|&K=|${row(9, 0)}|` +
+        `&T1=|${row(1, at[1])}|&T2=|${row(1, at[1])}|&T3=|${row(0, at[0])}|&T4=|${row(0, at[0])}|`;
+      await open(page, q);
+      const notes = midiNotesFromDataUrl(await midiFromPlayButton(page));
+      const tickOf = (note) => notes.find((n) => n.note === note)?.tick;
+      expect(tickOf(T2)).toBeDefined();
+      expect(tickOf(T3)).toBeDefined();
+      expect(tickOf(T2)).toBe(tickOf(T1));
+      expect(tickOf(T3)).toBe(tickOf(T4));
+    });
+  }
+
+  test('hidden toms 2 and 3 stay silent like toms 1 and 4, and come back when shown', async ({
+    page,
+  }) => {
+    await open(page, START + allFour);
+    await expect.poll(() => noteHeads(page)).toEqual({ count: 4, heights: 4 });
+    await page.click('#showHideTomsButton');
+    await expect.poll(() => noteHeads(page)).toEqual({ count: 0, heights: 0 });
+    const silent = notesOf(await midiFromPlayButton(page));
+    for (const tom of [T1, T2, T3, T4]) expect(silent).not.toContain(tom);
+    await page.click('#showHideTomsButton');
+    await expect.poll(() => noteHeads(page)).toEqual({ count: 4, heights: 4 });
   });
 });

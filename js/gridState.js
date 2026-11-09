@@ -336,6 +336,11 @@ export function get32NoteArrayFromClickableUI(
     if (ctx.tomsVisible) {
       Toms_Array[0][array_index] = get_tom_state(i + startIndexForClickableUI, 1, 'ABC');
       Toms_Array[3][array_index] = get_tom_state(i + startIndexForClickableUI, 4, 'ABC');
+      if (ctx.keptTomLanes) {
+        // Toms 2 and 3 have no grid row, so their notes come from the loaded groove.
+        Toms_Array[1][array_index] = ctx.keptTomLanes[0][i + startIndexForClickableUI];
+        Toms_Array[2][array_index] = ctx.keptTomLanes[1][i + startIndexForClickableUI];
+      }
     }
 
     Snare_Array[array_index] = get_snare_state(i + startIndexForClickableUI, 'ABC');
