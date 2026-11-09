@@ -13,8 +13,8 @@ export const test = base.extend({
     await page.route('**/*', (route) => {
       const url = route.request().url();
       if (
-        url.startsWith('http://localhost:8000') ||
-        url.startsWith('http://127.0.0.1:8000') ||
+        url.startsWith('http://localhost:8010') ||
+        url.startsWith('http://127.0.0.1:8010') ||
         url.startsWith('data:') ||
         url.startsWith('blob:')
       ) {

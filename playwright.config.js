@@ -20,22 +20,16 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   use: {
-    baseURL: 'http://localhost:8000',
+    baseURL: 'http://localhost:8010',
     headless: true,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    // Threaded server: the single-threaded `python3 -m http.server` serializes
-    // requests, so parallel page-loads (each pulling the large soundfont) time
-    // out. ThreadingHTTPServer serves workers concurrently. Its default listen backlog
-    // is 5, and the editor loads about 50 files at once, so Chromium sometimes got a
-    // reset and the page never started. A longer backlog stops that.
-    command:
-      'python3 -c "from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler; ThreadingHTTPServer.request_queue_size = 128; ThreadingHTTPServer((\'127.0.0.1\', 8000), SimpleHTTPRequestHandler).serve_forever()"',
-    url: 'http://localhost:8000/index.html',
-    reuseExistingServer: !process.env.CI,
+    command: 'python3 scripts/test-server.py 8010 .',
+    url: 'http://localhost:8010/index.html',
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });

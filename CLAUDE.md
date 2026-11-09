@@ -18,7 +18,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm test`             | Vitest unit suite — **771 pass**                                                                                                                                                                                                                        |
-| `npm run test:e2e`     | Playwright golden-master and UI — **110 pass**. Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                                                                     |
+| `npm run test:e2e`     | Playwright golden-master and UI — **110 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~83 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (246 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
@@ -106,8 +106,10 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - `index.html?emulator=1` on localhost uses the emulators. Tests sign in with an emulator
   credential because the emulator popup loads external scripts and sometimes hangs.
 - Golden-master baselines are Linux-only. On macOS Playwright writes new `*-chromium-darwin*`
-  files and reports a failure. To verify there, compare those files with the Linux baselines
-  using `cmp`, then delete them. Never commit them.
+  files and reports a failure. To verify there, run `npm run test:e2e:verify`. It compares those
+  files with the Linux baselines byte for byte, skips the two smoke PNGs that differ on a Mac,
+  deletes the darwin files, and exits non-zero on any real failure or difference. On Linux it runs
+  plain Playwright. Never commit darwin files.
 
 ## Conventions & gotchas
 
