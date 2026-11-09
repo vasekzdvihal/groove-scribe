@@ -55,6 +55,7 @@ import {
   constant_ABC_STICK_R,
   constant_ABC_T1_Normal,
   constant_ABC_T4_Normal,
+  constant_MAX_MEASURES,
   constant_OUR_MIDI_HIHAT_ACCENT,
   constant_OUR_MIDI_HIHAT_COW_BELL,
   constant_OUR_MIDI_HIHAT_CRASH,
@@ -2548,6 +2549,10 @@ function GrooveWriter() {
   // currently always at the end of the measures
   // copy the notes from the last measure to the new measure
   root.addMeasureButtonClick = function (event) {
+    // The URL parser clamps to constant_MAX_MEASURES, so a longer groove would lose
+    // its extra measures on reload. The button is disabled at the limit; stop here too.
+    if (class_number_of_measures >= constant_MAX_MEASURES) return;
+
     var uiStickings = '';
     var uiHH = '';
     var uiTom1 = '';
@@ -2601,7 +2606,9 @@ function GrooveWriter() {
     if (class_number_of_measures === 5)
       window.alert(
         'Please be aware that the Groove Scribe is not designed to write an entire musical score.\n' +
-          'You can create as many measures as you want, but your browser may slow down as more measures are added.\n' +
+          'You can create up to ' +
+          constant_MAX_MEASURES +
+          ' measures, and your browser may slow down as more measures are added.\n' +
           'There are also many notation features that would be useful for score writing that are not part of Groove Scribe'
       );
   };

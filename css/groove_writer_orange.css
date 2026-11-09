@@ -829,6 +829,12 @@ body {
 #addMeasureButton:hover {
   color: #000;
 }
+#addMeasureButton[aria-disabled='true'],
+#addMeasureButton[aria-disabled='true']:hover {
+  color: var(--highlight-color-on-white);
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 #permutationAnchor {
   color: #555;
 }

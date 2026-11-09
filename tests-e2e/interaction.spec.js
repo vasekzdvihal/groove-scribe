@@ -402,7 +402,7 @@ test.describe('known bugs', () => {
     await expectNoPermutation(page);
   });
 
-  test.fixme('add measure at 10 measures changes nothing (audit item 2)', async ({ page }) => {
+  test('add measure at 10 measures changes nothing (audit item 2)', async ({ page }) => {
     page.on('dialog', (dialog) => dialog.accept());
     const ten = empty(16, 10);
     await open(page, ten);
@@ -415,6 +415,33 @@ test.describe('known bugs', () => {
     await page.click('#addMeasureButton', { force: true });
     // Today the URL says Measures=11, and a reload cuts it back to 10.
     await expectQuery(page, ten);
+  });
+
+  test('the Add button follows the limit on load, remove, undo and redo', async ({ page }) => {
+    page.on('dialog', (dialog) => dialog.accept());
+    const add = page.locator('#addMeasureButton');
+    await open(page, empty(16, 9));
+    await expect(add).toBeEnabled();
+    await expect(add).toHaveAttribute('title', 'Add measure');
+
+    await add.click();
+    await expectQuery(page, empty(16, 10));
+    await expect(add).toBeDisabled();
+
+    await page.click('#undoButton');
+    await expectQuery(page, empty(16, 9));
+    await expect(add).toBeEnabled();
+
+    await page.click('#redoButton');
+    await expectQuery(page, empty(16, 10));
+    await expect(add).toBeDisabled();
+
+    await page.click('#closeMeasureButton10');
+    await expectQuery(page, empty(16, 9));
+    await expect(add).toBeEnabled();
+
+    await open(page, empty(16, 10));
+    await expect(add).toBeDisabled();
   });
 
   test.fixme('a bad time signature combination leaves all state unchanged (audit item 15)', async ({

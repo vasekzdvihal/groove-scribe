@@ -369,7 +369,7 @@ describe('GrooveWriter view & lifecycle', () => {
     //   -> swapViewEditMode(true) (needs .edit-block, optionally #view-edit-switch)
     //   -> selectButton(#subdivision_<N>ths)
     //   -> myGrooveUtils.AddMidiPlayerToPage("midiPlayer", ...) (needs #midiPlayer)
-    //   -> applyGrooveData(window.location.search) (needs the note-grid DOM,
+    //   -> applyGrooveData(parsed groove data) (needs the note-grid DOM,
     //      #ABCsource/#svgTarget/#diverr/#measureContainer/#tuneTitle/#tuneAuthor/
     //      #tuneComments, and calls all the way down into displayNewSVG ->
     //      myGrooveUtils.renderABCtoSVG, myGrooveUtils.setTempo/setSwing, and
