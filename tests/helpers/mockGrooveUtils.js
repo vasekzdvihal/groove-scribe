@@ -44,6 +44,7 @@ export function installMockGrooveUtils() {
       gd.__fromUrl = url;
       return gd;
     });
+    this.getGrooveUtilsBaseLocation = vi.fn(() => 'http://app.test/base/');
     this.createABCFromGrooveData = vi.fn(() => 'ABC-NOTATION');
     this.renderABCtoSVG = vi.fn(() => ({ svg: '<svg data-mock="1"></svg>' }));
 

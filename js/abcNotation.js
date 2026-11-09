@@ -622,6 +622,24 @@ function snare_HH_kick_ABC_for_quads(
   return ABC_String;
 }
 
+// A line break in free text would start a new ABC line, and a line that starts
+// with %% is a directive (abc2svg can run script from %%beginjs). Replace every
+// line break and control character with one space.
+// A % also starts an ABC comment, so "100% Funk" would render as "100". abc2svg
+// reads \% as a literal %. It skips the character after a backslash, so a %
+// after an even run of backslashes still needs its own backslash. It also decodes
+// \u0025 and \045 to % before it looks for comments, so those get the same escape.
+export function sanitizeAbcText(value) {
+  return (
+    String(value)
+      // eslint-disable-next-line no-control-regex -- the control characters are the point
+      .replace(/[\x00-\x1f\x7f\x85\u2028\u2029]+/g, ' ')
+      .replace(/\\(u0025|045)|\\[\s\S]|%/g, (match, decodesToPercent) =>
+        decodesToPercent || match === '%' ? '\\%' : match
+      )
+  );
+}
+
 export function get_top_ABC_BoilerPlate(
   gu,
   isPermutation,
@@ -641,10 +659,10 @@ export function get_top_ABC_BoilerPlate(
   fullABC += 'M:' + timeSigTop + '/' + timeSigBottom + '\n';
 
   // always add a Title even if it's blank
-  fullABC += 'T: ' + tuneTitle + '\n';
+  fullABC += 'T: ' + sanitizeAbcText(tuneTitle) + '\n';
 
   if (tuneAuthor !== '') {
-    fullABC += 'C: ' + tuneAuthor + '\n';
+    fullABC += 'C: ' + sanitizeAbcText(tuneAuthor) + '\n';
     fullABC += '%%musicspace 20px\n'; // add some more space
   }
 
@@ -699,7 +717,7 @@ export function get_top_ABC_BoilerPlate(
 
   // print comments below the legend if there is one, otherwise in the header section
   if (tuneComments !== '') {
-    fullABC += 'P: ' + tuneComments + '\n';
+    fullABC += 'P: ' + sanitizeAbcText(tuneComments) + '\n';
     fullABC += '%%musicspace 20px\n'; // add some more space
   }
 

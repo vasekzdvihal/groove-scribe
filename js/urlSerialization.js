@@ -17,6 +17,50 @@ import {
   GetDefaultTomGroove,
 } from './noteArrays.js';
 
+/** Every note division the editor offers (the division menu plus 1/4 notes). */
+const VALID_DIVISIONS = [4, 8, 12, 16, 24, 32, 48];
+
+/** The division used when a link carries a missing or unsupported Div. */
+const DEFAULT_DIVISION = 16;
+
+/**
+ * Turn a Div value from a link into a supported division.
+ * @param {*} value
+ * @returns {number}
+ */
+export function parseDivision(value) {
+  var division = parseInt(value, 10);
+  return VALID_DIVISIONS.includes(division) ? division : DEFAULT_DIVISION;
+}
+
+/**
+ * Decode a URL query value without throwing. A malformed escape such as a lone
+ * % keeps the raw text instead of throwing. A + stays a plus: it is the
+ * closed hi-hat in note strings.
+ * @param {string|undefined} value
+ * @returns {string}
+ */
+export function safeDecode(value) {
+  if (value === undefined || value === null) return '';
+  var text = String(value);
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * Decode a free-text field (title, author, comments). An unencoded + in an old
+ * link reads as a space; %2B reads as a plus. The + is replaced before
+ * decoding, so a decoded %2B is never turned into a space.
+ * @param {string|undefined} value
+ * @returns {string}
+ */
+function decodeText(value) {
+  return safeDecode(value === undefined || value === null ? '' : String(value).replace(/\+/g, ' '));
+}
+
 export function getQueryVariableFromString(variable, def_value, my_string) {
   // Tolerate query strings with or without a leading '?'. window.location.search
   // and share URLs include it; some callers (e.g. GrooveDisplay embeds) pass a
@@ -60,7 +104,9 @@ export function getGrooveDataFromUrlString(encodedURLData, config = {}) {
   myGrooveData.numBeats = timeSigArray[0];
   myGrooveData.noteValue = timeSigArray[1];
 
-  myGrooveData.timeDivision = parseInt(getQueryVariableFromString('Div', 16, encodedURLData), 10);
+  myGrooveData.timeDivision = parseDivision(
+    getQueryVariableFromString('Div', DEFAULT_DIVISION, encodedURLData)
+  );
   myGrooveData.notesPerMeasure = calc_notes_per_measure(
     myGrooveData.timeDivision,
     myGrooveData.numBeats,
@@ -174,16 +220,13 @@ export function getGrooveDataFromUrlString(encodedURLData, config = {}) {
   );
 
   myGrooveData.title = getQueryVariableFromString('title', '', encodedURLData);
-  myGrooveData.title = decodeURIComponent(myGrooveData.title);
-  myGrooveData.title = myGrooveData.title.replace(/\+/g, ' ');
+  myGrooveData.title = decodeText(myGrooveData.title);
 
   myGrooveData.author = getQueryVariableFromString('author', '', encodedURLData);
-  myGrooveData.author = decodeURIComponent(myGrooveData.author);
-  myGrooveData.author = myGrooveData.author.replace(/\+/g, ' ');
+  myGrooveData.author = decodeText(myGrooveData.author);
 
   myGrooveData.comments = getQueryVariableFromString('comments', '', encodedURLData);
-  myGrooveData.comments = decodeURIComponent(myGrooveData.comments);
-  myGrooveData.comments = myGrooveData.comments.replace(/\+/g, ' ');
+  myGrooveData.comments = decodeText(myGrooveData.comments);
 
   myGrooveData.tempo = parseInt(
     getQueryVariableFromString('tempo', constant_DEFAULT_TEMPO, encodedURLData),
@@ -222,8 +265,13 @@ export function getUrlStringFromGrooveData(myGrooveData, url_destination) {
       fullURL = fullURL.replace('/gscribe', '/groove/GrooveEmbed.html');
     else fullURL += 'GrooveEmbed.html';
   } else if (url_destination == 'fullGrooveScribe') {
-    // asking for the full GrooveScribe link
-    fullURL = 'https://www.mikeslessons.com/gscribe';
+    // asking for the full GrooveScribe link: the editor page (index.html) on the site serving this page
+    fullURL =
+      window.location.protocol +
+      '//' +
+      window.location.host +
+      window.location.pathname.slice(0, window.location.pathname.lastIndexOf('/') + 1) +
+      'index.html';
   }
 
   fullURL += '?';

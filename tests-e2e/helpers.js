@@ -1,9 +1,9 @@
 // Shared helpers for the Groove Scribe browser tests.
 
 // Navigate to a groove URL and wait until the sheet-music SVG has rendered.
-export async function loadGroove(page, url) {
-  await page.goto(url);
-  await page.waitForSelector('#svgTarget svg', { timeout: 15000 });
+export async function loadGroove(page, url, timeout = 15000) {
+  await page.goto(url, { timeout });
+  await page.waitForSelector('#svgTarget svg', { timeout });
 }
 
 // The rendered sheet-music SVG markup (abc2svg output).

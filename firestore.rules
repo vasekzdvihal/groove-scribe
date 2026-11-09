@@ -4,8 +4,11 @@ rules_version = '2';
 // grooves are top-level with an ownerId so it can be added without a migration.
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Only accounts listed in allowedUsers/{uid} can use the library. Clients cannot
+    // read or write that collection. The owner adds a document per account in the console.
     function signedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && exists(/databases/$(database)/documents/allowedUsers/$(request.auth.uid));
     }
 
     function ownsExisting() {
@@ -26,6 +29,10 @@ service cloud.firestore {
 
     function isShortString(value, maxLength) {
       return value is string && value.size() <= maxLength;
+    }
+
+    match /allowedUsers/{uid} {
+      allow read, write: if false;
     }
 
     match /users/{uid} {
@@ -67,6 +74,15 @@ service cloud.firestore {
           == request.auth.uid;
       }
 
+      // A rename keeps the lesson, even after the lesson is deleted. A new or changed
+      // lesson must belong to the caller.
+      function lessonIsAllowed(lessonId) {
+        return lessonId == null
+          || (lessonId is string
+            && ((resource != null && lessonId == resource.data.lessonId)
+              || callerOwnsLesson(lessonId)));
+      }
+
       function validGroove() {
         let data = request.resource.data;
         return data.keys().hasOnly(['ownerId', 'lessonId', 'title', 'query', 'createdAt', 'updatedAt'])
@@ -74,7 +90,7 @@ service cloud.firestore {
           && isShortString(data.title, 200)
           && isShortString(data.query, 8000)
           && data.query.matches('[?].+')
-          && (data.lessonId == null || (data.lessonId is string && callerOwnsLesson(data.lessonId)))
+          && lessonIsAllowed(data.lessonId)
           && data.updatedAt == request.time;
       }
 

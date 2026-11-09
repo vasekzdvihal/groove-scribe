@@ -19,16 +19,45 @@ async function openEditor(page, url = EDITOR) {
 
 const openPanel = (page) => page.getByRole('button', { name: 'Open library' }).click();
 
+const idTokenFor = (address) =>
+  JSON.stringify({ sub: address, email: address, email_verified: true });
+
+// Create the emulator account for an address, and add it to the allowlist. Signing in with
+// the same credential later reaches this account, so the library finds its allowlist entry.
+async function allowAccount(request, address) {
+  const response = await request.post(
+    'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=demo',
+    {
+      data: {
+        postBody: `id_token=${idTokenFor(address)}&providerId=google.com`,
+        requestUri: 'http://localhost',
+        returnIdpCredential: true,
+        returnSecureToken: true,
+      },
+    }
+  );
+  const { localId } = await response.json();
+  await request.patch(
+    `http://127.0.0.1:8080/v1/projects/demo-groovescribe/databases/(default)/documents/allowedUsers/${localId}`,
+    { headers: { Authorization: 'Bearer owner' }, data: { fields: {} } }
+  );
+}
+
 // Sign in with an emulator credential. The emulator popup loads apis.google.com and
 // unpkg.com, and those requests sometimes hang, so only one test touches the popup.
-async function signIn(page, email) {
+async function signInWithCredential(page, email) {
   await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
-  await page.evaluate(async (address) => {
+  await page.evaluate(async (idToken) => {
     const sdkUrl = '/js/vendor/firebase.js';
     const sdk = await import(sdkUrl);
-    const idToken = JSON.stringify({ sub: address, email: address, email_verified: true });
     await sdk.signInWithCredential(sdk.getAuth(), sdk.GoogleAuthProvider.credential(idToken));
-  }, email);
+  }, idTokenFor(email));
+}
+
+// Every account in these tests is on the allowlist unless a test signs in on its own.
+async function signIn(page, email) {
+  await allowAccount(page.request, email);
+  await signInWithCredential(page, email);
   await expect(page.locator('#lpLibrary')).toBeVisible();
 }
 
@@ -185,6 +214,16 @@ test('a short link gets a clear message and saves nothing', async ({ page }) => 
   await page.getByRole('button', { name: 'Add groove' }).click();
   await expect(page.getByRole('alert')).toContainText('short link');
   await expect(page.getByText('Your library is empty.')).toBeVisible();
+});
+
+test('an account that is not on the allowlist is told so and sees no library', async ({ page }) => {
+  await openEditor(page);
+  await openPanel(page);
+  await signInWithCredential(page, 'eve@example.com');
+  await expect(page.getByRole('alert')).toHaveText('This account does not have access.');
+  await expect(page.locator('#lpLibrary')).toBeHidden();
+  await expect(page.locator('#lpLoading')).toBeHidden();
+  await expect(page.getByText('Your library is empty.')).toBeHidden();
 });
 
 test('one user cannot see another user library', async ({ page }) => {

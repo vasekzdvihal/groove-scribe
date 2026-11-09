@@ -109,9 +109,17 @@ function showMessage(text) {
   message.hidden = !text;
 }
 
+// The rules refuse accounts that are not on the allowlist, so this code almost always
+// means the account has no access. A rare refused write can show the same message.
+const isDenied = (error) => error?.code === 'permission-denied';
+
 function reportFailure(error) {
   console.error(error);
-  showMessage('That did not work. Check your connection and try again.');
+  showMessage(
+    isDenied(error)
+      ? 'This account does not have access.'
+      : 'That did not work. Check your connection and try again.'
+  );
 }
 
 function lessonOptions(lessons, selectedId) {
@@ -226,7 +234,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
       return { ok: true, result };
     } catch (error) {
       if (isActive()) reportFailure(error);
-      return { ok: false };
+      return { ok: false, denied: isDenied(error) };
     }
   }
 
@@ -468,7 +476,7 @@ async function startCloud(search, editor, afterPick) {
     const library = createLibrary(sdk, db, user.uid);
     byId('lpLoading').hidden = false;
     // Attach the form handlers before the library becomes visible.
-    await startLibrary({
+    const started = await startLibrary({
       library,
       isActive: () => activeUid === user.uid,
       editor,
@@ -476,6 +484,8 @@ async function startCloud(search, editor, afterPick) {
     });
     if (activeUid !== user.uid) return;
     byId('lpLoading').hidden = true;
+    // A refused account sees the message only, and the forms stay hidden.
+    if (started.denied) return;
     byId('lpLibrary').hidden = false;
     library.saveProfile(user).catch(reportFailure);
   });

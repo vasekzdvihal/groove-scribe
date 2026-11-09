@@ -588,7 +588,9 @@ describe('GrooveUtils.loadFullScreenGrooveScribe', () => {
 
     expect(openSpy).toHaveBeenCalledTimes(1);
     const [url, target] = openSpy.mock.calls[0];
-    expect(url).toContain('https://www.mikeslessons.com/gscribe');
+    expect(url.startsWith(window.location.origin)).toBe(true);
+    expect(url).toContain('index.html?');
+    expect(url).not.toContain('mikeslessons.com');
     expect(target).toBe('_blank');
     expect(focusSpy).toHaveBeenCalledTimes(1);
   });
@@ -638,5 +640,26 @@ describe('GrooveUtils.renderABCtoSVG (real abc2svg-1.js)', () => {
     expect(result.svg.length).toBeGreaterThan(0);
     expect(result.svg).toContain('<svg');
     expect(result.svg).toContain('abc2s'); // abc2svg's own <title> marker
+  });
+
+  it('renders a % in the title, author and comments as text', async () => {
+    if (!AbcCtor) return;
+    const gu = await newGrooveUtils();
+    const abc = gu.get_top_ABC_BoilerPlate(
+      false,
+      '100% Funk',
+      'Mr 50% Off',
+      '25% done \\u0025 \\045',
+      false,
+      false,
+      false,
+      4,
+      4,
+      600
+    );
+    const result = gu.renderABCtoSVG(abc + 'K:C\nC D E F|\n');
+    expect(result.svg).toContain('100% Funk');
+    expect(result.svg).toContain('Mr 50% Off');
+    expect(result.svg).toContain('25% done % %');
   });
 });

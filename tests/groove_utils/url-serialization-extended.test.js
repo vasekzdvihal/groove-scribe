@@ -95,16 +95,12 @@ describe('GrooveUtils URL serialization (extended)', () => {
       expect(gd.notesPerMeasure).toBe(16);
     });
 
-    // Current behavior: unlike Measures/Tempo/Swing, Div has NO NaN guard --
-    // a non-numeric Div poisons timeDivision and notesPerMeasure with NaN,
-    // which in turn makes noteArraysFromURLData build a zero-length array
-    // (a `for (i=0; i<NaN; i++)` loop never executes). This documents the
-    // current (buggy but real) behavior.
-    it('propagates NaN when Div is non-numeric (no fallback default)', () => {
+    // A non-numeric Div falls back to 16 so a bad link cannot hang the editor.
+    it('falls back to 16 when Div is non-numeric', () => {
       const gd = gu.getGrooveDataFromUrlString('?TimeSig=4/4&Div=abc&H=|xxxxxxxxxxxxxxxx|');
-      expect(gd.timeDivision).toBeNaN();
-      expect(gd.notesPerMeasure).toBeNaN();
-      expect(gd.hh_array).toEqual([]);
+      expect(gd.timeDivision).toBe(16);
+      expect(gd.notesPerMeasure).toBe(16);
+      expect(gd.hh_array).toHaveLength(16);
     });
   });
 
@@ -484,10 +480,23 @@ describe('GrooveUtils URL serialization (extended)', () => {
       expect(out).toContain('GrooveEmbed.html?');
     });
 
-    it('"fullGrooveScribe" replaces the whole origin+path with the hardcoded external URL', () => {
+    it('"fullGrooveScribe" points at the editor page (index.html) on the current origin', () => {
       const gd = gu.getGrooveDataFromUrlString('?TimeSig=4/4&Div=16');
       const out = gu.getUrlStringFromGrooveData(gd, 'fullGrooveScribe');
-      expect(out.startsWith('https://www.mikeslessons.com/gscribe?')).toBe(true);
+      const dir = window.location.pathname.slice(0, window.location.pathname.lastIndexOf('/') + 1);
+      expect(out.startsWith(window.location.origin + dir + 'index.html?')).toBe(true);
+      expect(out).not.toContain('mikeslessons.com');
+    });
+
+    it('"fullGrooveScribe" from the embed page points at index.html, not GrooveEmbed.html', () => {
+      window.history.replaceState(null, '', '/GrooveEmbed.html?x=1');
+      try {
+        const gd = gu.getGrooveDataFromUrlString('?TimeSig=4/4&Div=16');
+        const out = gu.getUrlStringFromGrooveData(gd, 'fullGrooveScribe');
+        expect(out.startsWith(window.location.origin + '/index.html?')).toBe(true);
+      } finally {
+        window.history.replaceState(null, '', '/');
+      }
     });
 
     it('an unrecognized destination string falls through unchanged, same as no destination', () => {

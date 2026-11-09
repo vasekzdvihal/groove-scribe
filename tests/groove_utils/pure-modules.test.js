@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { newGrooveUtils, installMidiGlobal } from '../helpers/legacyLoader.js';
-import { createABCFromGrooveData } from '../../js/abcNotation.js';
+import { createABCFromGrooveData, sanitizeAbcText } from '../../js/abcNotation.js';
 import { create_MIDIURLFromGrooveData } from '../../js/midiFile.js';
 
 // Demonstrates the Step-2 extractions: ABC-notation and MIDI-file generation now
@@ -33,5 +33,51 @@ describe('extracted pure-core modules (direct import)', () => {
   it('midiFile.create_MIDIURLFromGrooveData matches the delegating GrooveUtils method', () => {
     const gd = grooveData();
     expect(create_MIDIURLFromGrooveData(gu, gd)).toBe(gu.create_MIDIURLFromGrooveData(gd));
+  });
+});
+
+describe('sanitizeAbcText', () => {
+  it('turns a line break into one space', () => {
+    expect(sanitizeAbcText('a\nb')).toBe('a b');
+  });
+
+  it('collapses every kind of line break and control character', () => {
+    expect(sanitizeAbcText('a\r\n\u2028\u2029\u0085\x00\x7fb')).toBe('a b');
+  });
+
+  it('leaves plain text alone', () => {
+    expect(sanitizeAbcText('Funky Drummer')).toBe('Funky Drummer');
+  });
+
+  it('escapes % so abc2svg does not read it as a comment', () => {
+    expect(sanitizeAbcText('100% Funk')).toBe('100\\% Funk');
+    expect(sanitizeAbcText('%%beginjs')).toBe('\\%\\%beginjs');
+  });
+
+  it('keeps % escaped after a backslash and after an escape that decodes to %', () => {
+    expect(sanitizeAbcText('a\\%b')).toBe('a\\%b');
+    expect(sanitizeAbcText('a\\\\%b')).toBe('a\\\\\\%b');
+    expect(sanitizeAbcText('a\\u0025b')).toBe('a\\%b');
+    expect(sanitizeAbcText('a\\045b')).toBe('a\\%b');
+  });
+
+  it('keeps a stored title with a line break on one ABC line', async () => {
+    const gu = await newGrooveUtils();
+    const abc = gu.get_top_ABC_BoilerPlate(
+      false,
+      'x\n%%beginjs',
+      'y\n%%beginjs',
+      'z\n%%beginjs',
+      false,
+      false,
+      false,
+      4,
+      4,
+      600
+    );
+    expect(abc).toContain('T: x \\%\\%beginjs\n');
+    expect(abc).toContain('C: y \\%\\%beginjs\n');
+    expect(abc).toContain('P: z \\%\\%beginjs\n');
+    expect(abc).not.toMatch(/^%%beginjs/m);
   });
 });
