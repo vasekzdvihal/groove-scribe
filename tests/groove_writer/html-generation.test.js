@@ -212,7 +212,8 @@ describe('HTMLforStaffContainer', () => {
     });
   });
 
-  describe('measure limit (constant_MAX_MEASURES = 10)', () => {
+  // Each test renders the grid up to ten times in jsdom, which takes seconds on a busy machine.
+  describe('measure limit (constant_MAX_MEASURES = 10)', { timeout: 30000 }, () => {
     it('renders an enabled add button below the limit and a disabled one at the limit', async () => {
       document.body.innerHTML = '';
       gw = await newGrooveWriter();
