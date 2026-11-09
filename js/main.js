@@ -12,6 +12,7 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
+import { createWakeLock } from './wakeLock.js';
 
 // Inline HTML handlers (onclick="myGrooveWriter.…") and other consumers still
 // reference these as globals, so expose them on window.
@@ -22,6 +23,28 @@ window.grooves = grooves;
 const myGrooveWriter = new GrooveWriter();
 window.myGrooveWriter = myGrooveWriter;
 const utils = myGrooveWriter.myGrooveUtils;
+
+// Keep the screen on while a groove plays and between exercises. The editor only: the
+// embed pages never load this.
+const wakeLock = createWakeLock({
+  navigator,
+  document,
+  setTimeout: (...args) => window.setTimeout(...args),
+  clearTimeout: (...args) => window.clearTimeout(...args),
+});
+const callbacks = utils.midiEventCallbacks;
+for (const [name, hook] of [
+  ['playEvent', wakeLock.onPlay],
+  ['pauseEvent', wakeLock.onStop],
+  ['stopEvent', wakeLock.onStop],
+]) {
+  const original = callbacks[name];
+  callbacks[name] = function (...args) {
+    const result = original.apply(this, args);
+    hook();
+    return result;
+  };
+}
 
 // Conditional stylesheets (previously injected via document.write in <head>).
 function addStylesheet(href) {
