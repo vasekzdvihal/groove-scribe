@@ -37,11 +37,9 @@ describe('GrooveUtils tempo & swing controls', () => {
       expect(gu.getTempo()).toBe(120);
     });
 
-    // The source guards with `if (tempo < 19 && tempo > 281)` which can never
-    // be true (a number cannot be simultaneously < 19 and > 281), so the
-    // "clamp to default" branch is dead code: out-of-range values pass
-    // through unmodified. This locks in that actual (buggy) behavior.
-    it('does not clamp values below 19 or above 281 (the clamp condition is unreachable)', () => {
+    // The old clamp guard (`tempo < 19 && tempo > 281`) could never be true and is
+    // removed. Out-of-range values pass through unmodified.
+    it('does not clamp values below 19 or above 281', () => {
       document.body.innerHTML =
         '<input id="tempoInput' + gu.grooveUtilsUniqueIndex + '" value="5">';
       expect(gu.getTempo()).toBe(5);
@@ -71,9 +69,8 @@ describe('GrooveUtils tempo & swing controls', () => {
       expect(gu.getTempo()).toBe(150);
     });
 
-    // Same unreachable-clamp story as getTempo: `if (newTempo < 19 &&
-    // newTempo > 281) return;` never triggers, so setTempo never rejects a
-    // value on those grounds.
+    // The old guard in setTempo could never be true and is removed, so setTempo
+    // never rejects a value on those grounds.
     it('does not reject values below 19 or above 281', () => {
       gu.setTempo(5);
       expect(gu.getTempo()).toBe(5);

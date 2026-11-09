@@ -1382,7 +1382,6 @@ function GrooveUtils() {
 
     if (tempoInput) {
       tempo = parseInt(tempoInput.value, 10);
-      if (tempo < 19 && tempo > 281) tempo = constant_DEFAULT_TEMPO;
     }
 
     return tempo;
@@ -1482,8 +1481,6 @@ function GrooveUtils() {
   };
 
   root.setTempo = function (newTempo) {
-    if (newTempo < 19 && newTempo > 281) return;
-
     document.getElementById('tempoInput' + root.grooveUtilsUniqueIndex).value = newTempo;
     root.tempoUpdate(newTempo);
   };
