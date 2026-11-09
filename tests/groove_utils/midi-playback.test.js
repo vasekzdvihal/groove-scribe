@@ -434,10 +434,8 @@ describe('GrooveUtils MIDI playback controls', () => {
       expect(() => gu.updateMidiPlayTime()).not.toThrow();
     });
 
-    it('getMidiPlayTime throws if called before any playback has started (global_current_midi_start_time is still the number 0, not a Date)', () => {
-      // Observed actual behavior, not a documented contract - recorded here
-      // as a regression pin so an accidental fix/behavior change is visible.
-      expect(() => gu.getMidiPlayTime()).toThrow(/getTime is not a function/);
+    it('getMidiPlayTime returns zero play time before any playback has started', () => {
+      expect(gu.getMidiPlayTime().getTime()).toBe(0);
     });
   });
 

@@ -1183,6 +1183,9 @@ function GrooveUtils() {
   // calculate how long the midi has been playing total (since the last play/pause press
   // this is computationally expensive
   root.getMidiPlayTime = function () {
+    // playback has not started yet, so no time has been played
+    if (!(global_current_midi_start_time instanceof Date)) return new Date(0);
+
     var time_now = new Date();
     var play_time_diff = new Date(time_now.getTime() - global_current_midi_start_time.getTime());
 

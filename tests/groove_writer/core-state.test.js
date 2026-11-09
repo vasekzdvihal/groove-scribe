@@ -479,16 +479,19 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.useRealTimers();
   });
 
-  // BUG: metronomeAutoSpeedUpTempoUpdate() calls root.myGrooveUtils.getMidiPlayTime(),
-  // which does `global_current_midi_start_time.getTime()`. Before MIDI playback has
-  // ever been started, that module-level var is still the number `0` (its initial
-  // value), not a Date -- so `.getTime` doesn't exist and the call throws. In the
-  // real app this code path is only ever reached from the `notePlaying` MIDI event
-  // callback while a groove is actively playing, so start time is always a Date by
-  // then; calling it standalone (as here) exposes the underlying assumption.
-  it('throws if MIDI playback was never started (global_current_midi_start_time is still 0, not a Date)', async () => {
+  // Before playback has ever started there is no start time. The speed-up must
+  // treat that as zero play time instead of throwing.
+  it('does nothing when MIDI playback was never started', async () => {
     const gw = await newGrooveWriter();
-    expect(() => gw.metronomeAutoSpeedUpTempoUpdate()).toThrow(/getTime is not a function/);
+    document.body.innerHTML =
+      '<input id="tempoInput' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '" value="80">' +
+      '<input id="tempoTextField' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '">';
+    expect(() => gw.metronomeAutoSpeedUpTempoUpdate()).not.toThrow();
+    expect(gw.myGrooveUtils.getTempo()).toBe(80);
   });
 
   it('does not change tempo on the first call after playback starts (it only establishes the timing baseline)', async () => {
