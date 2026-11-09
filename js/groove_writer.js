@@ -3371,34 +3371,112 @@ function GrooveWriter() {
       '</sub>';
   };
 
+  // A division that does not fit a time signature gets a message that says why. Null means it fits.
+  function divisionProblem(division, timeSigTop, timeSigBottom) {
+    // 9/8 and 1/4 notes for instance, or 9/16 and 1/8 notes
+    if (((division * timeSigTop) / timeSigBottom) % 1 != 0) {
+      return (
+        '1/' +
+        division +
+        ' notes are disabled in ' +
+        timeSigTop +
+        '/' +
+        timeSigBottom +
+        ' time.  This combination would result in a half note.'
+      );
+    }
+    if (root.myGrooveUtils.isTripletDivision(division) && timeSigBottom != 4) {
+      return (
+        'Triplets are disabled in ' +
+        timeSigTop +
+        '/' +
+        timeSigBottom +
+        ' time.  Use x/4 time for triplets.'
+      );
+    }
+    return null;
+  }
+
+  // One lane of the grid as a URL string, with each measure cut or padded to its new length.
+  function laneWithNewMeasureLength(getNote, newNotesPerMeasure) {
+    var keptNotes = Math.min(class_notes_per_measure, newNotesPerMeasure);
+    var lane = '|';
+    for (var measure = 0; measure < class_number_of_measures; measure++) {
+      for (var i = 0; i < keptNotes; i++) {
+        lane += getNote(measure * class_notes_per_measure + i);
+      }
+      lane += '-'.repeat(newNotesPerMeasure - keptNotes) + '|';
+    }
+    return lane;
+  }
+
+  function changeTimeSignature(newTimeSigTop, newTimeSigBottom) {
+    var newNotesPerMeasure = root.myGrooveUtils.calc_notes_per_measure(
+      class_time_division,
+      newTimeSigTop,
+      newTimeSigBottom
+    );
+    var readLane = function (getNote) {
+      return laneWithNewMeasureLength(getNote, newNotesPerMeasure);
+    };
+
+    // Read the grid first: its note ids still use the old measure length.
+    var uiStickings = readLane(function (i) {
+      return get_sticking_state(i, 'URL');
+    });
+    var uiHH = readLane(function (i) {
+      return get_hh_state(i, 'URL');
+    });
+    var uiTom1 = readLane(function (i) {
+      return get_tom_state(i, 1, 'URL');
+    });
+    var uiTom4 = readLane(function (i) {
+      return get_tom_state(i, 4, 'URL');
+    });
+    var uiSnare = readLane(function (i) {
+      return get_snare_state(i, 'URL');
+    });
+    var uiKick = readLane(function (i) {
+      return get_kick_state(i, 'URL');
+    });
+
+    class_num_beats_per_measure = newTimeSigTop;
+    class_note_value_per_measure = newTimeSigBottom;
+
+    root.expandAuthoringViewWhenNecessary(class_time_division, class_number_of_measures);
+    changeDivisionWithNotes(
+      class_time_division,
+      uiStickings,
+      uiHH,
+      uiTom1,
+      uiTom4,
+      uiSnare,
+      uiKick
+    );
+    updateSheetMusic();
+  }
+
   root.timeSigPopupClose = function (type, callback) {
-    var popup = document.getElementById('timeSigPopup');
-
-    if (popup) popup.style.display = 'none';
-
-    // ignore type "cancel"
     if (type == 'ok') {
-      var newTimeSigTop = document.getElementById('timeSigPopupTimeSigTop').value;
-      var newTimeSigBottom = document.getElementById('timeSigPopupTimeSigBottom').value;
+      var newTimeSigTop = parseInt(document.getElementById('timeSigPopupTimeSigTop').value, 10);
+      var newTimeSigBottom = parseInt(
+        document.getElementById('timeSigPopupTimeSigBottom').value,
+        10
+      );
 
-      if (usingTriplets() && newTimeSigBottom != 4) {
-        root.changeDivision(16); // switch to a non triplet division since they are not supported in this time signature
+      // A refused change touches nothing, and the popup stays open so the user can correct it.
+      var problem = divisionProblem(class_time_division, newTimeSigTop, newTimeSigBottom);
+      if (problem) {
+        alert(problem);
+        return;
       }
 
-      class_num_beats_per_measure = newTimeSigTop;
-      class_note_value_per_measure = newTimeSigBottom;
-      var new_notes_per_measure = root.myGrooveUtils.calc_notes_per_measure(
-        class_time_division,
-        class_num_beats_per_measure,
-        class_note_value_per_measure
-      );
-      // If new_notes_per_measure is greater it will cause the changeDivision code to error
-      // as it tries to read the notes from the UI.   Setting it lower will allow the code to truncate
-      // the groove properly to something smaller rather than interpolating the groove into something weird
-      if (new_notes_per_measure < class_notes_per_measure)
-        class_notes_per_measure = new_notes_per_measure;
-      root.changeDivision(class_time_division); // use this function because it will relayout everything
+      changeTimeSignature(newTimeSigTop, newTimeSigBottom);
     }
+
+    var popup = document.getElementById('timeSigPopup');
+    if (popup) popup.style.display = 'none';
+
     if (callback) {
       callback();
     }
@@ -3717,27 +3795,13 @@ function GrooveWriter() {
       class_note_value_per_measure
     );
 
-    // check for incompatible odd time signature division   9/8 and 1/4notes for instance or 9/16 and 1/8notes
-    if (((newDivision * class_num_beats_per_measure) / class_note_value_per_measure) % 1 != 0) {
-      alert(
-        '1/' +
-          newDivision +
-          ' notes are disabled in ' +
-          class_num_beats_per_measure +
-          '/' +
-          class_note_value_per_measure +
-          ' time.  This combination would result in a half note.'
-      );
-      return;
-    }
-    if (isNewDivisionTriplets && class_note_value_per_measure != 4) {
-      alert(
-        'Triplets are disabled in ' +
-          class_num_beats_per_measure +
-          '/' +
-          class_note_value_per_measure +
-          ' time.  Use x/4 time for triplets.'
-      );
+    var problem = divisionProblem(
+      newDivision,
+      class_num_beats_per_measure,
+      class_note_value_per_measure
+    );
+    if (problem) {
+      alert(problem);
       return;
     }
 

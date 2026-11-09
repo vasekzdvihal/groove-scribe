@@ -35,6 +35,16 @@ async function chooseDivision(page, id) {
   await page.click(`#${id}`);
 }
 
+// Accepts every dialog and returns the list of their messages.
+function collectDialogs(page) {
+  const messages = [];
+  page.on('dialog', (dialog) => {
+    messages.push(dialog.message());
+    dialog.accept();
+  });
+  return messages;
+}
+
 async function chooseTimeSignature(page, top, bottom) {
   await page.click('#timeLabel');
   await page.selectOption('#timeSigPopupTimeSigTop', top);
@@ -87,6 +97,48 @@ test.describe('add measure', () => {
       page,
       '?TimeSig=4/4&Div=16&Tempo=80&Measures=2&H=|x---------------|x---------------|&S=|----------------|----O-----------|&K=|----------------|----------------|'
     );
+  });
+
+  test('add measure at 10 measures changes nothing (audit item 2)', async ({ page }) => {
+    page.on('dialog', (dialog) => dialog.accept());
+    const ten = empty(16, 10);
+    await open(page, ten);
+    await expect(page.locator('#addMeasureButton')).toHaveAttribute(
+      'title',
+      'Maximum is 10 measures'
+    );
+    await expect(page.locator('#addMeasureButton')).toBeDisabled();
+    // Force the click: a disabled button is not clickable by default.
+    await page.click('#addMeasureButton', { force: true });
+    // The limit is 10 measures, so the URL must still say Measures=10.
+    await expectQuery(page, ten);
+  });
+
+  test('the Add button follows the limit on load, remove, undo and redo', async ({ page }) => {
+    page.on('dialog', (dialog) => dialog.accept());
+    const add = page.locator('#addMeasureButton');
+    await open(page, empty(16, 9));
+    await expect(add).toBeEnabled();
+    await expect(add).toHaveAttribute('title', 'Add measure');
+
+    await add.click();
+    await expectQuery(page, empty(16, 10));
+    await expect(add).toBeDisabled();
+
+    await page.click('#undoButton');
+    await expectQuery(page, empty(16, 9));
+    await expect(add).toBeEnabled();
+
+    await page.click('#redoButton');
+    await expectQuery(page, empty(16, 10));
+    await expect(add).toBeDisabled();
+
+    await page.click('#closeMeasureButton10');
+    await expectQuery(page, empty(16, 9));
+    await expect(add).toBeEnabled();
+
+    await open(page, empty(16, 10));
+    await expect(add).toBeDisabled();
   });
 });
 
@@ -326,6 +378,94 @@ test.describe('change time signature', () => {
     await expectQuery(page, EIGHT_EIGHT);
     await expect(page.locator('#timeSigLabel')).toHaveText('8/8');
   });
+
+  // Three measures with different notes in every lane. Notes in slots 12 to 15 fall outside a
+  // shorter measure, and each measure has a note there.
+  const LANES = {
+    H: ['x-----------x---', '-x-----------x--', '--x-----------x-'],
+    S: ['----O-----------', '-----O----------', '------g-------O-'],
+    K: ['o---------------', '-o--------------', '--o----------o--'],
+    Stickings: ['R-----------R---', '-L-----------L--', '--B-----------c-'],
+    T1: ['---o------------', '----o-----------', '-----o------o---'],
+    T4: ['--------o-------', '---------o------', '----------o----o'],
+  };
+
+  // The URL of the LANES groove with each measure cut or padded to the given length.
+  function lanesUrl(timeSig, notes) {
+    const row = (name) =>
+      `&${name}=|${LANES[name].map((m) => m.slice(0, notes).padEnd(notes, '-')).join('|')}|`;
+    return `?TimeSig=${timeSig}&Div=16&Tempo=80&Measures=3${row('H')}${row('S')}${row('K')}${row('T1')}${row('T4')}${row('Stickings')}`;
+  }
+
+  const ORIGINAL = lanesUrl('4/4', 16);
+
+  for (const [top, bottom, notes, name] of [
+    ['3', '4', 12, 'a shorter measure drops only its own notes past the new end'],
+    ['7', '8', 14, 'a shorter measure in 7/8 drops only its own notes past the new end'],
+    ['5', '4', 20, 'a longer measure keeps its notes and gets empty new slots'],
+    ['8', '4', 32, 'a measure of twice the length is padded and not stretched'],
+  ]) {
+    test(`${top}/${bottom} on three measures: ${name}, and one undo restores the groove`, async ({
+      page,
+    }) => {
+      await open(page, ORIGINAL);
+      await expectQuery(page, ORIGINAL);
+      await chooseTimeSignature(page, top, bottom);
+      await expectQuery(page, lanesUrl(`${top}/${bottom}`, notes));
+      await page.click('#undoButton');
+      await expectQuery(page, ORIGINAL);
+      await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
+    });
+  }
+
+  test('a refused change keeps every part of the editor as it was', async ({ page }) => {
+    const messages = collectDialogs(page);
+    const triplets =
+      '?TimeSig=4/4&Div=12&Tempo=80&Measures=2&H=|x-----------|-x----------|&S=|------------|------------|&K=|------------|------------|';
+    const edited = triplets.replace('H=|x-----', 'H=|x--x--');
+    await open(page, triplets);
+    await page.click('#hi-hat3');
+    await expectQuery(page, edited);
+
+    await chooseTimeSignature(page, '4', '8');
+    await expect.poll(() => messages).toHaveLength(1);
+
+    await expectQuery(page, edited);
+    await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
+    await expect(page.locator('#divisionMenuLabel')).toHaveText('1/8 triplets');
+    expect(await page.evaluate(() => window.myGrooveWriter.numberOfMeasures())).toBe(2);
+    expect(await page.evaluate(() => window.myGrooveWriter.notesPerMeasure())).toBe(12);
+
+    // The popup stays open with the refused choice, so the user can correct it.
+    await expect(page.locator('#timeSigPopup')).toBeVisible();
+    await expect(page.locator('#timeSigPopupTimeSigBottom')).toHaveValue('8');
+    await page.click('#timeSigPopupCancel');
+
+    // The refusal added no undo step: one undo takes back the note, a second does nothing.
+    await page.click('#undoButton');
+    await expectQuery(page, triplets);
+    await page.click('#undoButton');
+    await expectQuery(page, triplets);
+  });
+
+  test('1/8 notes in 3/16 time are refused, with the reason', async ({ page }) => {
+    const messages = collectDialogs(page);
+    const eighths = empty(8);
+    await open(page, eighths);
+    await chooseTimeSignature(page, '3', '16');
+    await expect
+      .poll(() => messages)
+      .toEqual([
+        '1/8 notes are disabled in 3/16 time.  This combination would result in a half note.',
+      ]);
+    await expectQuery(page, eighths);
+    await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
+    await expect(page.locator('#timeSigPopup')).toBeVisible();
+    await page.click('#timeSigPopupCancel');
+    // The next edit proves that the refused time signature was never stored.
+    await page.click('#hi-hat0');
+    await expectQuery(page, eighths.replace('H=|-', 'H=|x'));
+  });
 });
 
 // Known bugs. Each test states the correct behaviour. PR 3 removes the modifier.
@@ -402,63 +542,23 @@ test.describe('known bugs', () => {
     await expectNoPermutation(page);
   });
 
-  test('add measure at 10 measures changes nothing (audit item 2)', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept());
-    const ten = empty(16, 10);
-    await open(page, ten);
-    await expect(page.locator('#addMeasureButton')).toHaveAttribute(
-      'title',
-      'Maximum is 10 measures'
-    );
-    await expect(page.locator('#addMeasureButton')).toBeDisabled();
-    // Force the click: a disabled button is not clickable by default.
-    await page.click('#addMeasureButton', { force: true });
-    // Today the URL says Measures=11, and a reload cuts it back to 10.
-    await expectQuery(page, ten);
-  });
-
-  test('the Add button follows the limit on load, remove, undo and redo', async ({ page }) => {
-    page.on('dialog', (dialog) => dialog.accept());
-    const add = page.locator('#addMeasureButton');
-    await open(page, empty(16, 9));
-    await expect(add).toBeEnabled();
-    await expect(add).toHaveAttribute('title', 'Add measure');
-
-    await add.click();
-    await expectQuery(page, empty(16, 10));
-    await expect(add).toBeDisabled();
-
-    await page.click('#undoButton');
-    await expectQuery(page, empty(16, 9));
-    await expect(add).toBeEnabled();
-
-    await page.click('#redoButton');
-    await expectQuery(page, empty(16, 10));
-    await expect(add).toBeDisabled();
-
-    await page.click('#closeMeasureButton10');
-    await expectQuery(page, empty(16, 9));
-    await expect(add).toBeEnabled();
-
-    await open(page, empty(16, 10));
-    await expect(add).toBeDisabled();
-  });
-
-  test.fixme('a bad time signature combination leaves all state unchanged (audit item 15)', async ({
+  test('a bad time signature combination leaves all state unchanged (audit item 15)', async ({
     page,
   }) => {
+    const messages = collectDialogs(page);
     // 1/8 triplets are not allowed with an 8th note beat.
-    // The expected URL is a best guess. PR 3 may instead expect a switch to a straight division.
     const triplets =
       '?TimeSig=4/4&Div=12&Tempo=80&Measures=1&H=|x-----------|&S=|------------|&K=|------------|';
     await open(page, triplets);
     await chooseTimeSignature(page, '4', '8');
-    // Today the division changes to 16 and the hi-hat note spreads over the measure.
+    await expect
+      .poll(() => messages)
+      .toEqual(['Triplets are disabled in 4/8 time.  Use x/4 time for triplets.']);
     await expectQuery(page, triplets);
     await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
   });
 
-  test.fixme('on two measures, a time signature change keeps each measure in its own bar (audit item 18)', async ({
+  test('on two measures, a time signature change keeps each measure in its own bar (audit item 18)', async ({
     page,
   }) => {
     await open(
@@ -466,7 +566,6 @@ test.describe('known bugs', () => {
       '?TimeSig=4/4&Div=8&Tempo=80&Measures=2&H=|x-------|x-------|&S=|--------|--------|&K=|--------|--------|'
     );
     await chooseTimeSignature(page, '3', '4');
-    // Today the second measure's note moves to the third slot of the new second bar.
     await expectQuery(
       page,
       '?TimeSig=3/4&Div=8&Tempo=80&Measures=2&H=|x-----|x-----|&S=|------|------|&K=|------|------|'
