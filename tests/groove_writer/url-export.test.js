@@ -337,7 +337,7 @@ describe('GrooveWriter url-export (js/groove_writer.js)', () => {
       return fn;
     }
 
-    it('SVGSaveAs renders real ABC to SVG and calls Pablo(...).download("svg", "<title>svg", ...)', async () => {
+    it('SVGSaveAs renders real ABC to SVG and calls Pablo(...).download("svg", "<title>.svg", ...)', async () => {
       installAbcGlobal();
       const PabloFn = installPabloStub(true);
       const gw = await newGrooveWriter();
@@ -348,13 +348,10 @@ describe('GrooveWriter url-export (js/groove_writer.js)', () => {
 
       expect(PabloFn).toHaveBeenCalledTimes(1);
       expect(PabloFn.lastArg).toContain('<svg');
-      // Quirk (observed): the filename is `tune_title + imageType` with NO
-      // separator when a title is set (so "MyTune" + "svg" = "MyTunesvg"),
-      // unlike the untitled-case default "notation." (which already has a
-      // trailing dot baked in).
+      // The file name is the title, a dot and the image type.
       expect(PabloFn.lastChain.download).toHaveBeenCalledWith(
         'svg',
-        'MyTunesvg',
+        'MyTune.svg',
         expect.any(Function)
       );
     });
@@ -386,7 +383,7 @@ describe('GrooveWriter url-export (js/groove_writer.js)', () => {
       expect(PabloFn.support.image.png).toHaveBeenCalledTimes(1);
       expect(PabloFn.lastChain.download).toHaveBeenCalledWith(
         'png',
-        'MyTunepng',
+        'MyTune.png',
         expect.any(Function)
       );
     });

@@ -2462,11 +2462,11 @@ function GrooveWriter() {
     var tune_title = document.getElementById('tuneTitle').value;
 
     if (tune_title.length == 0) {
-      filename = 'notation.';
+      filename = 'notation';
     } else {
       filename = tune_title;
     }
-    filename += imageType;
+    filename += '.' + imageType;
 
     var svg_images = svg_obj.svg.split('</svg>');
     // that split should always create at least 2 since it will match that </svg> if there is only one
