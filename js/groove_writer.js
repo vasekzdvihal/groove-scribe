@@ -3906,7 +3906,8 @@ function GrooveWriter() {
     var changesBetweenStraightAndTriplets = usingTriplets() !== isNewDivisionTriplets;
     if (changesBetweenStraightAndTriplets) {
       // triplets do not scale from straight notes, so the notes would be replaced by a default groove
-      var hasNotes = /[^-|]/.test(uiStickings + uiHH + uiTom1 + uiTom4 + uiSnare + uiKick);
+      var hasNotes =
+        /[^-|]/.test(uiStickings + uiHH + uiTom1 + uiTom4 + uiSnare + uiKick) || !!keptTomLanes();
       if (
         hasNotes &&
         !window.confirm(

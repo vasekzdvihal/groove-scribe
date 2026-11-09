@@ -969,4 +969,19 @@ test.describe('toms 2 and 3 play and show', () => {
     await page.click('#showHideTomsButton');
     await expect.poll(() => noteHeads(page)).toEqual({ count: 4, heights: 4 });
   });
+
+  test('a groove with notes only on toms 2 or 3 asks before switching to triplets', async ({
+    page,
+  }) => {
+    const messages = [];
+    page.on('dialog', (dialog) => {
+      messages.push(dialog.message());
+      dialog.dismiss();
+    });
+    const onlyT2 = START + `&T2=${lane('o', 1)}`;
+    await open(page, onlyT2);
+    await chooseDivision(page, 'subdivision_12ths');
+    await expect.poll(() => messages).toHaveLength(1);
+    await expect(page.locator('#divisionMenuLabel')).toHaveText('1/16 notes');
+  });
 });
