@@ -615,13 +615,47 @@ test.describe('known bugs', () => {
     );
   });
 
-  test.fixme('toms 2 and 3 survive load and read back (audit item 17)', async ({ page }) => {
-    // The expected URL below is a best guess. PR 3 may correct it.
+  test('toms 2 and 3 survive load and read back (audit item 17)', async ({ page }) => {
     const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
     const withToms =
       START + `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('o', 3)}`;
     await open(page, withToms);
-    // Today the URL has T1 and T4 only.
     await expectQuery(page, withToms);
+  });
+
+  test('toms 2 and 3 survive an edit in another lane, undo and redo', async ({ page }) => {
+    const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
+    const toms = `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('o', 3)}`;
+    const base = START + toms;
+    await open(page, base);
+    await expectQuery(page, base);
+    await page.click('#hi-hat0');
+    const edited = START.replace('&H=|----------------|', '&H=|x---------------|') + toms;
+    await expectQuery(page, edited);
+    await page.click('#undoButton');
+    await expectQuery(page, base);
+    await page.click('#redoButton');
+    await expectQuery(page, edited);
+  });
+
+  test('toms 2 and 3 do not leak into the next groove', async ({ page }) => {
+    const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
+    const withT2 = START + `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T4=${lane('-', 0)}`;
+    await open(page, withT2);
+    await expectQuery(page, withT2);
+    const next = START + `&T1=${lane('o', 4)}&T4=${lane('o', 5)}`;
+    await page.evaluate((q) => window.myGrooveWriter.loadNewGroove(q), next);
+    await expectQuery(page, next);
+  });
+
+  test('toms 2 and 3 are dropped when the bar layout changes', async ({ page }) => {
+    const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
+    const withToms =
+      START + `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('-', 0)}`;
+    await open(page, withToms);
+    await expectQuery(page, withToms);
+    await chooseDivision(page, 'subdivision_8ths');
+    await expect.poll(() => query(page)).not.toContain('T2=');
+    await expect.poll(() => query(page)).not.toContain('T3=');
   });
 });

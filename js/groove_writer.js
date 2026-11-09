@@ -96,6 +96,17 @@ function GrooveWriter() {
 
   root.myGrooveUtils = new GrooveUtils();
 
+  // The grid has rows for toms 1 and 4 only. Toms 2 and 3 of a loaded groove are kept here and
+  // written back with it. They are valid only for the bar layout they were loaded with.
+  var class_kept_toms = null; // { layout: string, lanes: [T2 array, T3 array] } or null
+  function tomLayoutKey() {
+    return [
+      class_number_of_measures,
+      class_time_division,
+      class_num_beats_per_measure,
+      class_note_value_per_measure,
+    ].join('/');
+  }
   var class_undo_stack = [];
   var class_redo_stack = [];
   var constant_undo_stack_max_size = 40;
@@ -1891,6 +1902,13 @@ function GrooveWriter() {
       }
     }
 
+    // Toms 2 and 3 come from the kept lanes. A changed bar layout drops them for good.
+    if (class_kept_toms && class_kept_toms.layout !== tomLayoutKey()) class_kept_toms = null;
+    if (class_kept_toms && isTomsVisible()) {
+      myGrooveData.toms_array[1] = class_kept_toms.lanes[0].slice();
+      myGrooveData.toms_array[2] = class_kept_toms.lanes[1].slice();
+    }
+
     return myGrooveData;
   };
 
@@ -3649,6 +3667,18 @@ function GrooveWriter() {
     setNotesFromABCArray('T4', grooveData.toms_array[3], class_number_of_measures);
     setNotesFromABCArray('S', grooveData.snare_array, class_number_of_measures);
     setNotesFromABCArray('K', grooveData.kick_array, class_number_of_measures);
+
+    // Keep toms 2 and 3. Always replace the old ones, so nothing leaks from the last groove.
+    var hasNote = function (lane) {
+      return !!lane && lane.some((note) => note !== false && note !== undefined);
+    };
+    class_kept_toms =
+      hasNote(grooveData.toms_array[1]) || hasNote(grooveData.toms_array[2])
+        ? {
+            layout: tomLayoutKey(),
+            lanes: [grooveData.toms_array[1].slice(), grooveData.toms_array[2].slice()],
+          }
+        : null;
 
     root.showHideToms(true, grooveData.showToms, true);
 

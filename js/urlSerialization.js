@@ -308,6 +308,22 @@ export function getUrlStringFromGrooveData(myGrooveData, url_destination) {
 
   // notes
   var total_notes = myGrooveData.notesPerMeasure * myGrooveData.numberOfMeasures;
+  function tomLaneIfUsed(name, laneArray) {
+    if (!laneArray || !laneArray.some((note) => note !== false && note !== undefined)) return '';
+    return (
+      '&' +
+      name +
+      '=|' +
+      tabLineFromAbcNoteArray(
+        name,
+        laneArray,
+        true,
+        true,
+        total_notes,
+        myGrooveData.notesPerMeasure
+      )
+    );
+  }
   var HH =
     '&H=|' +
     tabLineFromAbcNoteArray(
@@ -363,7 +379,12 @@ export function getUrlStringFromGrooveData(myGrooveData, url_destination) {
         total_notes,
         myGrooveData.notesPerMeasure
       );
-    fullURL += Tom1 + Tom4;
+    // T2 and T3 have no grid rows. They are written only when they hold notes, and in lane order.
+    fullURL +=
+      Tom1 +
+      tomLaneIfUsed('T2', myGrooveData.toms_array[1]) +
+      tomLaneIfUsed('T3', myGrooveData.toms_array[2]) +
+      Tom4;
   }
 
   // only add if we need them.  // they are long and ugly. :)
