@@ -256,16 +256,20 @@ describe('GrooveUtils URL serialization (extended)', () => {
       }
     });
 
-    // Quirk: only T1 and T4 are ever re-serialized by getUrlStringFromGrooveData,
-    // even if showToms became true because of a T2/T3 param. T2/T3 data is
-    // effectively unrecoverable from a round trip today.
-    it('re-serializes only T1 and T4, never T2/T3, even when showToms is true', () => {
+    it('re-serializes T1, T2, T3 and T4 in that order', () => {
       const gd = gu.getGrooveDataFromUrlString(
-        '?TimeSig=4/4&Div=16&T1=|o---------------|&T2=|o---------------|&T3=|o---------------|&T4=|o---------------|'
+        '?TimeSig=4/4&Div=16&T1=|o---------------|&T2=|-o--------------|&T3=|--o-------------|&T4=|o---------------|'
       );
       const out = gu.getUrlStringFromGrooveData(gd);
-      expect(out).toContain('T1=|o---------------|');
-      expect(out).toContain('T4=|o---------------|');
+      expect(out).toContain(
+        '&T1=|o---------------|&T2=|-o--------------|&T3=|--o-------------|&T4=|o---------------|'
+      );
+    });
+
+    it('leaves out T2 and T3 when they have no notes', () => {
+      const gd = gu.getGrooveDataFromUrlString('?TimeSig=4/4&Div=16&T1=|o---------------|');
+      const out = gu.getUrlStringFromGrooveData(gd);
+      expect(out).toContain('&T1=|o---------------|&T4=|----------------|');
       expect(out).not.toContain('T2=');
       expect(out).not.toContain('T3=');
     });

@@ -6,6 +6,8 @@
 // context object / arguments, so GrooveWriter (which owns that state) delegates
 // its HTMLforStaffContainer / HTMLforPermutationOptions methods here.
 
+import { constant_MAX_MEASURES } from './constants.js';
+
 export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
   var newHTML =
     '\
@@ -438,10 +440,17 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
       ')" class="closeMeasureButton"><i class="fa fa-times-circle"></i></span>';
   else newHTML += '<span class="closeMeasureButton"><i class="fa">&nbsp;&nbsp;&nbsp;</i></span>';
 
-  if (baseindex == ctx.numberOfMeasures)
-    // add new measure button
-    newHTML +=
-      '<span id="addMeasureButton" title="Add measure" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></span>';
+  if (baseindex == ctx.numberOfMeasures) {
+    // add new measure button. At the limit the span stays (layout does not move) but is disabled.
+    if (ctx.numberOfMeasures >= constant_MAX_MEASURES)
+      newHTML +=
+        '<span id="addMeasureButton" role="button" title="Maximum is ' +
+        constant_MAX_MEASURES +
+        ' measures" aria-disabled="true" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></span>';
+    else
+      newHTML +=
+        '<span id="addMeasureButton" role="button" title="Add measure" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></span>';
+  }
 
   newHTML += '</div>';
 

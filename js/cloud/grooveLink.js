@@ -28,6 +28,12 @@ function parameterName(pair) {
   return pair.split('=')[0].toLowerCase();
 }
 
+// A hand-written link may hold a percent sign that starts no escape, such as Title=100%.
+// Store it as %25, so every reader of the stored query decodes it the same way.
+function fixStrayPercent(pair) {
+  return pair.replace(/%(?![0-9a-f]{2})/gi, '%25');
+}
+
 function extractSearch(text) {
   if (text.startsWith('?')) return text.slice(1);
   if (/^[a-z0-9]+=/i.test(text)) return text;
@@ -75,7 +81,10 @@ export function parseGrooveLink(text) {
     return { ok: false, reason: 'not-a-groove' };
   }
 
-  const pairs = search.split('&').filter((pair) => GROOVE_PARAMS.has(parameterName(pair)));
+  const pairs = search
+    .split('&')
+    .filter((pair) => GROOVE_PARAMS.has(parameterName(pair)))
+    .map(fixStrayPercent);
   if (!pairs.some((pair) => NOTE_PARAMS.has(parameterName(pair)))) {
     return { ok: false, reason: 'not-a-groove' };
   }

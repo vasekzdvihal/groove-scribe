@@ -55,6 +55,7 @@ import {
   constant_ABC_STICK_R,
   constant_ABC_T1_Normal,
   constant_ABC_T4_Normal,
+  constant_MAX_MEASURES,
   constant_OUR_MIDI_HIHAT_ACCENT,
   constant_OUR_MIDI_HIHAT_COW_BELL,
   constant_OUR_MIDI_HIHAT_CRASH,
@@ -95,6 +96,9 @@ function GrooveWriter() {
 
   root.myGrooveUtils = new GrooveUtils();
 
+  // The grid has rows for toms 1 and 4 only. Toms 2 and 3 of a loaded groove are kept here and
+  // written back with it. They are valid only for the bar layout they were loaded with.
+  var class_kept_toms = null; // { layout: string, lanes: [T2 array, T3 array] } or null
   var class_undo_stack = [];
   var class_redo_stack = [];
   var constant_undo_stack_max_size = 40;
@@ -109,6 +113,20 @@ function GrooveWriter() {
     class_num_beats_per_measure,
     class_note_value_per_measure
   );
+  function tomLayoutKey() {
+    return [
+      class_number_of_measures,
+      class_time_division,
+      class_num_beats_per_measure,
+      class_note_value_per_measure,
+    ].join('/');
+  }
+  // The [T2, T3] arrays that belong to the current bar layout, or null.
+  // A changed bar layout drops them for good.
+  function keptTomLanes() {
+    if (class_kept_toms && class_kept_toms.layout !== tomLayoutKey()) class_kept_toms = null;
+    return class_kept_toms ? class_kept_toms.lanes : null;
+  }
   var class_metronome_auto_speed_up_active = false;
   var class_metronome_count_in_active = false;
   var class_metronome_count_in_is_playing = false;
@@ -892,7 +910,6 @@ function GrooveWriter() {
             'menuChecked',
             false
           );
-          root.myGrooveUtils.setMetronomeCountIn(false);
         } else {
           class_metronome_count_in_active = true;
           addOrRemoveKeywordFromClassById(
@@ -900,7 +917,6 @@ function GrooveWriter() {
             'menuChecked',
             true
           );
-          root.myGrooveUtils.setMetronomeCountIn(true);
         }
         break;
 
@@ -977,6 +993,17 @@ function GrooveWriter() {
     }
   }
 
+  // Turn the permutation off without a redraw or a URL update, so a restore can use it.
+  function clearPermutation() {
+    showHideCSS_ClassVisibility('.kick-container', true, true); // show it
+    showHideCSS_ClassVisibility('.snare-container', true, true); // show it
+    class_permutation_type = 'none';
+
+    unselectButton(document.getElementById('permutationAnchor'));
+    document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
+    addOrRemoveKeywordFromClassById('PermutationOptions', 'displayed', false);
+  }
+
   root.permutationPopupClick = function (perm_type) {
     if (class_permutation_type == perm_type) return;
 
@@ -1008,13 +1035,7 @@ function GrooveWriter() {
       case 'none':
       /* falls through */
       default:
-        showHideCSS_ClassVisibility('.kick-container', true, true); // show it
-        showHideCSS_ClassVisibility('.snare-container', true, true); // show it
-        class_permutation_type = 'none';
-
-        unselectButton(document.getElementById('permutationAnchor'));
-        document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
-        addOrRemoveKeywordFromClassById('PermutationOptions', 'displayed', false);
+        clearPermutation();
         break;
     }
 
@@ -1616,6 +1637,7 @@ function GrooveWriter() {
         noteValuePerMeasure: class_note_value_per_measure,
         stickingsVisible: isStickingsVisible(),
         tomsVisible: isTomsVisible(),
+        keptTomLanes: keptTomLanes(),
       }
     );
   }
@@ -1885,6 +1907,13 @@ function GrooveWriter() {
       }
     }
 
+    // Toms 2 and 3 come from the kept lanes.
+    var keptLanes = keptTomLanes();
+    if (keptLanes && isTomsVisible()) {
+      myGrooveData.toms_array[1] = keptLanes[0].slice();
+      myGrooveData.toms_array[2] = keptLanes[1].slice();
+    }
+
     return myGrooveData;
   };
 
@@ -2058,7 +2087,7 @@ function GrooveWriter() {
       // the one we want to load is behind the head, since all changes go on the undo stack immediately
       // no need to pop, since it would just get added right back on anyways
       undoURL = class_undo_stack[class_undo_stack.length - 1];
-      set_Default_notes(undoURL);
+      applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(undoURL));
     }
   };
 
@@ -2066,7 +2095,7 @@ function GrooveWriter() {
     if (class_redo_stack.length > 0) {
       var redoURL = class_redo_stack.pop();
       root.AddItemToUndoOrRedoStack(redoURL, class_undo_stack); // add to undo stack
-      set_Default_notes(redoURL);
+      applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(redoURL));
     }
   };
 
@@ -2075,7 +2104,7 @@ function GrooveWriter() {
   root.AddItemToUndoOrRedoStack = function (newURL, ourStack, noClear) {
     if (!ourStack) return false;
 
-    if (newURL == class_undo_stack[class_undo_stack.length - 1]) {
+    if (newURL == ourStack[ourStack.length - 1]) {
       //debugPrintUndoRedoStack();
       return false; // no change, so don't push
     }
@@ -2088,12 +2117,23 @@ function GrooveWriter() {
     return true;
   };
 
+  // view mode is not part of the groove, so it must not create or break a history step
+  function undoFragmentFromFullURL(fullURL) {
+    return fullURL.slice(fullURL.indexOf('?')).replace('Mode=view&', '');
+  }
+
+  // Let the newest history step show the current groove instead of adding a step.
+  // The tempo that the metronome raises by itself is not an edit, so it must not
+  // push the user's own edits out of the history.
+  root.ReplaceNewestUndoStep = function (fullURL) {
+    var urlFragment = undoFragmentFromFullURL(fullURL);
+
+    if (class_undo_stack.length === 0) class_undo_stack.push(urlFragment);
+    else class_undo_stack[class_undo_stack.length - 1] = urlFragment;
+  };
+
   root.AddFullURLToUndoStack = function (fullURL) {
-    var urlFragment;
-
-    var searchData = fullURL.indexOf('?');
-
-    urlFragment = fullURL.slice(searchData);
+    var urlFragment = undoFragmentFromFullURL(fullURL);
 
     // clear redo array whenever we add a new valid element to the stack
     // when we undo, we end up with a null push that returns false here
@@ -2104,10 +2144,19 @@ function GrooveWriter() {
 
   // update the current URL so that reloads and history traversal and link shares and bookmarks work correctly
   root.updateCurrentURL = function () {
+    updateCurrentURLWithHistory(root.AddFullURLToUndoStack);
+  };
+
+  // the same, for a change that is not an edit: the newest history step shows it
+  root.updateCurrentURLWithoutNewUndoStep = function () {
+    updateCurrentURLWithHistory(root.ReplaceNewestUndoStep);
+  };
+
+  function updateCurrentURLWithHistory(recordInHistory) {
     var newURL = get_FullURLForPage();
     var newTitle = false;
 
-    root.AddFullURLToUndoStack(newURL);
+    recordInHistory(newURL);
 
     var title = document.getElementById('tuneTitle').value.trim();
     if (title !== '') newTitle = title;
@@ -2136,7 +2185,7 @@ function GrooveWriter() {
         searchDataEle.innerHTML = '<p style="margin-left: 10px;"><b>' + searchURL + '</b><p>';
       }
     }
-  };
+  }
 
   function generate_ABC(renderWidth) {
     var Sticking_Array = get_empty_note_array_in_32nds();
@@ -2439,11 +2488,11 @@ function GrooveWriter() {
     var tune_title = document.getElementById('tuneTitle').value;
 
     if (tune_title.length == 0) {
-      filename = 'notation.';
+      filename = 'notation';
     } else {
       filename = tune_title;
     }
-    filename += imageType;
+    filename += '.' + imageType;
 
     var svg_images = svg_obj.svg.split('</svg>');
     // that split should always create at least 2 since it will match that </svg> if there is only one
@@ -2496,6 +2545,9 @@ function GrooveWriter() {
   // remove a measure from the page
   // measureNum is indexed starting at 1, not 0
   root.closeMeasureButtonClick = function (measureNum) {
+    // a groove always keeps at least one measure
+    if (class_number_of_measures <= 1) return;
+
     var uiStickings = '';
     var uiHH = '';
     var uiTom1 = '';
@@ -2542,6 +2594,10 @@ function GrooveWriter() {
   // currently always at the end of the measures
   // copy the notes from the last measure to the new measure
   root.addMeasureButtonClick = function (event) {
+    // The URL parser clamps to constant_MAX_MEASURES, so a longer groove would lose
+    // its extra measures on reload. The button is disabled at the limit; stop here too.
+    if (class_number_of_measures >= constant_MAX_MEASURES) return;
+
     var uiStickings = '';
     var uiHH = '';
     var uiTom1 = '';
@@ -2595,7 +2651,9 @@ function GrooveWriter() {
     if (class_number_of_measures === 5)
       window.alert(
         'Please be aware that the Groove Scribe is not designed to write an entire musical score.\n' +
-          'You can create as many measures as you want, but your browser may slow down as more measures are added.\n' +
+          'You can create up to ' +
+          constant_MAX_MEASURES +
+          ' measures, and your browser may slow down as more measures are added.\n' +
           'There are also many notation features that would be useful for score writing that are not part of Groove Scribe'
       );
   };
@@ -2652,6 +2710,7 @@ function GrooveWriter() {
       set_snare_state(i, 'off');
       set_kick_state(i, 'off');
     }
+    class_kept_toms = null; // toms 2 and 3 have no grid row, so Clear All must drop them here
     updateSheetMusic();
   };
 
@@ -2749,17 +2808,18 @@ function GrooveWriter() {
         (e.target.tagName.toUpperCase() != 'INPUT' && e.target.tagName.toUpperCase() != 'TEXTAREA')
       ) {
         switch (e.which) {
-          case 90: // ctrl-z
-            if (e.ctrlKey) {
-              // ctrl-z
-              root.undoCommand();
+          case 90: // ctrl-z or cmd-z, and with shift: redo (the macOS shortcut)
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              if (e.shiftKey) root.redoCommand();
+              else root.undoCommand();
               return false;
             }
             break;
 
-          case 89: // ctrl-y
-            if (e.ctrlKey) {
-              // ctrl-y
+          case 89: // ctrl-y or cmd-y
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
               root.redoCommand();
               return false;
             }
@@ -2828,7 +2888,7 @@ function GrooveWriter() {
     root.myGrooveUtils.AddMidiPlayerToPage('midiPlayer', class_time_division);
 
     // load the groove from the URL data if it was passed in.
-    set_Default_notes(window.location.search);
+    applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(window.location.search));
 
     root.myGrooveUtils.midiEventCallbacks.loadMidiDataEvent = function (myroot, playStarting) {
       var midiURL;
@@ -2871,7 +2931,7 @@ function GrooveWriter() {
 
     // enable or disable swing
     root.myGrooveUtils.swingEnabled(
-      root.myGrooveUtils.doesDivisionSupportSwing(class_notes_per_measure)
+      root.myGrooveUtils.doesDivisionSupportSwing(class_time_division)
     );
 
     window.onresize = root.refresh_ABC;
@@ -2924,6 +2984,8 @@ function GrooveWriter() {
 
     // get updates when the tempo changes
     root.myGrooveUtils.tempoChangeCallback = root.tempoChangeCallback;
+    // the swing slider changes the URL too, and uses the same debounce
+    root.myGrooveUtils.swingChangeCallback = root.tempoChangeCallback;
   };
 
   // called right before the midi reloads for the next replay
@@ -2988,7 +3050,12 @@ function GrooveWriter() {
       }
     }
 
-    if (tempoDiffInt > 0) root.myGrooveUtils.setTempo(root.myGrooveUtils.getTempo() + tempoDiffInt);
+    if (tempoDiffInt > 0) {
+      root.myGrooveUtils.setTempo(root.myGrooveUtils.getTempo() + tempoDiffInt);
+      // show the new tempo in the URL now, in the newest history step, so the debounced
+      // update that setTempo schedules finds nothing new to add
+      root.updateCurrentURLWithoutNewUndoStep();
+    }
   };
 
   // takes a string of notes encoded in a serialized string and sets the notes on or off
@@ -3317,8 +3384,18 @@ function GrooveWriter() {
     if (popup) popup.style.display = 'none';
   };
 
+  // A URL can hold a time signature the popup does not list, for example 16/4. Setting that value
+  // would empty the select, so the select then stays as it was.
+  function selectListedValue(selectId, value) {
+    var select = /** @type {HTMLSelectElement | null} */ (document.getElementById(selectId));
+    if (select && select.querySelector('option[value="' + value + '"]')) select.value = value;
+  }
+
   root.timeSigPopupOpen = function (type) {
     var popup = document.getElementById('timeSigPopup');
+
+    selectListedValue('timeSigPopupTimeSigTop', class_num_beats_per_measure);
+    selectListedValue('timeSigPopupTimeSigBottom', class_note_value_per_measure);
 
     if (popup) popup.style.display = 'block';
   };
@@ -3358,34 +3435,112 @@ function GrooveWriter() {
       '</sub>';
   };
 
+  // A division that does not fit a time signature gets a message that says why. Null means it fits.
+  function divisionProblem(division, timeSigTop, timeSigBottom) {
+    if (root.myGrooveUtils.isTripletDivision(division) && timeSigBottom != 4) {
+      return (
+        'Triplets are disabled in ' +
+        timeSigTop +
+        '/' +
+        timeSigBottom +
+        ' time.  Use x/4 time for triplets.'
+      );
+    }
+    // 9/8 and 1/4 notes for instance, or 9/16 and 1/8 notes
+    if (((division * timeSigTop) / timeSigBottom) % 1 != 0) {
+      return (
+        '1/' +
+        division +
+        ' notes are disabled in ' +
+        timeSigTop +
+        '/' +
+        timeSigBottom +
+        ' time.  This combination would result in a half note.'
+      );
+    }
+    return null;
+  }
+
+  // One lane of the grid as a URL string, with each measure cut or padded to its new length.
+  function laneWithNewMeasureLength(getNote, newNotesPerMeasure) {
+    var keptNotes = Math.min(class_notes_per_measure, newNotesPerMeasure);
+    var lane = '|';
+    for (var measure = 0; measure < class_number_of_measures; measure++) {
+      for (var i = 0; i < keptNotes; i++) {
+        lane += getNote(measure * class_notes_per_measure + i);
+      }
+      lane += '-'.repeat(newNotesPerMeasure - keptNotes) + '|';
+    }
+    return lane;
+  }
+
+  function changeTimeSignature(newTimeSigTop, newTimeSigBottom) {
+    var newNotesPerMeasure = root.myGrooveUtils.calc_notes_per_measure(
+      class_time_division,
+      newTimeSigTop,
+      newTimeSigBottom
+    );
+    var readLane = function (getNote) {
+      return laneWithNewMeasureLength(getNote, newNotesPerMeasure);
+    };
+
+    // Read the grid first: its note ids still use the old measure length.
+    var uiStickings = readLane(function (i) {
+      return get_sticking_state(i, 'URL');
+    });
+    var uiHH = readLane(function (i) {
+      return get_hh_state(i, 'URL');
+    });
+    var uiTom1 = readLane(function (i) {
+      return get_tom_state(i, 1, 'URL');
+    });
+    var uiTom4 = readLane(function (i) {
+      return get_tom_state(i, 4, 'URL');
+    });
+    var uiSnare = readLane(function (i) {
+      return get_snare_state(i, 'URL');
+    });
+    var uiKick = readLane(function (i) {
+      return get_kick_state(i, 'URL');
+    });
+
+    class_num_beats_per_measure = newTimeSigTop;
+    class_note_value_per_measure = newTimeSigBottom;
+
+    root.expandAuthoringViewWhenNecessary(newNotesPerMeasure, class_number_of_measures);
+    changeDivisionWithNotes(
+      class_time_division,
+      uiStickings,
+      uiHH,
+      uiTom1,
+      uiTom4,
+      uiSnare,
+      uiKick
+    );
+    updateSheetMusic();
+  }
+
   root.timeSigPopupClose = function (type, callback) {
-    var popup = document.getElementById('timeSigPopup');
-
-    if (popup) popup.style.display = 'none';
-
-    // ignore type "cancel"
     if (type == 'ok') {
-      var newTimeSigTop = document.getElementById('timeSigPopupTimeSigTop').value;
-      var newTimeSigBottom = document.getElementById('timeSigPopupTimeSigBottom').value;
+      var newTimeSigTop = parseInt(document.getElementById('timeSigPopupTimeSigTop').value, 10);
+      var newTimeSigBottom = parseInt(
+        document.getElementById('timeSigPopupTimeSigBottom').value,
+        10
+      );
 
-      if (usingTriplets() && newTimeSigBottom != 4) {
-        root.changeDivision(16); // switch to a non triplet division since they are not supported in this time signature
+      // A refused change touches nothing, and the popup stays open so the user can correct it.
+      var problem = divisionProblem(class_time_division, newTimeSigTop, newTimeSigBottom);
+      if (problem) {
+        alert(problem);
+        return;
       }
 
-      class_num_beats_per_measure = newTimeSigTop;
-      class_note_value_per_measure = newTimeSigBottom;
-      var new_notes_per_measure = root.myGrooveUtils.calc_notes_per_measure(
-        class_time_division,
-        class_num_beats_per_measure,
-        class_note_value_per_measure
-      );
-      // If new_notes_per_measure is greater it will cause the changeDivision code to error
-      // as it tries to read the notes from the UI.   Setting it lower will allow the code to truncate
-      // the groove properly to something smaller rather than interpolating the groove into something weird
-      if (new_notes_per_measure < class_notes_per_measure)
-        class_notes_per_measure = new_notes_per_measure;
-      root.changeDivision(class_time_division); // use this function because it will relayout everything
+      changeTimeSignature(newTimeSigTop, newTimeSigBottom);
     }
+
+    var popup = document.getElementById('timeSigPopup');
+    if (popup) popup.style.display = 'none';
+
     if (callback) {
       callback();
     }
@@ -3518,45 +3673,64 @@ function GrooveWriter() {
     }
   };
 
-  function set_Default_notes(encodedURLData) {
-    var myGrooveData = root.myGrooveUtils.getGrooveDataFromUrlString(encodedURLData);
+  // The one path that puts a groove into the editor: startup, loadNewGroove, undo and redo.
+  // A permutation is not part of the groove data, so a restore always clears it.
+  function applyGrooveData(grooveData) {
+    if (class_permutation_type != 'none') clearPermutation();
 
-    class_num_beats_per_measure = myGrooveData.numBeats; // TimeSigTop
-    class_note_value_per_measure = myGrooveData.noteValue; // TimeSigBottom
+    var timeSigChanged =
+      grooveData.numBeats != class_num_beats_per_measure ||
+      grooveData.noteValue != class_note_value_per_measure;
+
+    class_num_beats_per_measure = grooveData.numBeats; // TimeSigTop
+    class_note_value_per_measure = grooveData.noteValue; // TimeSigBottom
 
     if (
-      myGrooveData.notesPerMeasure != class_notes_per_measure ||
-      myGrooveData.timeDivision != class_time_division ||
-      class_number_of_measures != myGrooveData.numberOfMeasures
+      timeSigChanged ||
+      grooveData.notesPerMeasure != class_notes_per_measure ||
+      grooveData.timeDivision != class_time_division ||
+      class_number_of_measures != grooveData.numberOfMeasures
     ) {
-      class_number_of_measures = myGrooveData.numberOfMeasures;
-      changeDivisionWithNotes(myGrooveData.timeDivision);
+      class_number_of_measures = grooveData.numberOfMeasures;
+      changeDivisionWithNotes(grooveData.timeDivision);
     }
 
     root.expandAuthoringViewWhenNecessary(class_notes_per_measure, class_number_of_measures);
 
-    setNotesFromABCArray('Stickings', myGrooveData.sticking_array, class_number_of_measures);
-    setNotesFromABCArray('H', myGrooveData.hh_array, class_number_of_measures);
-    setNotesFromABCArray('T1', myGrooveData.toms_array[0], class_number_of_measures);
-    setNotesFromABCArray('T4', myGrooveData.toms_array[3], class_number_of_measures);
-    setNotesFromABCArray('S', myGrooveData.snare_array, class_number_of_measures);
-    setNotesFromABCArray('K', myGrooveData.kick_array, class_number_of_measures);
+    setNotesFromABCArray('Stickings', grooveData.sticking_array, class_number_of_measures);
+    setNotesFromABCArray('H', grooveData.hh_array, class_number_of_measures);
+    setNotesFromABCArray('T1', grooveData.toms_array[0], class_number_of_measures);
+    setNotesFromABCArray('T4', grooveData.toms_array[3], class_number_of_measures);
+    setNotesFromABCArray('S', grooveData.snare_array, class_number_of_measures);
+    setNotesFromABCArray('K', grooveData.kick_array, class_number_of_measures);
 
-    if (myGrooveData.showToms) root.showHideToms(true, true, true);
+    // Keep toms 2 and 3. Always replace the old ones, so nothing leaks from the last groove.
+    var hasNote = function (lane) {
+      return !!lane && lane.some((note) => note !== false && note !== undefined);
+    };
+    class_kept_toms =
+      hasNote(grooveData.toms_array[1]) || hasNote(grooveData.toms_array[2])
+        ? {
+            layout: tomLayoutKey(),
+            lanes: [grooveData.toms_array[1].slice(), grooveData.toms_array[2].slice()],
+          }
+        : null;
 
-    if (myGrooveData.showStickings) root.stickingsShowHide(true, true, true);
+    root.showHideToms(true, grooveData.showToms, true);
 
-    document.getElementById('tuneTitle').value = myGrooveData.title;
+    root.stickingsShowHide(true, grooveData.showStickings, true);
 
-    document.getElementById('tuneAuthor').value = myGrooveData.author;
+    document.getElementById('tuneTitle').value = grooveData.title;
 
-    document.getElementById('tuneComments').value = myGrooveData.comments;
+    document.getElementById('tuneAuthor').value = grooveData.author;
 
-    root.myGrooveUtils.setTempo(myGrooveData.tempo);
+    document.getElementById('tuneComments').value = grooveData.comments;
 
-    root.myGrooveUtils.setSwing(myGrooveData.swingPercent);
+    root.myGrooveUtils.setTempo(grooveData.tempo);
 
-    root.setMetronomeFrequency(myGrooveData.metronomeFrequency);
+    root.myGrooveUtils.setSwing(grooveData.swingPercent);
+
+    root.setMetronomeFrequency(grooveData.metronomeFrequency);
 
     updateSheetMusic();
   }
@@ -3564,7 +3738,7 @@ function GrooveWriter() {
   // nameWhenUntitled names the groove in the top bar when its URL has no title.
   root.loadNewGroove = function (encodedURLData, nameWhenUntitled) {
     grooveNameWhenUntitled = nameWhenUntitled || '';
-    set_Default_notes(encodedURLData);
+    applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(encodedURLData));
   };
 
   function getABCDataWithLineEndings() {
@@ -3576,13 +3750,30 @@ function GrooveWriter() {
     return myABC;
   }
 
+  // The file name is the title, without the characters that no file name may hold.
+  function getABCFileName() {
+    var title = document
+      .getElementById('tuneTitle')
+      .value.replace(/[\\/:*?"<>|]|\p{Cc}/gu, '')
+      .trim();
+    return (title || 'notation') + '.abc';
+  }
+
   root.saveABCtoFile = function () {
-    var myABC = getABCDataWithLineEndings();
+    var blob = new Blob([getABCDataWithLineEndings()], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
 
-    var myURL = 'data:text/plain;charset=utf-8;base64,' + btoa(myABC);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = getABCFileName();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-    console.log('Use "Save As" to save the new page to a local file');
-    window.open(myURL);
+    // the browser has started the download by now
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
   };
 
   // change the base division to something else.
@@ -3683,13 +3874,6 @@ function GrooveWriter() {
     var uiSnare = '|';
     var uiKick = '|';
 
-    if (newDivision == 48 && !have_shown_mixed_division_message) {
-      have_shown_mixed_division_message = true;
-      alert(
-        'The MIXED subdivision allows you to create a combination of triplets and non-triplet notes in one measure.  Set every 3rd note for 16ths and every 6th note for 8th notes'
-      );
-    }
-
     var isNewDivisionTriplets = root.myGrooveUtils.isTripletDivision(newDivision);
     var new_notes_per_measure = root.myGrooveUtils.calc_notes_per_measure(
       isNewDivisionTriplets ? 48 : 32,
@@ -3697,48 +3881,53 @@ function GrooveWriter() {
       class_note_value_per_measure
     );
 
-    // check for incompatible odd time signature division   9/8 and 1/4notes for instance or 9/16 and 1/8notes
-    if (((newDivision * class_num_beats_per_measure) / class_note_value_per_measure) % 1 != 0) {
-      alert(
-        '1/' +
-          newDivision +
-          ' notes are disabled in ' +
-          class_num_beats_per_measure +
-          '/' +
-          class_note_value_per_measure +
-          ' time.  This combination would result in a half note.'
-      );
-      return;
-    }
-    if (isNewDivisionTriplets && class_note_value_per_measure != 4) {
-      alert(
-        'Triplets are disabled in ' +
-          class_num_beats_per_measure +
-          '/' +
-          class_note_value_per_measure +
-          ' time.  Use x/4 time for triplets.'
-      );
+    var problem = divisionProblem(
+      newDivision,
+      class_num_beats_per_measure,
+      class_note_value_per_measure
+    );
+    if (problem) {
+      alert(problem);
       return;
     }
 
-    if (usingTriplets() === isNewDivisionTriplets) {
-      // get the encoded notes out of the UI.
-      // run through both measures.
-      var topIndex = class_notes_per_measure * class_number_of_measures;
-      for (var i = 0; i < topIndex; i++) {
-        uiStickings += get_sticking_state(i, 'URL');
-        uiHH += get_hh_state(i, 'URL');
-        uiTom1 += get_tom_state(i, 1, 'URL');
-        uiTom4 += get_tom_state(i, 4, 'URL');
-        uiSnare += get_snare_state(i, 'URL');
-        uiKick += get_kick_state(i, 'URL');
+    // get the encoded notes out of the UI.
+    // run through all measures.
+    var topIndex = class_notes_per_measure * class_number_of_measures;
+    for (var i = 0; i < topIndex; i++) {
+      uiStickings += get_sticking_state(i, 'URL');
+      uiHH += get_hh_state(i, 'URL');
+      uiTom1 += get_tom_state(i, 1, 'URL');
+      uiTom4 += get_tom_state(i, 4, 'URL');
+      uiSnare += get_snare_state(i, 'URL');
+      uiKick += get_kick_state(i, 'URL');
+    }
+
+    var changesBetweenStraightAndTriplets = usingTriplets() !== isNewDivisionTriplets;
+    if (changesBetweenStraightAndTriplets) {
+      // triplets do not scale from straight notes, so the notes would be replaced by a default groove
+      var hasNotes =
+        /[^-|]/.test(uiStickings + uiHH + uiTom1 + uiTom4 + uiSnare + uiKick) || !!keptTomLanes();
+      if (
+        hasNotes &&
+        !window.confirm(
+          'Switching between straight notes and triplets cannot keep your notes. ' +
+            'You will lose the notes of this groove (hi-hat, snare, kick, toms and stickings), ' +
+            'and a default groove for the new division will replace them.\n\nContinue?'
+        )
+      ) {
+        return;
       }
+    }
 
-      // override the hi-hat if we are going to a higher division.
-      // otherwise the notes get lost in translation (not enough)
-      //if (newDivision > class_notes_per_measure)
-      //	uiHH = root.myGrooveUtils.GetDefaultHHGroove(new_notes_per_measure, class_num_beats_per_measure, class_note_value_per_measure, class_number_of_measures);
-    } else {
+    if (newDivision == 48 && !have_shown_mixed_division_message) {
+      have_shown_mixed_division_message = true;
+      alert(
+        'The MIXED subdivision allows you to create a combination of triplets and non-triplet notes in one measure.  Set every 3rd note for 16ths and every 6th note for 8th notes'
+      );
+    }
+
+    if (changesBetweenStraightAndTriplets) {
       // changing from or changing to a triplet division
       // triplets don't scale well, so use defaults when we change
       uiStickings = root.myGrooveUtils.GetDefaultStickingsGroove(

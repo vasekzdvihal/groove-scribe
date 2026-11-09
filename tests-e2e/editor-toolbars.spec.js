@@ -95,6 +95,8 @@ test('the note division menu changes the division and shows the choice', async (
   await expect(page.locator('#divisionMenuLabel')).toHaveText('1/16 notes');
   await expect(page.locator('#subdivision_8ths')).toBeHidden();
 
+  // The default groove has notes, so the switch to triplets asks first. Accept it.
+  page.once('dialog', (dialog) => dialog.accept());
   await page.click('#divisionMenuButton');
   await page.click('#subdivision_12ths');
   await expect(page.locator('#divisionPopover')).toBeHidden();

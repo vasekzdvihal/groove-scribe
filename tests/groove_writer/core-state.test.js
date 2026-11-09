@@ -7,7 +7,7 @@ import { newGrooveWriter, buildGridDOM } from '../helpers/loadGrooveWriter.js';
 //   undoCommand, redoCommand, changeDivision, metronomeAutoSpeedUpTempoUpdate,
 //   and the private `usingTriplets()` helper (covered indirectly).
 //
-// Several of these methods cascade into a private `set_Default_notes()` (used by
+// Several of these methods cascade into a private `applyGrooveData()` (used by
 // undoCommand/redoCommand) and into `updateSheetMusic()` (used by changeDivision),
 // which in turn touch a lot of DOM and re-generate ABC notation. Per the task
 // brief we stub the purely-cosmetic cascading calls (`updateCurrentURL`,
@@ -20,7 +20,7 @@ import { newGrooveWriter, buildGridDOM } from '../helpers/loadGrooveWriter.js';
 // top-level `var`s attach to the shared `window` object, so groove_writer.js
 // can see them for free. Under Vitest's ES-module transform every file gets
 // its own module scope, so those vars never reach the global object and the
-// bare reference throws a ReferenceError deep inside set_Default_notes /
+// bare reference throws a ReferenceError deep inside applyGrooveData /
 // changeDivision. We shim them on globalThis (values copied verbatim from
 // groove_utils.js) so the real code path can run unmodified.
 //
@@ -97,7 +97,7 @@ const ABC_CONSTANTS = {
 };
 for (const [k, v] of Object.entries(ABC_CONSTANTS)) globalThis[k] = v;
 
-// Fixture mirroring the slice of index.html that changeDivision / set_Default_notes
+// Fixture mirroring the slice of index.html that changeDivision / applyGrooveData
 // / updateSheetMusic touch: the note grid plus the surrounding chrome elements they
 // read or write (ABC source textarea, SVG target, tempo/swing controls, etc).
 function buildFixture(gw, measures = 1) {
@@ -256,18 +256,13 @@ describe('GrooveWriter core state & undo/redo', () => {
       expect(stack).toEqual(['a']);
     });
 
-    // BUG/QUIRK: the dedup check `newURL == class_undo_stack[class_undo_stack.length-1]`
-    // always compares against the writer's *internal* undo stack, never against the
-    // `ourStack` argument that was actually passed in. When called with a stack other
-    // than the internal undo stack (e.g. a plain array, or the redo stack) the dedup
-    // is checked against the wrong array, so back-to-back identical pushes are NOT
-    // deduplicated in that case (they only get deduplicated when ourStack IS the
-    // internal undo stack, as happens via AddFullURLToUndoStack -- see below).
-    it('does NOT dedupe consecutive identical values when pushed to an arbitrary stack (dedup checks the wrong array)', () => {
+    it('dedupes consecutive identical values on whichever stack it is given', () => {
       const stack = [];
-      gw.AddItemToUndoOrRedoStack('a', stack);
-      gw.AddItemToUndoOrRedoStack('a', stack); // internal class_undo_stack is still [], so 'a' != undefined -> pushes again
-      expect(stack).toEqual(['a', 'a']);
+      expect(gw.AddItemToUndoOrRedoStack('a', stack)).toBe(true);
+      expect(gw.AddItemToUndoOrRedoStack('a', stack)).toBe(false);
+      expect(stack).toEqual(['a']);
+      expect(gw.AddItemToUndoOrRedoStack('b', stack)).toBe(true);
+      expect(stack).toEqual(['a', 'b']);
     });
 
     it('caps the stack at 40 entries, dropping the oldest (shift, not pop)', () => {
@@ -278,6 +273,42 @@ describe('GrooveWriter core state & undo/redo', () => {
       expect(stack).toHaveLength(40);
       expect(stack[0]).toBe('item5'); // the first 5 pushes were shifted off
       expect(stack[stack.length - 1]).toBe('item44');
+    });
+  });
+
+  describe('ReplaceNewestUndoStep', () => {
+    beforeEach(() => {
+      gw.updateCurrentURL = vi.fn();
+    });
+
+    it('rewrites the newest step and leaves the older steps and the step count alone', () => {
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=16&Tempo=80');
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=8&Tempo=80');
+
+      gw.ReplaceNewestUndoStep('http://example.com/index.html?Div=8&Tempo=90');
+
+      buildFixture(gw, 1);
+      gw.updateCurrentURL = vi.fn();
+      gw.displayNewSVG = vi.fn();
+      gw.updateGrooveDBSource = vi.fn();
+      gw.undoCommand(); // back to the older step
+      expect(gw.notesPerMeasure()).toBe(16);
+      gw.redoCommand(); // the newest step carries the rewritten tempo
+      expect(gw.myGrooveUtils.getTempo()).toBe(90);
+    });
+
+    it('does not clear the redo stack', () => {
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=16&Tempo=80');
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=8&Tempo=80');
+      buildFixture(gw, 1);
+      gw.displayNewSVG = vi.fn();
+      gw.updateGrooveDBSource = vi.fn();
+      gw.undoCommand();
+
+      gw.ReplaceNewestUndoStep('http://example.com/index.html?Div=16&Tempo=85');
+      gw.redoCommand();
+
+      expect(gw.notesPerMeasure()).toBe(8);
     });
   });
 
@@ -371,9 +402,67 @@ describe('GrooveWriter core state & undo/redo', () => {
   });
 
   describe('changeDivision', () => {
+    let confirmSpy;
     beforeEach(() => {
       buildFixture(gw, 1);
       stubCascadingRenders(gw);
+      confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      confirmSpy.mockRestore();
+    });
+
+    describe('between straight notes and triplets', () => {
+      // a note in the stickings lane, which needs no MIDI
+      function putNote() {
+        gw.stickingsShowHide(true, true, true);
+        gw.noteLeftClick(null, 'sticking', 0);
+      }
+
+      it('asks first, naming what will be lost, when the groove has notes', () => {
+        putNote();
+
+        gw.changeDivision(12);
+
+        expect(confirmSpy).toHaveBeenCalledTimes(1);
+        expect(confirmSpy.mock.calls[0][0]).toMatch(/lose/i);
+        expect(confirmSpy.mock.calls[0][0]).toMatch(/notes/i);
+      });
+
+      it('changes nothing when the user cancels', () => {
+        putNote();
+        const before = gw.grooveDataFromClickableUI();
+        confirmSpy.mockReturnValue(false);
+
+        gw.changeDivision(12);
+
+        expect(gw.notesPerMeasure()).toBe(16);
+        expect(gw.grooveDataFromClickableUI()).toEqual(before);
+      });
+
+      it('replaces the groove with the default triplet groove when the user accepts', () => {
+        putNote();
+
+        gw.changeDivision(12);
+
+        expect(gw.notesPerMeasure()).toBe(12);
+      });
+
+      it('does not ask when the grid is empty, because nothing can be lost', () => {
+        gw.changeDivision(12);
+
+        expect(confirmSpy).not.toHaveBeenCalled();
+        expect(gw.notesPerMeasure()).toBe(12);
+      });
+
+      it('does not ask for a change between two straight divisions', () => {
+        putNote();
+
+        gw.changeDivision(8);
+
+        expect(confirmSpy).not.toHaveBeenCalled();
+      });
     });
 
     it('changes notesPerMeasure to match the new division (16ths -> 8ths)', () => {
@@ -440,6 +529,7 @@ describe('GrooveWriter core state & undo/redo', () => {
       gw.changeDivision(8); // 16ths(non-triplet) -> 8ths(non-triplet): usingTriplets() unchanged -> notes preserved
       expect(gw.grooveDataFromClickableUI().sticking_array[0]).toBe('"R"x');
 
+      vi.spyOn(window, 'confirm').mockReturnValue(true); // the user accepts losing the notes
       gw.changeDivision(12); // 8ths(non-triplet) -> 12(triplet): usingTriplets() flips -> resets to the default groove
       expect(gw.grooveDataFromClickableUI().sticking_array[0]).toBe('""x'); // constant_ABC_STICK_OFF
     });
@@ -484,16 +574,44 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.useRealTimers();
   });
 
-  // BUG: metronomeAutoSpeedUpTempoUpdate() calls root.myGrooveUtils.getMidiPlayTime(),
-  // which does `global_current_midi_start_time.getTime()`. Before MIDI playback has
-  // ever been started, that module-level var is still the number `0` (its initial
-  // value), not a Date -- so `.getTime` doesn't exist and the call throws. In the
-  // real app this code path is only ever reached from the `notePlaying` MIDI event
-  // callback while a groove is actively playing, so start time is always a Date by
-  // then; calling it standalone (as here) exposes the underlying assumption.
-  it('throws if MIDI playback was never started (global_current_midi_start_time is still 0, not a Date)', async () => {
+  // Before playback has ever started there is no start time. The speed-up must
+  // treat that as zero play time instead of throwing.
+  it('does nothing when MIDI playback was never started', async () => {
     const gw = await newGrooveWriter();
-    expect(() => gw.metronomeAutoSpeedUpTempoUpdate()).toThrow(/getTime is not a function/);
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
+    document.body.innerHTML =
+      '<input id="tempoInput' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '" value="80">' +
+      '<input id="tempoTextField' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '">';
+    expect(() => gw.metronomeAutoSpeedUpTempoUpdate()).not.toThrow();
+    expect(gw.myGrooveUtils.getTempo()).toBe(80);
+  });
+
+  it('shows a raised tempo in the newest undo step instead of adding a step', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
+    globalThis.MIDI = makeMidiMock();
+    const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn();
+    gw.updateCurrentURL = vi.fn();
+    document.body.innerHTML =
+      '<input id="tempoInput' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '" value="80">' +
+      '<input id="tempoTextField' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '">';
+    gw.myGrooveUtils.startMIDI_playback();
+    gw.metronomeAutoSpeedUpTempoUpdate(); // baseline
+    vi.setSystemTime(new Date(2020, 0, 1, 0, 1, 0)); // one minute: +1 bpm with the defaults
+
+    gw.metronomeAutoSpeedUpTempoUpdate();
+
+    expect(gw.myGrooveUtils.getTempo()).toBe(81);
+    expect(gw.updateCurrentURLWithoutNewUndoStep).toHaveBeenCalledTimes(1);
   });
 
   it('does not change tempo on the first call after playback starts (it only establishes the timing baseline)', async () => {
@@ -501,6 +619,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +
@@ -520,6 +639,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +
@@ -548,6 +668,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +
@@ -577,6 +698,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +

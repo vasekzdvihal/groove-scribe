@@ -37,11 +37,9 @@ describe('GrooveUtils tempo & swing controls', () => {
       expect(gu.getTempo()).toBe(120);
     });
 
-    // The source guards with `if (tempo < 19 && tempo > 281)` which can never
-    // be true (a number cannot be simultaneously < 19 and > 281), so the
-    // "clamp to default" branch is dead code: out-of-range values pass
-    // through unmodified. This locks in that actual (buggy) behavior.
-    it('does not clamp values below 19 or above 281 (the clamp condition is unreachable)', () => {
+    // The old clamp guard (`tempo < 19 && tempo > 281`) could never be true and is
+    // removed. Out-of-range values pass through unmodified.
+    it('does not clamp values below 19 or above 281', () => {
       document.body.innerHTML =
         '<input id="tempoInput' + gu.grooveUtilsUniqueIndex + '" value="5">';
       expect(gu.getTempo()).toBe(5);
@@ -71,9 +69,8 @@ describe('GrooveUtils tempo & swing controls', () => {
       expect(gu.getTempo()).toBe(150);
     });
 
-    // Same unreachable-clamp story as getTempo: `if (newTempo < 19 &&
-    // newTempo > 281) return;` never triggers, so setTempo never rejects a
-    // value on those grounds.
+    // The old guard in setTempo could never be true and is removed, so setTempo
+    // never rejects a value on those grounds.
     it('does not reject values below 19 or above 281', () => {
       gu.setTempo(5);
       expect(gu.getTempo()).toBe(5);
@@ -255,10 +252,7 @@ describe('GrooveUtils tempo & swing controls', () => {
   });
 
   describe('swingEnabled', () => {
-    it('enabling swing with no prior slider value produces "NaN%" (parseInt("") is NaN, and NaN is neither < 0 nor > 60)', () => {
-      // This documents an existing quirk: swingEnabled(true) calls
-      // swingUpdateText(root.getSwing()), and getSwing() parses whatever is
-      // currently in the (empty) swingInput element.
+    it('enabling swing with no prior slider value shows 0%, not NaN%', () => {
       document.body.innerHTML =
         '<input id="swingInput' +
         gu.grooveUtilsUniqueIndex +
@@ -269,7 +263,7 @@ describe('GrooveUtils tempo & swing controls', () => {
       gu.swingEnabled(true);
       expect(gu.swingIsEnabled).toBe(true);
       expect(document.getElementById('swingOutput' + gu.grooveUtilsUniqueIndex).innerHTML).toBe(
-        'NaN%'
+        '0%'
       );
     });
 
@@ -309,6 +303,22 @@ describe('GrooveUtils tempo & swing controls', () => {
       expect(document.getElementById('swingOutput' + gu.grooveUtilsUniqueIndex).innerHTML).toBe(
         '25%'
       );
+    });
+
+    it('tells the writer through swingChangeCallback so the URL gets the new swing', () => {
+      const calls = [];
+      gu.swingChangeCallback = (swing) => calls.push(swing);
+      gu.swingIsEnabled = true;
+      gu.swingUpdateEvent({ target: { value: '25' } });
+      expect(calls).toEqual(['25']);
+    });
+
+    it('does not call swingChangeCallback when swing is disabled', () => {
+      const calls = [];
+      gu.swingChangeCallback = (swing) => calls.push(swing);
+      gu.swingIsEnabled = false;
+      gu.swingUpdateEvent({ target: { value: '25' } });
+      expect(calls).toEqual([]);
     });
 
     it('resets the slider to 0 (ignoring the event value) when swing is disabled', () => {

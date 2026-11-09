@@ -51,7 +51,7 @@ export function buildGridDOM(gw, measures = 1) {
 
 /**
  * Build the fuller page DOM that the load/render pipeline needs
- * (set_Default_notes / loadNewGroove / updateSheetMusic / displayNewSVG /
+ * (applyGrooveData / loadNewGroove / updateSheetMusic / displayNewSVG /
  * setMetronomeFrequency), on top of buildGridDOM. The SVG render is stubbed so
  * abc2svg is not required; the rest is real.
  *
@@ -63,7 +63,7 @@ export function buildFullPageDOM(gw, measures = 1) {
   const container = buildGridDOM(gw, measures);
 
   // GrooveUtils tempo/swing setters write to inputs suffixed with the instance's
-  // unique index; set_Default_notes calls setTempo/setSwing.
+  // unique index; applyGrooveData calls setTempo/setSwing.
   const idx = gw.myGrooveUtils.grooveUtilsUniqueIndex;
   const extra = document.createElement('div');
   // Subdivision buttons highlighted on a division change.

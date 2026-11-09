@@ -212,6 +212,62 @@ describe('HTMLforStaffContainer', () => {
     });
   });
 
+  // Each test renders the grid up to ten times in jsdom, which takes seconds on a busy machine.
+  describe('measure limit (constant_MAX_MEASURES = 10)', { timeout: 30000 }, () => {
+    it('renders an enabled add button below the limit and a disabled one at the limit', async () => {
+      document.body.innerHTML = '';
+      gw = await newGrooveWriter();
+      scaffoldForStateMutatingCalls(gw);
+      vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+      for (let i = 1; i < 9; i++) swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
+      expect(gw.numberOfMeasures()).toBe(9);
+      const below = gw.HTMLforStaffContainer(9, 0);
+      expect(below).toContain('title="Add measure"');
+      expect(below).not.toContain('aria-disabled');
+
+      swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
+      expect(gw.numberOfMeasures()).toBe(10);
+      const atLimit = gw.HTMLforStaffContainer(10, 0);
+      expect(atLimit).toContain('title="Maximum is 10 measures"');
+      expect(atLimit).toContain('aria-disabled="true"');
+    });
+
+    it('Add at 10 measures changes nothing and shows no alert', async () => {
+      document.body.innerHTML = '';
+      gw = await newGrooveWriter();
+      scaffoldForStateMutatingCalls(gw);
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+      for (let i = 1; i < 10; i++) swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
+      expect(gw.numberOfMeasures()).toBe(10);
+      const container = document.getElementById('measureContainer');
+      const before = container ? container.innerHTML : '';
+      alertSpy.mockClear();
+
+      swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
+
+      expect(gw.numberOfMeasures()).toBe(10);
+      expect(container ? container.innerHTML : '').toBe(before);
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    it('removing a measure at the limit renders an enabled add button again', async () => {
+      document.body.innerHTML = '';
+      gw = await newGrooveWriter();
+      scaffoldForStateMutatingCalls(gw);
+      vi.spyOn(window, 'alert').mockImplementation(() => {});
+      for (let i = 1; i < 10; i++) swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
+      expect(gw.numberOfMeasures()).toBe(10);
+
+      swallowingKnownHarnessGap(() => gw.closeMeasureButtonClick(10));
+
+      expect(gw.numberOfMeasures()).toBe(9);
+      const html = gw.HTMLforStaffContainer(9, 0);
+      expect(html).toContain('title="Add measure"');
+      expect(html).not.toContain('aria-disabled');
+    });
+  });
+
   describe('note grouping differs between straight and triplet divisions', () => {
     // class_time_division is read once, at construction, from the "Div" URL
     // query parameter (default "16"); there is no other supported way to seed

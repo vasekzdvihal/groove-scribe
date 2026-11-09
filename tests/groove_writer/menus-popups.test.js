@@ -243,14 +243,12 @@ describe('metronome options menu', () => {
     expect(document.getElementById('metronomeAutoSpeedupConfiguration').style.display).toBe('none');
   });
 
-  // BUG: root.myGrooveUtils.setMetronomeCountIn is never defined anywhere in
-  // groove_utils.js (verified by grep across the source), yet
-  // metronomeOptionsMenuPopupClick("CountIn") unconditionally calls it. Clicking
-  // "Count it in" in the real app throws a TypeError instead of toggling the
-  // count-in feature. This is a genuine product bug, not a test-harness artifact.
-  it('metronomeOptionsMenuPopupClick("CountIn") throws because setMetronomeCountIn does not exist (documented bug)', () => {
-    expect(gw.myGrooveUtils.setMetronomeCountIn).toBeUndefined();
-    expect(() => gw.metronomeOptionsMenuPopupClick('CountIn')).toThrow(TypeError);
+  it('metronomeOptionsMenuPopupClick("CountIn") toggles the checkmark without throwing', () => {
+    const item = document.getElementById('metronomeOptionsContextMenuCountIn');
+    expect(() => gw.metronomeOptionsMenuPopupClick('CountIn')).not.toThrow();
+    expect(item.className).toContain('menuChecked');
+    expect(() => gw.metronomeOptionsMenuPopupClick('CountIn')).not.toThrow();
+    expect(item.className).not.toContain('menuChecked');
   });
 
   it('metronomeOptionsMenuPopupClick("OffTheOne") opens the non-triplet offset submenu by default', () => {

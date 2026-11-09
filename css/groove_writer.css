@@ -584,6 +584,12 @@ body {
 #addMeasureButton:hover {
   color: #000;
 }
+#addMeasureButton[aria-disabled='true'],
+#addMeasureButton[aria-disabled='true']:hover {
+  color: #2484c0;
+  opacity: 0.35;
+  cursor: not-allowed;
+}
 #PermutationOptions.displayed {
   margin: 3px 0px 0px 10px;
 }

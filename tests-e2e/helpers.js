@@ -38,3 +38,39 @@ export function grooveData(page) {
     };
   });
 }
+
+// The note-on events of a Standard MIDI File, as { tick, note } in time order.
+// Takes the data URL the editor plays or saves, so a test can read the real output.
+export function midiNotesFromDataUrl(dataUrl) {
+  const bytes = Buffer.from(dataUrl.split(',')[1], 'base64');
+  const notes = [];
+  let at = 14; // the header chunk
+  at += 8; // "MTrk" and the track length
+  let tick = 0;
+  const readVarLength = () => {
+    let value = 0;
+    let byte;
+    do {
+      byte = bytes[at++];
+      value = value * 128 + (byte % 128);
+    } while (byte >= 128);
+    return value;
+  };
+  while (at < bytes.length) {
+    tick += readVarLength();
+    const status = bytes[at++];
+    if (status === 0xff) {
+      at += 1; // meta type
+      const length = readVarLength();
+      at += length;
+    } else if (status >= 0x90 && status < 0xa0) {
+      if (bytes[at + 1] > 0) notes.push({ tick, note: bytes[at] });
+      at += 2;
+    } else if (status >= 0xc0 && status < 0xe0) {
+      at += 1; // program change or channel pressure
+    } else {
+      at += 2; // note off and the other two-byte channel events
+    }
+  }
+  return notes;
+}
