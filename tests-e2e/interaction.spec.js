@@ -207,6 +207,9 @@ test.describe('change division', () => {
     );
   });
 
+  // This test pins today's behaviour on purpose. The straight-to-triplet switch drops the
+  // hi-hat note and loads a default triplet groove with no warning. PR 3 task T3.5
+  // ("ask before straight to triplet") changes this, and then this test needs an update.
   test('1/8 triplets switch to 12 notes and load the default triplet notes', async ({ page }) => {
     await open(page, HH0);
     await chooseDivision(page, 'subdivision_12ths');
@@ -245,6 +248,8 @@ test.describe('change time signature', () => {
     await expect(page.locator('#timeSigLabel')).toHaveText('7/8');
   });
 
+  // selectOption alone never changes the URL, so this proves only that Cancel applies no
+  // change. It does not prove that the popup would have changed the URL on Done.
   test('cancel leaves the time signature as it was', async ({ page }) => {
     await open(page, HH0);
     await page.click('#timeLabel');
@@ -266,6 +271,7 @@ test.describe('change time signature', () => {
 // Known bugs. Each test states the correct behaviour. PR 3 removes the fixme.
 test.describe('known bugs', () => {
   test.fixme('toms hide when the next loaded groove has none', async ({ page }) => {
+    // The expected URL below is a best guess. PR 3 may correct it.
     await open(page, `${START}&T1=|o---------------|&T4=|---o------------|`);
     await page.click('#groovesAnchor');
     await page.locator('.grooveListLI').first().click();
@@ -275,6 +281,7 @@ test.describe('known bugs', () => {
   });
 
   test.fixme('stickings hide when the next loaded groove has none', async ({ page }) => {
+    // The expected URL below is a best guess. PR 3 may correct it.
     await open(page, `${START}&Stickings=|R---------------|`);
     await page.click('#groovesAnchor');
     await page.locator('.grooveListLI').first().click();
@@ -299,7 +306,7 @@ test.describe('known bugs', () => {
   test.fixme('a permutation survives a restore', async ({ page }) => {
     await open(page);
     await page.click('#permutationAnchor');
-    await page.getByText('Permutation', { exact: false }).first().click();
+    await page.locator('#permutationContextMenu li').nth(1).click();
     await expect(page.locator('#PermutationOptions')).toHaveClass(/displayed/);
     await page.reload();
     await page.waitForSelector('#svgTarget svg');
@@ -315,7 +322,9 @@ test.describe('known bugs', () => {
       'title',
       'Maximum is 10 measures'
     );
-    await page.click('#addMeasureButton');
+    await expect(page.locator('#addMeasureButton')).toBeDisabled();
+    // Force the click: a disabled button is not clickable by default.
+    await page.click('#addMeasureButton', { force: true });
     // Today the URL says Measures=11, and a reload cuts it back to 10.
     await expectQuery(page, ten);
   });
@@ -324,6 +333,7 @@ test.describe('known bugs', () => {
     page,
   }) => {
     // 1/8 triplets are not allowed with an 8th note beat.
+    // The expected URL is a best guess. PR 3 may instead expect a switch to a straight division.
     const triplets =
       '?TimeSig=4/4&Div=12&Tempo=80&Measures=1&H=|x-----------|&S=|------------|&K=|------------|';
     await open(page, triplets);
@@ -349,6 +359,7 @@ test.describe('known bugs', () => {
   });
 
   test.fixme('toms 2 and 3 survive load and read back (audit item 17)', async ({ page }) => {
+    // The expected URL below is a best guess. PR 3 may correct it.
     const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
     const withToms =
       START + `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('o', 3)}`;
