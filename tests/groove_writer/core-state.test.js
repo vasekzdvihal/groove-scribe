@@ -276,6 +276,42 @@ describe('GrooveWriter core state & undo/redo', () => {
     });
   });
 
+  describe('ReplaceNewestUndoStep', () => {
+    beforeEach(() => {
+      gw.updateCurrentURL = vi.fn();
+    });
+
+    it('rewrites the newest step and leaves the older steps and the step count alone', () => {
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=16&Tempo=80');
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=8&Tempo=80');
+
+      gw.ReplaceNewestUndoStep('http://example.com/index.html?Div=8&Tempo=90');
+
+      buildFixture(gw, 1);
+      gw.updateCurrentURL = vi.fn();
+      gw.displayNewSVG = vi.fn();
+      gw.updateGrooveDBSource = vi.fn();
+      gw.undoCommand(); // back to the older step
+      expect(gw.notesPerMeasure()).toBe(16);
+      gw.redoCommand(); // the newest step carries the rewritten tempo
+      expect(gw.myGrooveUtils.getTempo()).toBe(90);
+    });
+
+    it('does not clear the redo stack', () => {
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=16&Tempo=80');
+      gw.AddFullURLToUndoStack('http://example.com/index.html?Div=8&Tempo=80');
+      buildFixture(gw, 1);
+      gw.displayNewSVG = vi.fn();
+      gw.updateGrooveDBSource = vi.fn();
+      gw.undoCommand();
+
+      gw.ReplaceNewestUndoStep('http://example.com/index.html?Div=16&Tempo=85');
+      gw.redoCommand();
+
+      expect(gw.notesPerMeasure()).toBe(8);
+    });
+  });
+
   describe('AddFullURLToUndoStack', () => {
     beforeEach(() => {
       gw.updateCurrentURL = vi.fn(); // not under test here
@@ -542,6 +578,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
   // treat that as zero play time instead of throwing.
   it('does nothing when MIDI playback was never started', async () => {
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +
@@ -553,11 +590,36 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     expect(gw.myGrooveUtils.getTempo()).toBe(80);
   });
 
+  it('shows a raised tempo in the newest undo step instead of adding a step', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
+    globalThis.MIDI = makeMidiMock();
+    const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn();
+    gw.updateCurrentURL = vi.fn();
+    document.body.innerHTML =
+      '<input id="tempoInput' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '" value="80">' +
+      '<input id="tempoTextField' +
+      gw.myGrooveUtils.grooveUtilsUniqueIndex +
+      '">';
+    gw.myGrooveUtils.startMIDI_playback();
+    gw.metronomeAutoSpeedUpTempoUpdate(); // baseline
+    vi.setSystemTime(new Date(2020, 0, 1, 0, 1, 0)); // one minute: +1 bpm with the defaults
+
+    gw.metronomeAutoSpeedUpTempoUpdate();
+
+    expect(gw.myGrooveUtils.getTempo()).toBe(81);
+    expect(gw.updateCurrentURLWithoutNewUndoStep).toHaveBeenCalledTimes(1);
+  });
+
   it('does not change tempo on the first call after playback starts (it only establishes the timing baseline)', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +
@@ -577,6 +639,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +
@@ -605,6 +668,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +
@@ -634,6 +698,7 @@ describe('GrooveWriter metronomeAutoSpeedUpTempoUpdate', () => {
     vi.setSystemTime(new Date(2020, 0, 1, 0, 0, 0));
     globalThis.MIDI = makeMidiMock();
     const gw = await newGrooveWriter();
+    gw.updateCurrentURLWithoutNewUndoStep = vi.fn(); // needs the whole page, not under test here
     document.body.innerHTML =
       '<input id="tempoInput' +
       gw.myGrooveUtils.grooveUtilsUniqueIndex +

@@ -2110,13 +2110,23 @@ function GrooveWriter() {
     return true;
   };
 
+  // view mode is not part of the groove, so it must not create or break a history step
+  function undoFragmentFromFullURL(fullURL) {
+    return fullURL.slice(fullURL.indexOf('?')).replace('Mode=view&', '');
+  }
+
+  // Let the newest history step show the current groove instead of adding a step.
+  // The tempo that the metronome raises by itself is not an edit, so it must not
+  // push the user's own edits out of the history.
+  root.ReplaceNewestUndoStep = function (fullURL) {
+    var urlFragment = undoFragmentFromFullURL(fullURL);
+
+    if (class_undo_stack.length === 0) class_undo_stack.push(urlFragment);
+    else class_undo_stack[class_undo_stack.length - 1] = urlFragment;
+  };
+
   root.AddFullURLToUndoStack = function (fullURL) {
-    var urlFragment;
-
-    var searchData = fullURL.indexOf('?');
-
-    // view mode is not part of the groove, so it must not create or break a history step
-    urlFragment = fullURL.slice(searchData).replace('Mode=view&', '');
+    var urlFragment = undoFragmentFromFullURL(fullURL);
 
     // clear redo array whenever we add a new valid element to the stack
     // when we undo, we end up with a null push that returns false here
@@ -2127,10 +2137,19 @@ function GrooveWriter() {
 
   // update the current URL so that reloads and history traversal and link shares and bookmarks work correctly
   root.updateCurrentURL = function () {
+    updateCurrentURLWithHistory(root.AddFullURLToUndoStack);
+  };
+
+  // the same, for a change that is not an edit: the newest history step shows it
+  root.updateCurrentURLWithoutNewUndoStep = function () {
+    updateCurrentURLWithHistory(root.ReplaceNewestUndoStep);
+  };
+
+  function updateCurrentURLWithHistory(recordInHistory) {
     var newURL = get_FullURLForPage();
     var newTitle = false;
 
-    root.AddFullURLToUndoStack(newURL);
+    recordInHistory(newURL);
 
     var title = document.getElementById('tuneTitle').value.trim();
     if (title !== '') newTitle = title;
@@ -2159,7 +2178,7 @@ function GrooveWriter() {
         searchDataEle.innerHTML = '<p style="margin-left: 10px;"><b>' + searchURL + '</b><p>';
       }
     }
-  };
+  }
 
   function generate_ABC(renderWidth) {
     var Sticking_Array = get_empty_note_array_in_32nds();
@@ -3024,7 +3043,12 @@ function GrooveWriter() {
       }
     }
 
-    if (tempoDiffInt > 0) root.myGrooveUtils.setTempo(root.myGrooveUtils.getTempo() + tempoDiffInt);
+    if (tempoDiffInt > 0) {
+      root.myGrooveUtils.setTempo(root.myGrooveUtils.getTempo() + tempoDiffInt);
+      // show the new tempo in the URL now, in the newest history step, so the debounced
+      // update that setTempo schedules finds nothing new to add
+      root.updateCurrentURLWithoutNewUndoStep();
+    }
   };
 
   // takes a string of notes encoded in a serialized string and sets the notes on or off

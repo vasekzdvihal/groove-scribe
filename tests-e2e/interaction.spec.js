@@ -192,6 +192,43 @@ test.describe('undo and redo', () => {
     ).toBeTruthy();
   });
 
+  // The metronome can raise the tempo by itself. That is not an edit. Before the fix, each
+  // raise added an undo step, so 40 raises pushed the user's own edits out of the history.
+  test('the metronome auto speed-up does not push edits out of the undo history', async ({
+    page,
+  }) => {
+    await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+    await open(page);
+    await page.click('#hi-hat0');
+    await page.click('#snare4');
+    await page.click('#kick8');
+    await expectQuery(page, HH0_SN4_K8);
+
+    await page.evaluate(() => {
+      document.getElementById('metronomeAutoSpeedupTempoIncreaseAmount').value = '1';
+      document.getElementById('metronomeAutoSpeedupTempoIncreaseInterval').value = '1';
+      document.getElementById('metronomeAutoSpeedUpKeepGoingForever').checked = true;
+      window.myGrooveWriter.metronomeOptionsMenuPopupClick('SpeedUp');
+      window.myGrooveWriter.myGrooveUtils.startMIDI_playback();
+    });
+    // 50 raises, each one minute apart. The history holds at most 40 steps.
+    for (let i = 0; i < 50; i++) {
+      await page.clock.fastForward(61000);
+      await page.evaluate(() => window.myGrooveWriter.metronomeAutoSpeedUpTempoUpdate());
+    }
+    await page.clock.fastForward(1000);
+    expect(
+      await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.getTempo())
+    ).toBeGreaterThan(120);
+
+    // Undo takes back the user's three edits one by one, down to the start. The first undo
+    // also takes back the tempo, because the newest step carried it.
+    for (const expected of [HH0_SN4, HH0, START]) {
+      await page.evaluate(() => window.myGrooveWriter.undoCommand());
+      await expectQuery(page, expected);
+    }
+  });
+
   test('undo takes back an added measure', async ({ page }) => {
     await open(page);
     await page.click('#hi-hat0');
