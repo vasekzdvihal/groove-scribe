@@ -27,11 +27,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm run typecheck
-      - run: npm run knip
-      - run: npm test
+      - run: npm run verify:fast
 
   e2e:
     name: Golden master

@@ -11,6 +11,7 @@
 //   4. compares each darwin SVG/MIDI byte for byte with its Linux baseline,
 //   5. deletes all darwin files, even when something failed.
 // Any real failure, any difference, or any baseline without a darwin file exits non-zero.
+// So does a Playwright exit that the report does not explain.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -103,6 +104,19 @@ export function classifyReport(report) {
   return { failures, missingSnapshots };
 }
 
+/**
+ * Decides the exit code on macOS. Playwright's own non-zero exit is only excused when the
+ * report shows missing darwin snapshots. A non-zero exit with no failure and no missing
+ * snapshot is unexplained, so it fails.
+ * @param {{ runStatus: number | null, failures: string[], problems: string[], missingSnapshots?: number }} result
+ * @returns {number}
+ */
+export function exitCodeFor({ runStatus, failures, problems, missingSnapshots = 0 }) {
+  if (failures.length + problems.length > 0) return 1;
+  if (runStatus !== 0 && missingSnapshots === 0) return 1;
+  return 0;
+}
+
 function snapshotDirs() {
   return readdirSync(e2eDir)
     .filter((n) => n.endsWith('-snapshots'))
@@ -158,7 +172,10 @@ function main(args) {
         `${missingSnapshots} tests only had a missing darwin snapshot`
     );
     for (const line of [...failures, ...problems]) console.error(`verify: ${line}`);
-    return failures.length + problems.length > 0 ? 1 : 0;
+    if (failures.length + problems.length === 0 && run.status !== 0 && missingSnapshots === 0) {
+      console.error(`verify: Playwright exited ${run.status} but the report shows no failure.`);
+    }
+    return exitCodeFor({ runStatus: run.status, failures, problems, missingSnapshots });
   } finally {
     deleteDarwinFiles();
     rmSync(reportDir, { recursive: true, force: true });

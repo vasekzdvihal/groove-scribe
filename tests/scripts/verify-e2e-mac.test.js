@@ -2,7 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { classifyReport, compareSnapshotDir, SKIPPED_PNGS } from '../../scripts/verify-e2e-mac.mjs';
+import {
+  classifyReport,
+  compareSnapshotDir,
+  exitCodeFor,
+  SKIPPED_PNGS,
+} from '../../scripts/verify-e2e-mac.mjs';
 
 describe('compareSnapshotDir', () => {
   let dir;
@@ -95,5 +100,31 @@ describe('classifyReport', () => {
 
   it('counts a global error as a failure', () => {
     expect(classifyReport({ suites: [], errors: [{ message: 'setup' }] }).failures).toHaveLength(1);
+  });
+});
+
+describe('exitCodeFor', () => {
+  it('passes when Playwright passed and nothing is wrong', () => {
+    expect(exitCodeFor({ runStatus: 0, failures: [], problems: [] })).toBe(0);
+  });
+
+  it('passes when only missing darwin snapshots made Playwright exit non-zero', () => {
+    expect(exitCodeFor({ runStatus: 1, failures: [], problems: [], missingSnapshots: 3 })).toBe(0);
+  });
+
+  it('fails on a real failure or a snapshot problem', () => {
+    expect(exitCodeFor({ runStatus: 1, failures: ['x'], problems: [], missingSnapshots: 0 })).toBe(
+      1
+    );
+    expect(exitCodeFor({ runStatus: 0, failures: [], problems: ['y'], missingSnapshots: 0 })).toBe(
+      1
+    );
+  });
+
+  it('fails when Playwright exited non-zero but the report shows nothing wrong', () => {
+    expect(exitCodeFor({ runStatus: 1, failures: [], problems: [], missingSnapshots: 0 })).toBe(1);
+    expect(exitCodeFor({ runStatus: null, failures: [], problems: [], missingSnapshots: 0 })).toBe(
+      1
+    );
   });
 });
