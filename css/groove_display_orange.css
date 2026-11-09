@@ -404,3 +404,39 @@ input[type='range']:active::-webkit-slider-thumb {
     display: none !important;
   }
 }
+
+/* "Sound failed. Tap to retry." under the player. Empty while the sound loads fine. */
+.soundRetryNote {
+  white-space: normal;
+}
+.soundRetry {
+  min-height: 44px;
+  margin: 4px 6px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 4px;
+  background: #a8261a;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+.soundRetry:hover {
+  background: #c02e20;
+}
+.soundRetry:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px #2484c0;
+}
+/* The small player is only 90 px wide, so the button goes beside it on one line. */
+.playerControl.small {
+  position: relative;
+}
+.playerControl.small .soundRetryNote {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  margin-left: 6px;
+  white-space: nowrap;
+}

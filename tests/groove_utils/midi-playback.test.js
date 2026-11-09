@@ -84,6 +84,85 @@ describe('GrooveUtils MIDI playback controls', () => {
   }
 
   describe('oneTimeInitializeMidi', () => {
+    describe('when the sound file does not load', () => {
+      let icon;
+      let note;
+      let callbacks; // the callback of each MIDI.loadPlugin call, in order
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        globalThis.__groovescribeSoundLoad = { delays: [10, 30, 90], timeoutMs: 1000 };
+        icon = addElement('midiPlayImage' + gu.grooveUtilsUniqueIndex);
+        note = addElement('soundRetryNote' + gu.grooveUtilsUniqueIndex);
+        callbacks = [];
+        globalThis.MIDI.loadPlugin = vi.fn((opts) => callbacks.push(opts.callback));
+      });
+
+      afterEach(() => {
+        delete globalThis.__groovescribeSoundLoad;
+      });
+
+      it('gives up on a stalled load after the timeout and retries after 1, 3 and 9 s steps', () => {
+        gu.oneTimeInitializeMidi();
+        expect(callbacks).toHaveLength(1);
+        vi.advanceTimersByTime(999);
+        expect(callbacks).toHaveLength(1);
+        vi.advanceTimersByTime(1 + 10); // timeout, then the first delay
+        expect(callbacks).toHaveLength(2);
+        vi.advanceTimersByTime(1000 + 30);
+        expect(callbacks).toHaveLength(3);
+        vi.advanceTimersByTime(1000 + 90);
+        expect(callbacks).toHaveLength(4);
+        expect(note.querySelector('button')).toBeNull();
+        vi.advanceTimersByTime(1000); // the last try fails too
+        expect(callbacks).toHaveLength(4);
+        expect(note.querySelector('button').textContent).toBe('Sound failed. Tap to retry.');
+      });
+
+      it('a tap on the button starts a new load, and success removes the message', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(10000);
+        const button = note.querySelector('button');
+        expect(button).not.toBeNull();
+
+        button.click();
+        expect(callbacks).toHaveLength(5);
+        expect(note.querySelector('button')).toBeNull();
+
+        callbacks[4]();
+        expect(icon.className).toBe('midiPlayImage Stopped');
+        expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+      });
+
+      it('the Play button retries while the message shows', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(10000);
+        icon.onclick();
+        expect(callbacks).toHaveLength(5);
+      });
+
+      it('a late success after the timeout sets up once and cancels the retry', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(1000); // the first try timed out, the retry is waiting
+        callbacks[0](); // the first try finishes late
+        expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+        expect(icon.className).toBe('midiPlayImage Stopped');
+
+        vi.advanceTimersByTime(60000);
+        expect(callbacks).toHaveLength(1); // the waiting retry never started
+      });
+
+      it('a second success from a retry that was already running does nothing', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(1010); // the retry is running now
+        callbacks[0]();
+        callbacks[1]();
+        expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(60000);
+        expect(note.querySelector('button')).toBeNull();
+      });
+    });
+
     it('calls MIDI.loadPlugin (with a soundfont URL + callback) on first invocation', () => {
       addElement('midiPlayImage' + gu.grooveUtilsUniqueIndex);
 

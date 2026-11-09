@@ -711,3 +711,11 @@
     display: none !important;
   }
 }
+
+/* The failed-sound button floats just above the playback bar, so the bar keeps its height. */
+#PlaybackBar .soundRetryNote {
+  position: absolute;
+  left: 12px;
+  bottom: 100%;
+  margin-bottom: 8px;
+}
