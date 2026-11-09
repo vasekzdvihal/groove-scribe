@@ -47,3 +47,35 @@ test('grooveDBTest.html renders (GrooveDBFormatPutGrooveOnPage path)', async ({ 
   expect(await page.locator('svg').count()).toBeGreaterThan(1);
   expect(errors, errors.join('\n')).toEqual([]);
 });
+
+// A line break in Title, Author or Comments must not become an ABC directive.
+// abc2svg runs %%beginjs with eval and copies %%beginsvg <style> to the page.
+const JS_PAYLOAD = 'x\n%%beginjs\nwindow.__xss=5\n%%endjs\n';
+const SVG_PAYLOAD =
+  'x\n%%beginsvg\n<style type="text/css">\n</style><img src=x onerror="window.__xss=6">\n%%endsvg\n';
+
+for (const name of ['Title', 'title', 'Author', 'author', 'Comments', 'comments']) {
+  for (const [kind, payload] of [
+    ['beginjs', JS_PAYLOAD],
+    ['beginsvg', SVG_PAYLOAD],
+  ]) {
+    test(`crafted text does not run: ${kind} in ${name}`, async ({ page }) => {
+      await page.goto(
+        '/GrooveEmbed.html' + GROOVE + '&' + name + '=' + encodeURIComponent(payload)
+      );
+      await page.waitForSelector('svg', { timeout: 15000 });
+      await page.waitForTimeout(500);
+      expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+    });
+  }
+}
+
+test('crafted text does not run: directive in the H lane', async ({ page }) => {
+  await page.goto(
+    '/GrooveEmbed.html?TimeSig=4/4&Div=16&Tempo=80&Measures=1&H=' +
+      encodeURIComponent('|x\n%%beginjs\nwindow.__xss=7\n%%endjs\nxxxxxxxxxxxxxx|') +
+      '&S=|----O-------O---|&K=|o-------o-------|'
+  );
+  await page.waitForTimeout(1500);
+  expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+});
