@@ -46,7 +46,20 @@ describe('parseGrooveLink', () => {
     expect(parseGrooveLink('?H=|' + 'x'.repeat(8000))).toEqual({ ok: false, reason: 'too-long' });
   });
 
-  it('keeps a title with a malformed escape', () => {
-    expect(parseGrooveLink('?Title=100%&H=|x|').title).toBe('100%');
+  it('keeps a title with a malformed escape, and stores the stray percent sign as %25', () => {
+    expect(parseGrooveLink('?Title=100%&H=|x|')).toEqual({
+      ok: true,
+      query: '?Title=100%25&H=|x|',
+      title: '100%',
+    });
+  });
+
+  it('leaves a valid escape alone and fixes only the stray percent signs', () => {
+    expect(parseGrooveLink('?Title=50%%20off&H=|x|').query).toBe('?Title=50%25%20off&H=|x|');
+  });
+
+  it('stores a query that the editor reads back to the same title', () => {
+    const parsed = parseGrooveLink('?Title=100%&H=|x|');
+    expect(getGrooveDataFromUrlString(parsed.query).title).toBe('100%');
   });
 });
