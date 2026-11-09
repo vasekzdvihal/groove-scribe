@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(node -e ' *)",
       "Bash(xargs -I{} sed -n '1,{}p' js/groove_utils.js)",
       "Bash(node -e 'const fs=require\\(\"fs\"\\);let e=fs.readFileSync\\(\"eslint.config.js\",\"utf8\"\\);e=e.replace\\(\" \\\\x27js/noteArrays.js\\\\x27,\",\" \\\\x27js/noteArrays.js\\\\x27,\\\\n \\\\x27js/browserInfo.js\\\\x27,\"\\);fs.writeFileSync\\(\"eslint.config.js\",e\\);')",
       "Bash(awk '/var class_empty_note_array = \\\\[/{f=1} f{print} /\\\\];/&&f{exit}' js/groove_utils.js)",
@@ -11,18 +10,13 @@
       "Bash(awk -F: '$1>4700')",
       "Bash(awk 'NR>=1595 && NR<=2854 { if \\($0 ~ /function /\\) fn=$0; if \\($0 ~ /getElementById/\\) print fn }' js/groove_writer.js)",
       "Bash(awk -F: '$1<1595 || $1>2854')",
-      "Bash(node /tmp/claude-1000/-home-montulli-GrooveScribe/c72288af-8deb-4c4d-aec0-002c903037d5/scratchpad/extract_permutations.mjs)",
-      "Bash(cd /home/montulli/GrooveScribe *)",
       "Bash(awk 'NR>=4112 { print; if \\(NR>4112 && /^  };/\\) {print \"END:\"NR; exit} }' js/groove_writer.js)",
       "Bash(awk 'NR>=4632 && NR<=4770' js/groove_writer.js)",
       "Bash(awk 'NR>=4112 && NR<=4592' js/groove_writer.js)",
       "Bash(awk 'NR>=4632 && NR<=4767' js/groove_writer.js)",
-      "Bash(node /tmp/claude-1000/-home-montulli-GrooveScribe/c72288af-8deb-4c4d-aec0-002c903037d5/scratchpad/extract_viewhtml.mjs)",
       "Bash(awk 'NR>=1823 && NR<=2189' js/groove_writer.js)",
       "Bash(awk 'NR>=1884 && NR<=1941' js/groove_writer.js)",
-      "Bash(node /tmp/claude-1000/-home-montulli-GrooveScribe/c72288af-8deb-4c4d-aec0-002c903037d5/scratchpad/extract_gridstate.mjs)",
       "Bash(node -e \"console.log\\(JSON.stringify\\(require\\('./package.json'\\).scripts,null,2\\)\\)\")",
-      "Bash(node /tmp/claude-1000/-home-montulli-GrooveScribe/c72288af-8deb-4c4d-aec0-002c903037d5/scratchpad/rebuild_gdbcg.mjs)",
       "Bash(sed -n '/toggles tom1 and tom4/,/^  }\\);/p' tests/groove_writer/grid-notes.test.js)",
       "Bash(sed -n '/rotates sticking state/,/^  }\\);/p' tests/groove_writer/grid-notes.test.js)",
       "Bash(awk '/groove_writer\\\\.js/{f=1} f')",
@@ -32,7 +26,6 @@
       "Bash(npm ls *)",
       "Bash(python3 -c \"import yaml,sys; yaml.safe_load\\(open\\('.github/workflows/mobile-build.yml'\\)\\); print\\('workflow YAML valid ✅'\\)\")",
       "Bash([ -s \"$HOME/.nvm/nvm.sh\" ])",
-      "Read(//home/montulli/.nvm/versions/node/**)",
       "Bash(command -v fnm)",
       "Bash(fnm list *)",
       "Read(//usr/local/n/versions/**)",
@@ -43,12 +36,8 @@
       "Bash(node /tmp/bw_test.mjs)",
       "Bash(echo \"exit: $? \\(expect 1\\)\")",
       "Bash(gh pr *)",
-      "Bash(gh api *)",
       "Bash(git checkout *)",
       "Bash(git add *)"
-    ],
-    "additionalDirectories": [
-      "/tmp/claude-1000/-home-montulli-GrooveScribe/c72288af-8deb-4c4d-aec0-002c903037d5/scratchpad"
     ]
   }
 }
