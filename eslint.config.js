@@ -126,6 +126,12 @@ export default [
     rules: { 'sonarjs/assertions-in-tests': 'off' },
   },
 
+  // expectQuery in the interaction tests wraps expect.poll, which the rule cannot see.
+  {
+    files: ['tests-e2e/interaction.spec.js'],
+    rules: { 'sonarjs/assertions-in-tests': 'off' },
+  },
+
   // Test suite + build config: modern ESM, Node + Vitest environment. Covers the
   // Vitest suite (tests/), the Playwright suite (tests-e2e/), and *.config.js.
   {

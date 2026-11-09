@@ -15,18 +15,18 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 ### Verify loop (run after every change; all must stay green)
 
-| Command                | Expectation                                                                                                                                                                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **812 pass**                                                                                                                                                                                                                        |
-| `npm run test:e2e`     | Playwright golden-master and UI — **129 pass**, 9 skipped as `test.fixme` (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
-| `npm run lint`         | ESLint — **0 errors** (~83 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
-| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (246 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
-| `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
-| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                                                                                                |
-| `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                  |
-| `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                          |
-| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                                                                                              |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                                                                                           |
+| Command                | Expectation                                                                                                                                                                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`             | Vitest unit suite — **815 pass**                                                                                                                                                                                                                         |
+| `npm run test:e2e`     | Playwright golden-master and UI — **129 pass**, 11 skipped as `test.fixme` (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
+| `npm run lint`         | ESLint — **0 errors** (~81 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                            |
+| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (246 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`.  |
+| `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                  |
+| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                                                                                                 |
+| `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                   |
+| `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                           |
+| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                                                                                               |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                                                                                            |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -115,6 +115,8 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
   files with the Linux baselines byte for byte, skips the two smoke PNGs that differ on a Mac,
   deletes the darwin files, and exits non-zero on any real failure or difference. On Linux it runs
   plain Playwright. Never commit darwin files.
+- Test servers use fixed ports: `npm run test:e2e` uses 8010 and `npm run test:cloud` uses 8001.
+  `reuseExistingServer` is false, so a busy port fails the run. Stop the other process first.
 
 ## Conventions & gotchas
 

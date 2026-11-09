@@ -11,7 +11,7 @@ const files = readdirSync(dir).filter((name) => /\.ya?ml$/.test(name));
  * @returns {string[]}
  */
 function usesValues(text) {
-  return [...text.matchAll(/^\s*(?:-\s+)?uses:\s*(\S+)/gm)].map((match) => match[1]);
+  return [...text.matchAll(/^[ \t]*(?:-[ \t]+)?uses:[ \t]*(\S+)/gm)].map((match) => match[1]);
 }
 
 describe('workflow actions', () => {

@@ -13,7 +13,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  // Cap workers: the threaded dev server + Chromium instances are CPU-bound, and
+  // Cap workers: the test server + Chromium instances are CPU-bound, and
   // a modest count keeps page loads fast and the suite well under its time budget.
   workers: 4,
   reporter: [['list']],

@@ -4,7 +4,7 @@
 //
 // After you fix errors, lower the baseline with: npm run typecheck -- --update
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,7 +57,8 @@ function main() {
     maxBuffer: 64 * 1024 * 1024,
   });
   if (run.error || run.status === null) {
-    console.error(`typecheck: tsc could not run: ${run.error?.message ?? `signal ${run.signal}`}`);
+    const reason = run.error?.message ?? `signal ${run.signal}`;
+    console.error(`typecheck: tsc could not run: ${reason}`);
     return 1;
   }
   const current = countErrorsByFile(run.stdout + run.stderr, repoRoot);
@@ -86,6 +87,7 @@ function main() {
   return 0;
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// realpathSync: Node gives this module its real path, but keeps a symlinked argv[1] as typed.
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   process.exitCode = main();
 }

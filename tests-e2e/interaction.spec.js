@@ -8,8 +8,8 @@ import { loadGroove } from './helpers.js';
 // protect the refactor of the editor's state handling.
 //
 // Every test starts from a fixed URL, so a later change of the default groove
-// cannot break them. Tests marked test.fixme describe the correct behaviour of a
-// known bug. Remove the fixme in the PR that fixes the bug.
+// cannot break them. Tests marked with the skip modifier describe the correct behaviour
+// of a known bug. Remove the modifier in the PR that fixes the bug.
 
 const empty = (div, measures = 1, extra = '') => {
   const lane = '-'.repeat(div);
@@ -186,6 +186,31 @@ test.describe('toggle toms', () => {
     // Today the URL still has the tom lanes, and the next undo is lost too.
     await expectQuery(page, HH0);
   });
+
+  test.fixme('undo takes back the view mode toggle (audit item 14)', async ({ page }) => {
+    await open(page);
+    await page.click('#hi-hat0');
+    await expectQuery(page, HH0);
+    await page.click('#view-edit-switch');
+    await expect(page.locator('#view-edit-switch')).toHaveText('Edit mode');
+    await page.click('#view-edit-switch');
+    await expect(page.locator('#view-edit-switch')).toHaveText('View mode');
+    // A view toggle is not an edit. One undo must take back the hi-hat note.
+    // Today the toggles add history steps, so the first undo changes nothing visible.
+    await page.click('#undoButton');
+    await expectQuery(page, START);
+  });
+
+  test.fixme('undo takes back the stickings toggle (audit item 14)', async ({ page }) => {
+    await open(page);
+    await page.click('#hi-hat0');
+    await page.click('#stickingsButton');
+    await page.locator('#stickingsContextMenu li').filter({ hasText: 'Show or Hide' }).click();
+    await expect.poll(() => query(page)).toContain('&Stickings=');
+    await page.click('#undoButton');
+    // Today the URL keeps the stickings lane, and the next undo is lost too.
+    await expectQuery(page, HH0);
+  });
 });
 
 test.describe('change division', () => {
@@ -268,7 +293,7 @@ test.describe('change time signature', () => {
   });
 });
 
-// Known bugs. Each test states the correct behaviour. PR 3 removes the fixme.
+// Known bugs. Each test states the correct behaviour. PR 3 removes the modifier.
 test.describe('known bugs', () => {
   test.fixme('toms hide when the next loaded groove has none', async ({ page }) => {
     // The expected URL below is a best guess. PR 3 may correct it.

@@ -13,7 +13,7 @@
 // Any real failure, any difference, or any baseline without a darwin file exits non-zero.
 // So does a Playwright exit that the report does not explain.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -182,6 +182,7 @@ function main(args) {
   }
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// realpathSync: Node gives this module its real path, but keeps a symlinked argv[1] as typed.
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   process.exitCode = main(process.argv.slice(2));
 }

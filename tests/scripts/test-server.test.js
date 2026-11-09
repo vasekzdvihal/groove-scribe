@@ -33,6 +33,8 @@ function status(port, path) {
 
 async function startServer(dir, ...extra) {
   const port = await freePort();
+  // The tests need the python3 on PATH, the same one a developer runs the server with.
+  // eslint-disable-next-line sonarjs/no-os-command-from-path
   const child = spawn('python3', [SCRIPT, String(port), dir, ...extra], { stdio: 'ignore' });
   const exited = new Promise((_, reject) => {
     child.once('exit', (code) => reject(new Error(`test-server exited with code ${code}`)));
@@ -107,6 +109,7 @@ describe('test-server.py', () => {
   });
 
   it.each(['..', 'a/b', '/etc', ''])('refuses %j as an overlay folder name', (name) => {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path
     const run = spawnSync('python3', [SCRIPT, '0', dir, name], { timeout: 5000 });
     expect(run.status).not.toBe(0);
     expect(run.signal).toBeNull();
