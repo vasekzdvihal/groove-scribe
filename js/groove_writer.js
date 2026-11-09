@@ -3718,13 +3718,30 @@ function GrooveWriter() {
     return myABC;
   }
 
+  // The file name is the title, without the characters that no file name may hold.
+  function getABCFileName() {
+    var title = document
+      .getElementById('tuneTitle')
+      .value.replace(/[\\/:*?"<>|]|\p{Cc}/gu, '')
+      .trim();
+    return (title || 'notation') + '.abc';
+  }
+
   root.saveABCtoFile = function () {
-    var myABC = getABCDataWithLineEndings();
+    var blob = new Blob([getABCDataWithLineEndings()], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
 
-    var myURL = 'data:text/plain;charset=utf-8;base64,' + btoa(myABC);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = getABCFileName();
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
 
-    console.log('Use "Save As" to save the new page to a local file');
-    window.open(myURL);
+    // the browser has started the download by now
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
   };
 
   // change the base division to something else.

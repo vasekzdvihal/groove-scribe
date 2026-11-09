@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -451,22 +451,90 @@ describe('GrooveWriter url-export (js/groove_writer.js)', () => {
   });
 
   describe('saveABCtoFile', () => {
-    it('base64-encodes the ABC source (with CRLF line endings) as a data: URL and passes it to window.open', async () => {
+    // The ABC goes into a Blob and a temporary link downloads it. A data: URL made with
+    // btoa threw on non-Latin text, and browsers block window.open on data: URLs.
+    function readBlob(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(new Uint8Array(reader.result));
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(blob);
+      });
+    }
+
+    async function setup(title, abc) {
       const gw = await newGrooveWriter();
       buildGridDOM(gw, 1);
+      document.getElementById('tuneTitle').value = title;
       const ta = document.createElement('textarea');
       ta.id = 'ABCsource';
-      ta.value = 'X:1\nK:C\n';
+      ta.value = abc;
       document.body.appendChild(ta);
+      const blobs = [];
+      URL.createObjectURL = vi.fn((blob) => {
+        blobs.push(blob);
+        return 'blob:test/1';
+      });
+      URL.revokeObjectURL = vi.fn();
+      const downloads = [];
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function () {
+        downloads.push({ href: this.href, download: this.download });
+      });
       const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+      return { gw, blobs, downloads, openSpy };
+    }
+
+    afterEach(() => {
+      vi.useRealTimers();
+      delete URL.createObjectURL;
+      delete URL.revokeObjectURL;
+    });
+
+    it('downloads the ABC source (with CRLF line endings) as a UTF-8 text Blob', async () => {
+      const { gw, blobs, downloads, openSpy } = await setup('', 'X:1\nK:C\n');
 
       gw.saveABCtoFile();
 
-      expect(openSpy).toHaveBeenCalledTimes(1);
-      const [url] = openSpy.mock.calls[0];
-      expect(url).toMatch(/^data:text\/plain;charset=utf-8;base64,/);
-      const base64 = url.split(',')[1];
-      expect(Buffer.from(base64, 'base64').toString('utf8')).toBe('X:1\r\nK:C\r\n');
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(downloads).toEqual([{ href: 'blob:test/1', download: 'notation.abc' }]);
+      expect(blobs[0].type).toBe('text/plain;charset=utf-8');
+      expect(new TextDecoder().decode(await readBlob(blobs[0]))).toBe('X:1\r\nK:C\r\n');
+    });
+
+    it('saves a non-Latin title without throwing and names the file title.abc', async () => {
+      const { gw, blobs, downloads } = await setup('Český rock 🥁', 'T:Český rock 🥁\nK:C\n');
+
+      expect(() => gw.saveABCtoFile()).not.toThrow();
+
+      expect(downloads[0].download).toBe('Český rock 🥁.abc');
+      expect(new TextDecoder().decode(await readBlob(blobs[0]))).toBe('T:Český rock 🥁\r\nK:C\r\n');
+    });
+
+    it('removes characters that no file name may hold', async () => {
+      const { gw, downloads } = await setup('a/b:c*d?', 'X:1\n');
+
+      gw.saveABCtoFile();
+
+      expect(downloads[0].download).toBe('abcd.abc');
+    });
+
+    it('revokes the object URL after the download starts', async () => {
+      vi.useFakeTimers();
+      const { gw } = await setup('', 'X:1\n');
+
+      gw.saveABCtoFile();
+      expect(URL.revokeObjectURL).not.toHaveBeenCalled();
+
+      vi.runAllTimers();
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test/1');
+    });
+
+    it('leaves no temporary link in the page', async () => {
+      const { gw } = await setup('', 'X:1\n');
+
+      gw.saveABCtoFile();
+
+      expect(document.querySelector('a[download]')).toBeNull();
     });
   });
 
