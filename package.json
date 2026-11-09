@@ -16,7 +16,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/typecheck.mjs",
     "knip": "knip",
     "check": "npm run lint && npm run typecheck && npm run format:check && npm run test",
     "build:www": "node scripts/build-www.mjs",

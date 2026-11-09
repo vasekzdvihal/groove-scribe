@@ -15,17 +15,17 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 ### Verify loop (run after every change; all must stay green)
 
-| Command                | Expectation                                                                                                                                                                         |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **771 pass**                                                                                                                                                    |
-| `npm run test:e2e`     | Playwright golden-master and UI — **110 pass**. Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
-| `npm run lint`         | ESLint — **0 errors** (~83 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                       |
-| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc — ~254 known errors baseline; changes should be typecheck-**neutral**                                                                              |
-| `npm run knip`         | no unused exports/files                                                                                                                                                             |
-| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                            |
-| `npm run check`        | lint + typecheck + format:check + test in one shot                                                                                                                                  |
-| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                          |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                       |
+| Command                | Expectation                                                                                                                                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`             | Vitest unit suite — **771 pass**                                                                                                                                                                                                                        |
+| `npm run test:e2e`     | Playwright golden-master and UI — **110 pass**. Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                                                                     |
+| `npm run lint`         | ESLint — **0 errors** (~83 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
+| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (246 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
+| `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
+| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                                                                                                |
+| `npm run check`        | lint + typecheck + format:check + test in one shot                                                                                                                                                                                                      |
+| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                                                                                              |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                                                                                           |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
