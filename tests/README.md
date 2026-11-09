@@ -149,10 +149,11 @@ entirely through the DOM. Two things make it testable:
   out) and `debugPrintUndoRedoStack` (debug-only); plus browser-only paths (real
   file download / navigation / print) asserted as "does not throw".
 
-Several real product bugs were found while writing these tests and are pinned as
-documented regression expectations (e.g. `closeMeasureButtonClick` has no
-lower-bound guard; the undo-stack dedup checks the wrong array). Search the test
-files for "bug" / "quirk".
+Several real product bugs were found while writing these tests. Most are fixed
+now (e.g. `closeMeasureButtonClick` keeps at least one measure; the undo-stack
+dedup checks the stack that gets the push). The tests pin the fixed behavior, and
+any bug that is still open is pinned as a documented regression expectation.
+Search the test files for "bug" / "quirk".
 
 ## Conventions
 
@@ -163,3 +164,4 @@ files for "bug" / "quirk".
   a refactor legitimately changes behavior, update the expectation deliberately
   — a failing test here means "something changed," which is exactly the point.
 - Keep tests black-box: exercise the public methods on a `GrooveUtils` instance
+  rather than reaching into internals.

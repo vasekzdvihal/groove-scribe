@@ -8,8 +8,7 @@ import { getMidi, loadGroove, midiNotesFromDataUrl } from './helpers.js';
 // protect the refactor of the editor's state handling.
 //
 // Every test starts from a fixed URL, so a later change of the default groove
-// cannot break them. Tests marked with the skip modifier describe the correct behaviour
-// of a known bug. Remove the modifier in the PR that fixes the bug.
+// cannot break them.
 
 const empty = (div, measures = 1, extra = '') => {
   const lane = '-'.repeat(div);
@@ -679,8 +678,7 @@ test.describe('change time signature', () => {
   });
 });
 
-// Known bugs. Each test states the correct behaviour. PR 3 removes the modifier.
-test.describe('known bugs', () => {
+test.describe('editor state regressions', () => {
   test('toms hide when the next loaded groove has none', async ({ page }) => {
     await open(page, `${START}&T1=|o---------------|&T4=|---o------------|`);
     await page.click('#groovesAnchor');
