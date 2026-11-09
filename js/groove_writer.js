@@ -2782,17 +2782,18 @@ function GrooveWriter() {
         (e.target.tagName.toUpperCase() != 'INPUT' && e.target.tagName.toUpperCase() != 'TEXTAREA')
       ) {
         switch (e.which) {
-          case 90: // ctrl-z
-            if (e.ctrlKey) {
-              // ctrl-z
-              root.undoCommand();
+          case 90: // ctrl-z or cmd-z, and with shift: redo (the macOS shortcut)
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              if (e.shiftKey) root.redoCommand();
+              else root.undoCommand();
               return false;
             }
             break;
 
-          case 89: // ctrl-y
-            if (e.ctrlKey) {
-              // ctrl-y
+          case 89: // ctrl-y or cmd-y
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
               root.redoCommand();
               return false;
             }

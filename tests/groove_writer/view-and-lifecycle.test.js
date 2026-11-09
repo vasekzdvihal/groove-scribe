@@ -217,15 +217,21 @@ describe('GrooveWriter view & lifecycle', () => {
     // keys: ctrl-z (90) -> undoCommand, ctrl-y (89) -> redoCommand, left arrow
     // (37) -> myGrooveUtils.downTempo, right arrow (39) -> myGrooveUtils.upTempo.
 
-    function fireKeydown(gw, { which, ctrlKey = false, targetTag = 'div', targetType }) {
+    function fireKeydown(
+      gw,
+      { which, ctrlKey = false, metaKey = false, shiftKey = false, targetTag = 'div', targetType }
+    ) {
       const target = document.createElement(targetTag);
       if (targetType) target.type = targetType;
       document.body.appendChild(target);
-      const evt = new KeyboardEvent('keydown', { bubbles: true });
+      const evt = new KeyboardEvent('keydown', { bubbles: true, cancelable: true });
       Object.defineProperty(evt, 'which', { value: which });
       Object.defineProperty(evt, 'ctrlKey', { value: ctrlKey });
+      Object.defineProperty(evt, 'metaKey', { value: metaKey });
+      Object.defineProperty(evt, 'shiftKey', { value: shiftKey });
       Object.defineProperty(evt, 'target', { value: target });
       document.dispatchEvent(evt);
+      return evt;
     }
 
     async function setup() {
@@ -248,6 +254,47 @@ describe('GrooveWriter view & lifecycle', () => {
       const gw = await setup();
       fireKeydown(gw, { which: 89, ctrlKey: true });
       expect(gw.redoCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it('cmd-z (which=90, metaKey) calls undoCommand, as on macOS', async () => {
+      const gw = await setup();
+      fireKeydown(gw, { which: 90, metaKey: true });
+      expect(gw.undoCommand).toHaveBeenCalledTimes(1);
+      expect(gw.redoCommand).not.toHaveBeenCalled();
+    });
+
+    it('cmd-y (which=89, metaKey) calls redoCommand', async () => {
+      const gw = await setup();
+      fireKeydown(gw, { which: 89, metaKey: true });
+      expect(gw.redoCommand).toHaveBeenCalledTimes(1);
+    });
+
+    it('cmd-shift-z and ctrl-shift-z call redoCommand, not undoCommand', async () => {
+      const gw = await setup();
+      fireKeydown(gw, { which: 90, metaKey: true, shiftKey: true });
+      fireKeydown(gw, { which: 90, ctrlKey: true, shiftKey: true });
+      expect(gw.redoCommand).toHaveBeenCalledTimes(2);
+      expect(gw.undoCommand).not.toHaveBeenCalled();
+    });
+
+    it('stops the browser default for a handled undo', async () => {
+      const gw = await setup();
+      const evt = fireKeydown(gw, { which: 90, metaKey: true });
+      expect(evt.defaultPrevented).toBe(true);
+    });
+
+    it('cmd-z in a text field is left to the browser: no groove undo, default not prevented', async () => {
+      const gw = await setup();
+      const evt = fireKeydown(gw, {
+        which: 90,
+        metaKey: true,
+        targetTag: 'input',
+        targetType: 'text',
+      });
+      const area = fireKeydown(gw, { which: 90, metaKey: true, targetTag: 'textarea' });
+      expect(gw.undoCommand).not.toHaveBeenCalled();
+      expect(evt.defaultPrevented).toBe(false);
+      expect(area.defaultPrevented).toBe(false);
     });
 
     it('left arrow (which=37) calls myGrooveUtils.downTempo', async () => {

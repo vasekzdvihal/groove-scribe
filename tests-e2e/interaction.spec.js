@@ -157,6 +157,41 @@ test.describe('undo and redo', () => {
     await expectQuery(page, START);
   });
 
+  test('Cmd+Z and Cmd+Shift+Z undo and redo, and so do Ctrl+Z and Ctrl+Y', async ({ page }) => {
+    await open(page);
+    await page.click('#hi-hat0');
+    await page.click('#snare4');
+    await expectQuery(page, HH0_SN4);
+    await page.keyboard.press('Meta+z');
+    await expectQuery(page, HH0);
+    await page.keyboard.press('Meta+Shift+z');
+    await expectQuery(page, HH0_SN4);
+    await page.keyboard.press('Control+z');
+    await expectQuery(page, HH0);
+    await page.keyboard.press('Control+y');
+    await expectQuery(page, HH0_SN4);
+    await page.keyboard.press('Meta+y');
+    await expectQuery(page, HH0_SN4);
+  });
+
+  test('Cmd+Z in the title field is left to the browser and does not undo the groove', async ({
+    page,
+  }) => {
+    await open(page);
+    await page.click('#hi-hat0');
+    await expectQuery(page, HH0);
+    await page.click('#detailsButton');
+    await page.locator('#tuneTitle').focus();
+    await page.keyboard.type('abc');
+    await expect(page.locator('#tuneTitle')).toHaveValue('abc');
+    await page.keyboard.press('Meta+z');
+    await page.keyboard.press('Control+z');
+    // the groove keeps its hi-hat note
+    expect(
+      await page.evaluate(() => window.myGrooveWriter.grooveDataFromClickableUI().hh_array[0])
+    ).toBeTruthy();
+  });
+
   test('undo takes back an added measure', async ({ page }) => {
     await open(page);
     await page.click('#hi-hat0');
