@@ -91,6 +91,18 @@ test.describe('menus & popups', () => {
     const shared = await page.inputValue('#fullURLPopupTextField');
     expect(shared).toContain('TimeSig=4/4');
   });
+
+  test('share popup has no shortener and the page calls no dead services', async ({ page }) => {
+    const requests = [];
+    page.on('request', (r) => requests.push(r.url()));
+    await loadGroove(page, grooveUrl(EMPTY_16));
+    await page.evaluate(() => window.myGrooveWriter.show_FullURLPopup());
+    await expect(page.locator('#fullURLPopup')).toBeVisible();
+    await expect(page.locator('#shortenerCheckbox')).toHaveCount(0);
+    await expect(page.locator('#embedCodeCheckbox')).toBeVisible();
+    const dead = requests.filter((u) => /herokuapp|firebasedynamiclinks|googledrive/.test(u));
+    expect(dead, dead.join('\n')).toEqual([]);
+  });
 });
 
 test.describe('playback', () => {

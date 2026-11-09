@@ -480,10 +480,23 @@ describe('GrooveUtils URL serialization (extended)', () => {
       expect(out).toContain('GrooveEmbed.html?');
     });
 
-    it('"fullGrooveScribe" replaces the whole origin+path with the hardcoded external URL', () => {
+    it('"fullGrooveScribe" points at the editor page (index.html) on the current origin', () => {
       const gd = gu.getGrooveDataFromUrlString('?TimeSig=4/4&Div=16');
       const out = gu.getUrlStringFromGrooveData(gd, 'fullGrooveScribe');
-      expect(out.startsWith('https://www.mikeslessons.com/gscribe?')).toBe(true);
+      const dir = window.location.pathname.slice(0, window.location.pathname.lastIndexOf('/') + 1);
+      expect(out.startsWith(window.location.origin + dir + 'index.html?')).toBe(true);
+      expect(out).not.toContain('mikeslessons.com');
+    });
+
+    it('"fullGrooveScribe" from the embed page points at index.html, not GrooveEmbed.html', () => {
+      window.history.replaceState(null, '', '/GrooveEmbed.html?x=1');
+      try {
+        const gd = gu.getGrooveDataFromUrlString('?TimeSig=4/4&Div=16');
+        const out = gu.getUrlStringFromGrooveData(gd, 'fullGrooveScribe');
+        expect(out.startsWith(window.location.origin + '/index.html?')).toBe(true);
+      } finally {
+        window.history.replaceState(null, '', '/');
+      }
     });
 
     it('an unrecognized destination string falls through unchanged, same as no destination', () => {

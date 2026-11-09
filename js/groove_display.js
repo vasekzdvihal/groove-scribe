@@ -304,7 +304,9 @@ if (typeof GrooveDisplay === 'undefined') {
 
         if (linkToEditor)
           svgTarget.innerHTML =
-            '<a style="text-decoration: none" href="http://mikeslessons.com/gscribe/' +
+            '<a style="text-decoration: none" href="' +
+            myGrooveUtils.getGrooveUtilsBaseLocation() +
+            'index.html' +
             GrooveDefinition +
             '">' +
             svgReturn.svg +

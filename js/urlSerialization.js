@@ -265,8 +265,13 @@ export function getUrlStringFromGrooveData(myGrooveData, url_destination) {
       fullURL = fullURL.replace('/gscribe', '/groove/GrooveEmbed.html');
     else fullURL += 'GrooveEmbed.html';
   } else if (url_destination == 'fullGrooveScribe') {
-    // asking for the full GrooveScribe link
-    fullURL = 'https://www.mikeslessons.com/gscribe';
+    // asking for the full GrooveScribe link: the editor page (index.html) on the site serving this page
+    fullURL =
+      window.location.protocol +
+      '//' +
+      window.location.host +
+      window.location.pathname.slice(0, window.location.pathname.lastIndexOf('/') + 1) +
+      'index.html';
   }
 
   fullURL += '?';

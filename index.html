@@ -26,9 +26,6 @@
 		<meta property="og:description" content="Groove Scribe allows drummers to easily create grooves, listen, share, print sheet music, and more. Use the Groove Scribe to create new grooves, figure out the groove to your favorite song, or write down the groove to your latest tune."/>
 		<meta property="og:site_name" content="GrooveScribe at MikesLessons.com"/>
 
-		<script>
-			document.write('<meta property="og:image" content="https://gscribe-png-image.herokuapp.com/' + window.location.search + '">');
-		</script>
 		<meta property="og:image" content="https://mikeslessons.com/groove/images/GScribe_Logo_on_orange.png">
 
 		<link rel="stylesheet" type="text/css" href="font-awesome/4.7.0/css/font-awesome.min.css">
@@ -442,7 +439,6 @@
 			<div id="fullURLPopupSubTitle">Use this URL to share or save this groove</div>
 			<div id="fullURLPopupSubSubTitle">(You can also bookmark this page)</div>
 			<div id="fullURLPopupCheckboxes">
-				<span><label  id="shortURLLabel" class="fullURLPopupCheckboxLabel"><input type="checkbox" id="shortenerCheckbox" onchange="myGrooveWriter.shortenerCheckboxChanged();">Short URL</label></span>
 				<span><label id="embedCodeLabel" class="fullURLPopupCheckboxLabel"><input type="checkbox" id="embedCodeCheckbox" onchange="myGrooveWriter.embedCodeCheckboxChanged();">Embed Code</label></span>
 			</div>
 			<div id="fullURLPopupTextFieldContainer"><input type="text" id="fullURLPopupTextField"></div>

@@ -918,11 +918,6 @@ function GrooveUtils() {
       baseLocation = global_grooveUtilsScriptSrc.slice(0, lastSlash + 1);
     }
 
-    if (baseLocation.length < 1) {
-      baseLocation =
-        'https://b125c4f8bf7d89726feec9ab8202d31e0c8d14d8.googledrive.com/host/0B2wxVWzVoWGYfnB5b3VTekxyYUowVjZ5YVE3UllLaVk5dVd4TzF4Q2ZaUXVsazhNSTdRM1E/';
-    }
-
     return baseLocation;
   };
 
