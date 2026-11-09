@@ -49,6 +49,14 @@ describe('AddGrooveDisplayToElementId', () => {
     expect(anchor.getAttribute('href')).toBe('http://app.test/base/index.html' + DEF);
   });
 
+  it('opens the editor link in a new tab so an embed frame never loads the editor', () => {
+    const host = makeHost();
+    GD.AddGrooveDisplayToElementId('host', DEF, false, true, false);
+    const anchor = host.querySelector('.svgTarget a');
+    expect(anchor.getAttribute('target')).toBe('_blank');
+    expect(anchor.getAttribute('rel')).toBe('noopener');
+  });
+
   it('renders a bare SVG (no link) when linkToEditor is false', () => {
     const host = makeHost();
     GD.AddGrooveDisplayToElementId('host', DEF, false, false, false);

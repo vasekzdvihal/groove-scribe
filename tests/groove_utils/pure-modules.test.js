@@ -49,6 +49,18 @@ describe('sanitizeAbcText', () => {
     expect(sanitizeAbcText('Funky Drummer')).toBe('Funky Drummer');
   });
 
+  it('escapes % so abc2svg does not read it as a comment', () => {
+    expect(sanitizeAbcText('100% Funk')).toBe('100\\% Funk');
+    expect(sanitizeAbcText('%%beginjs')).toBe('\\%\\%beginjs');
+  });
+
+  it('keeps % escaped after a backslash and after an escape that decodes to %', () => {
+    expect(sanitizeAbcText('a\\%b')).toBe('a\\%b');
+    expect(sanitizeAbcText('a\\\\%b')).toBe('a\\\\\\%b');
+    expect(sanitizeAbcText('a\\u0025b')).toBe('a\\%b');
+    expect(sanitizeAbcText('a\\045b')).toBe('a\\%b');
+  });
+
   it('keeps a stored title with a line break on one ABC line', async () => {
     const gu = await newGrooveUtils();
     const abc = gu.get_top_ABC_BoilerPlate(
@@ -63,9 +75,9 @@ describe('sanitizeAbcText', () => {
       4,
       600
     );
-    expect(abc).toContain('T: x %%beginjs\n');
-    expect(abc).toContain('C: y %%beginjs\n');
-    expect(abc).toContain('P: z %%beginjs\n');
+    expect(abc).toContain('T: x \\%\\%beginjs\n');
+    expect(abc).toContain('C: y \\%\\%beginjs\n');
+    expect(abc).toContain('P: z \\%\\%beginjs\n');
     expect(abc).not.toMatch(/^%%beginjs/m);
   });
 });

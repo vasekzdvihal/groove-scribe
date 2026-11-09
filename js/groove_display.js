@@ -308,7 +308,7 @@ if (typeof GrooveDisplay === 'undefined') {
             myGrooveUtils.getGrooveUtilsBaseLocation() +
             'index.html' +
             GrooveDefinition +
-            '">' +
+            '" target="_blank" rel="noopener">' +
             svgReturn.svg +
             '</a>';
         else svgTarget.innerHTML = svgReturn.svg;

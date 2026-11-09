@@ -64,6 +64,13 @@ describe('Firebase Hosting security headers', () => {
     expect(headersFor(p)).not.toHaveProperty('Content-Security-Policy');
   });
 
+  it.each(['/__/auth/iframe', '__/auth/iframe', '/__/auth/handler'])(
+    '%s (Firebase Auth) gets no CSP',
+    (p) => {
+      expect(headersFor(p)).not.toHaveProperty('Content-Security-Policy');
+    }
+  );
+
   it('does not set Cross-Origin-Opener-Policy (breaks the Google sign-in popup)', () => {
     for (const p of [...pages, EMBED]) {
       expect(headersFor(p)).not.toHaveProperty('Cross-Origin-Opener-Policy');

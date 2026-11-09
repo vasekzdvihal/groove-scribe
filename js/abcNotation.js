@@ -625,9 +625,19 @@ function snare_HH_kick_ABC_for_quads(
 // A line break in free text would start a new ABC line, and a line that starts
 // with %% is a directive (abc2svg can run script from %%beginjs). Replace every
 // line break and control character with one space.
+// A % also starts an ABC comment, so "100% Funk" would render as "100". abc2svg
+// reads \% as a literal %. It skips the character after a backslash, so a %
+// after an even run of backslashes still needs its own backslash. It also decodes
+// \u0025 and \045 to % before it looks for comments, so those get the same escape.
 export function sanitizeAbcText(value) {
-  // eslint-disable-next-line no-control-regex -- the control characters are the point
-  return String(value).replace(/[\x00-\x1f\x7f\x85\u2028\u2029]+/g, ' ');
+  return (
+    String(value)
+      // eslint-disable-next-line no-control-regex -- the control characters are the point
+      .replace(/[\x00-\x1f\x7f\x85\u2028\u2029]+/g, ' ')
+      .replace(/\\(u0025|045)|\\[\s\S]|%/g, (match, decodesToPercent) =>
+        decodesToPercent || match === '%' ? '\\%' : match
+      )
+  );
 }
 
 export function get_top_ABC_BoilerPlate(

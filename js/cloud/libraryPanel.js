@@ -109,8 +109,8 @@ function showMessage(text) {
   message.hidden = !text;
 }
 
-// The rules refuse accounts that are not on the allowlist. Nothing else the panel does
-// can be refused, so this code means the account has no access.
+// The rules refuse accounts that are not on the allowlist, so this code almost always
+// means the account has no access. A rare refused write can show the same message.
 const isDenied = (error) => error?.code === 'permission-denied';
 
 function reportFailure(error) {

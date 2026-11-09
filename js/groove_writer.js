@@ -1859,31 +1859,29 @@ function GrooveWriter() {
     myGrooveData.metronomeFrequency = root.getMetronomeFrequency();
     myGrooveData.kickStemsUp = true;
 
-    for (var i = 0; i < class_number_of_measures; i++) {
-      var total_notes = class_notes_per_measure * class_number_of_measures;
-      myGrooveData.sticking_array = [];
-      myGrooveData.hh_array = [];
-      myGrooveData.snare_array = [];
-      myGrooveData.kick_array = [];
-      myGrooveData.toms_array = [[], [], [], []];
+    var total_notes = class_notes_per_measure * class_number_of_measures;
+    myGrooveData.sticking_array = [];
+    myGrooveData.hh_array = [];
+    myGrooveData.snare_array = [];
+    myGrooveData.kick_array = [];
+    myGrooveData.toms_array = [[], [], [], []];
 
-      // query the clickable UI and generate a arrays representing the notes of all measures
-      for (var noteIndex = 0; noteIndex < total_notes; noteIndex++) {
-        // only grab the stickings if they are visible
-        if (isStickingsVisible())
-          myGrooveData.sticking_array.push(get_sticking_state(noteIndex, 'ABC'));
+    // query the clickable UI and generate a arrays representing the notes of all measures
+    for (var noteIndex = 0; noteIndex < total_notes; noteIndex++) {
+      // only grab the stickings if they are visible
+      if (isStickingsVisible())
+        myGrooveData.sticking_array.push(get_sticking_state(noteIndex, 'ABC'));
 
-        myGrooveData.hh_array.push(get_hh_state(noteIndex, 'ABC'));
-        myGrooveData.snare_array.push(get_snare_state(noteIndex, 'ABC'));
-        myGrooveData.kick_array.push(get_kick_state(noteIndex, 'ABC'));
+      myGrooveData.hh_array.push(get_hh_state(noteIndex, 'ABC'));
+      myGrooveData.snare_array.push(get_snare_state(noteIndex, 'ABC'));
+      myGrooveData.kick_array.push(get_kick_state(noteIndex, 'ABC'));
 
-        if (isTomsVisible()) {
-          myGrooveData.toms_array[0].push(get_tom_state(noteIndex, 1, 'ABC'));
-          myGrooveData.toms_array[3].push(get_tom_state(noteIndex, 4, 'ABC'));
-        } else {
-          myGrooveData.toms_array[0].push(false);
-          myGrooveData.toms_array[3].push(false);
-        }
+      if (isTomsVisible()) {
+        myGrooveData.toms_array[0].push(get_tom_state(noteIndex, 1, 'ABC'));
+        myGrooveData.toms_array[3].push(get_tom_state(noteIndex, 4, 'ABC'));
+      } else {
+        myGrooveData.toms_array[0].push(false);
+        myGrooveData.toms_array[3].push(false);
       }
     }
 
