@@ -448,6 +448,49 @@ test.describe('change time signature', () => {
     await expectQuery(page, triplets);
   });
 
+  test('1/8 triplets in 7/8 time are refused because of the triplets', async ({ page }) => {
+    const messages = collectDialogs(page);
+    const triplets = empty(12);
+    await open(page, triplets);
+    await chooseTimeSignature(page, '7', '8');
+    await expect
+      .poll(() => messages)
+      .toEqual(['Triplets are disabled in 7/8 time.  Use x/4 time for triplets.']);
+    await expectQuery(page, triplets);
+  });
+
+  test('after a refusal and Cancel, the popup opens on the real time signature', async ({
+    page,
+  }) => {
+    collectDialogs(page);
+    await open(page, empty(12));
+    await chooseTimeSignature(page, '7', '8');
+    await page.click('#timeSigPopupCancel');
+    await page.click('#timeLabel');
+    await expect(page.locator('#timeSigPopupTimeSigTop')).toHaveValue('4');
+    await expect(page.locator('#timeSigPopupTimeSigBottom')).toHaveValue('4');
+  });
+
+  test('a time signature the popup does not list leaves its selects usable', async ({ page }) => {
+    const messages = collectDialogs(page);
+    const lane = '-'.repeat(64);
+    await open(
+      page,
+      `?TimeSig=16/4&Div=16&Tempo=80&Measures=1&H=|${lane}|&S=|${lane}|&K=|${lane}|`
+    );
+    await page.click('#timeLabel');
+    await expect(page.locator('#timeSigPopupTimeSigTop')).not.toHaveValue('');
+    await page.click('#timeSigPopupCancel');
+    expect(messages).toEqual([]);
+  });
+
+  test('a long single measure gets the expanded grid', async ({ page }) => {
+    await open(page);
+    await expect(page.locator('#musicalInput')).not.toHaveClass(/expanded/);
+    await chooseTimeSignature(page, '8', '4');
+    await expect(page.locator('#musicalInput')).toHaveClass(/expanded/);
+  });
+
   test('1/8 notes in 3/16 time are refused, with the reason', async ({ page }) => {
     const messages = collectDialogs(page);
     const eighths = empty(8);

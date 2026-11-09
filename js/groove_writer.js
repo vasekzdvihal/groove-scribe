@@ -3330,8 +3330,18 @@ function GrooveWriter() {
     if (popup) popup.style.display = 'none';
   };
 
+  // A URL can hold a time signature the popup does not list, for example 16/4. Setting that value
+  // would empty the select, so the select then stays as it was.
+  function selectListedValue(selectId, value) {
+    var select = /** @type {HTMLSelectElement | null} */ (document.getElementById(selectId));
+    if (select && select.querySelector('option[value="' + value + '"]')) select.value = value;
+  }
+
   root.timeSigPopupOpen = function (type) {
     var popup = document.getElementById('timeSigPopup');
+
+    selectListedValue('timeSigPopupTimeSigTop', class_num_beats_per_measure);
+    selectListedValue('timeSigPopupTimeSigBottom', class_note_value_per_measure);
 
     if (popup) popup.style.display = 'block';
   };
@@ -3373,6 +3383,15 @@ function GrooveWriter() {
 
   // A division that does not fit a time signature gets a message that says why. Null means it fits.
   function divisionProblem(division, timeSigTop, timeSigBottom) {
+    if (root.myGrooveUtils.isTripletDivision(division) && timeSigBottom != 4) {
+      return (
+        'Triplets are disabled in ' +
+        timeSigTop +
+        '/' +
+        timeSigBottom +
+        ' time.  Use x/4 time for triplets.'
+      );
+    }
     // 9/8 and 1/4 notes for instance, or 9/16 and 1/8 notes
     if (((division * timeSigTop) / timeSigBottom) % 1 != 0) {
       return (
@@ -3383,15 +3402,6 @@ function GrooveWriter() {
         '/' +
         timeSigBottom +
         ' time.  This combination would result in a half note.'
-      );
-    }
-    if (root.myGrooveUtils.isTripletDivision(division) && timeSigBottom != 4) {
-      return (
-        'Triplets are disabled in ' +
-        timeSigTop +
-        '/' +
-        timeSigBottom +
-        ' time.  Use x/4 time for triplets.'
       );
     }
     return null;
@@ -3443,7 +3453,7 @@ function GrooveWriter() {
     class_num_beats_per_measure = newTimeSigTop;
     class_note_value_per_measure = newTimeSigBottom;
 
-    root.expandAuthoringViewWhenNecessary(class_time_division, class_number_of_measures);
+    root.expandAuthoringViewWhenNecessary(newNotesPerMeasure, class_number_of_measures);
     changeDivisionWithNotes(
       class_time_division,
       uiStickings,
