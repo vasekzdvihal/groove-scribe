@@ -448,6 +448,37 @@ test.describe('change division on a touch tablet', () => {
   });
 });
 
+test.describe('save ABC', () => {
+  test('a non-Latin title downloads as title.abc with the ABC text in UTF-8', async ({ page }) => {
+    await open(page, HH0 + '&Debug=1'); // the ABC panel is part of the debug view
+    await page.click('#detailsButton');
+    await page.locator('#tuneTitle').fill('Český rock 🥁');
+    await page.locator('#tuneTitle').blur();
+    await page.click('#showHideABC');
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('text=Save ABC to file'),
+    ]);
+    expect(download.suggestedFilename()).toBe('Český rock 🥁.abc');
+    const stream = await download.createReadStream();
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    const text = Buffer.concat(chunks).toString('utf8');
+    expect(text).toContain('Český rock 🥁');
+    expect(text).toContain('\r\n');
+  });
+
+  test('an untitled groove downloads as notation.abc', async ({ page }) => {
+    await open(page, HH0 + '&Debug=1'); // the ABC panel is part of the debug view
+    await page.click('#showHideABC');
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('text=Save ABC to file'),
+    ]);
+    expect(download.suggestedFilename()).toBe('notation.abc');
+  });
+});
+
 test.describe('change time signature', () => {
   test('3/4 shortens the measure to 12 notes', async ({ page }) => {
     await open(page, HH0_SN4_K8);
