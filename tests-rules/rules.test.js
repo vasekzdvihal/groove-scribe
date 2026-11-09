@@ -56,7 +56,41 @@ beforeAll(async () => {
   });
 });
 afterAll(() => env.cleanup());
-beforeEach(() => env.clearFirestore());
+// Only accounts listed in allowedUsers can use the library. The unlisted uid stays out.
+const ALLOWED = ['ana', 'bob'];
+const UNLISTED = 'eve';
+beforeEach(async () => {
+  await env.clearFirestore();
+  await env.withSecurityRulesDisabled(async (context) => {
+    for (const uid of ALLOWED) await setDoc(doc(context.firestore(), 'allowedUsers', uid), {});
+  });
+});
+
+describe('allowlist', () => {
+  it('lets a listed user read their lesson and blocks an unlisted one', async () => {
+    await seed('lessons/one', { ownerId: 'ana', name: 'Week 1' });
+    await seed('lessons/eve', { ownerId: UNLISTED, name: 'Week 1' });
+    await assertSucceeds(getDoc(doc(db('ana'), 'lessons/one')));
+    await assertFails(getDoc(doc(db(UNLISTED), 'lessons/eve')));
+    await assertFails(addDoc(collection(db(UNLISTED), 'lessons'), lessonData(UNLISTED)));
+    await assertFails(
+      setDoc(doc(db(UNLISTED), 'users/eve'), {
+        displayName: 'Eve',
+        photoURL: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('lets no client read or write the list', async () => {
+    for (const uid of ['ana', UNLISTED, null]) {
+      await assertFails(getDoc(doc(db(uid), 'allowedUsers/ana')));
+      await assertFails(setDoc(doc(db(uid), 'allowedUsers/' + (uid ?? 'anon')), {}));
+      await assertFails(deleteDoc(doc(db(uid), 'allowedUsers/ana')));
+    }
+  });
+});
 
 describe('users', () => {
   const profile = () => ({
@@ -135,6 +169,21 @@ describe('grooves', () => {
     const grooves = collection(db('ana'), 'grooves');
     await assertSucceeds(addDoc(grooves, grooveData('ana')));
     await assertSucceeds(addDoc(grooves, grooveData('ana', { lessonId: 'one' })));
+  });
+
+  it('lets an owner rename a groove after its lesson is gone', async () => {
+    await seed('grooves/g', { ownerId: 'ana', lessonId: 'gone', title: 'Beat', query: '?H=|x|' });
+    await assertSucceeds(
+      updateDoc(doc(db('ana'), 'grooves/g'), { title: 'Renamed', updatedAt: serverTimestamp() })
+    );
+  });
+
+  it('blocks moving a groove into a missing or foreign lesson', async () => {
+    await seed('lessons/theirs', { ownerId: 'bob', name: 'Week 1' });
+    await seed('grooves/g', { ownerId: 'ana', lessonId: null, title: 'Beat', query: '?H=|x|' });
+    const ref = doc(db('ana'), 'grooves/g');
+    await assertFails(updateDoc(ref, { lessonId: 'missing', updatedAt: serverTimestamp() }));
+    await assertFails(updateDoc(ref, { lessonId: 'theirs', updatedAt: serverTimestamp() }));
   });
 
   it('blocks filing a groove in another user lesson', async () => {
