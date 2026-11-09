@@ -3842,13 +3842,6 @@ function GrooveWriter() {
     var uiSnare = '|';
     var uiKick = '|';
 
-    if (newDivision == 48 && !have_shown_mixed_division_message) {
-      have_shown_mixed_division_message = true;
-      alert(
-        'The MIXED subdivision allows you to create a combination of triplets and non-triplet notes in one measure.  Set every 3rd note for 16ths and every 6th note for 8th notes'
-      );
-    }
-
     var isNewDivisionTriplets = root.myGrooveUtils.isTripletDivision(newDivision);
     var new_notes_per_measure = root.myGrooveUtils.calc_notes_per_measure(
       isNewDivisionTriplets ? 48 : 32,
@@ -3866,24 +3859,42 @@ function GrooveWriter() {
       return;
     }
 
-    if (usingTriplets() === isNewDivisionTriplets) {
-      // get the encoded notes out of the UI.
-      // run through both measures.
-      var topIndex = class_notes_per_measure * class_number_of_measures;
-      for (var i = 0; i < topIndex; i++) {
-        uiStickings += get_sticking_state(i, 'URL');
-        uiHH += get_hh_state(i, 'URL');
-        uiTom1 += get_tom_state(i, 1, 'URL');
-        uiTom4 += get_tom_state(i, 4, 'URL');
-        uiSnare += get_snare_state(i, 'URL');
-        uiKick += get_kick_state(i, 'URL');
-      }
+    // get the encoded notes out of the UI.
+    // run through all measures.
+    var topIndex = class_notes_per_measure * class_number_of_measures;
+    for (var i = 0; i < topIndex; i++) {
+      uiStickings += get_sticking_state(i, 'URL');
+      uiHH += get_hh_state(i, 'URL');
+      uiTom1 += get_tom_state(i, 1, 'URL');
+      uiTom4 += get_tom_state(i, 4, 'URL');
+      uiSnare += get_snare_state(i, 'URL');
+      uiKick += get_kick_state(i, 'URL');
+    }
 
-      // override the hi-hat if we are going to a higher division.
-      // otherwise the notes get lost in translation (not enough)
-      //if (newDivision > class_notes_per_measure)
-      //	uiHH = root.myGrooveUtils.GetDefaultHHGroove(new_notes_per_measure, class_num_beats_per_measure, class_note_value_per_measure, class_number_of_measures);
-    } else {
+    var changesBetweenStraightAndTriplets = usingTriplets() !== isNewDivisionTriplets;
+    if (changesBetweenStraightAndTriplets) {
+      // triplets do not scale from straight notes, so the notes would be replaced by a default groove
+      var hasNotes = /[^-|]/.test(uiStickings + uiHH + uiTom1 + uiTom4 + uiSnare + uiKick);
+      if (
+        hasNotes &&
+        !window.confirm(
+          'Switching between straight notes and triplets cannot keep your notes. ' +
+            'You will lose the notes of this groove (hi-hat, snare, kick, toms and stickings), ' +
+            'and a default groove for the new division will replace them.\n\nContinue?'
+        )
+      ) {
+        return;
+      }
+    }
+
+    if (newDivision == 48 && !have_shown_mixed_division_message) {
+      have_shown_mixed_division_message = true;
+      alert(
+        'The MIXED subdivision allows you to create a combination of triplets and non-triplet notes in one measure.  Set every 3rd note for 16ths and every 6th note for 8th notes'
+      );
+    }
+
+    if (changesBetweenStraightAndTriplets) {
       // changing from or changing to a triplet division
       // triplets don't scale well, so use defaults when we change
       uiStickings = root.myGrooveUtils.GetDefaultStickingsGroove(

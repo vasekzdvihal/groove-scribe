@@ -366,9 +366,67 @@ describe('GrooveWriter core state & undo/redo', () => {
   });
 
   describe('changeDivision', () => {
+    let confirmSpy;
     beforeEach(() => {
       buildFixture(gw, 1);
       stubCascadingRenders(gw);
+      confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      confirmSpy.mockRestore();
+    });
+
+    describe('between straight notes and triplets', () => {
+      // a note in the stickings lane, which needs no MIDI
+      function putNote() {
+        gw.stickingsShowHide(true, true, true);
+        gw.noteLeftClick(null, 'sticking', 0);
+      }
+
+      it('asks first, naming what will be lost, when the groove has notes', () => {
+        putNote();
+
+        gw.changeDivision(12);
+
+        expect(confirmSpy).toHaveBeenCalledTimes(1);
+        expect(confirmSpy.mock.calls[0][0]).toMatch(/lose/i);
+        expect(confirmSpy.mock.calls[0][0]).toMatch(/notes/i);
+      });
+
+      it('changes nothing when the user cancels', () => {
+        putNote();
+        const before = gw.grooveDataFromClickableUI();
+        confirmSpy.mockReturnValue(false);
+
+        gw.changeDivision(12);
+
+        expect(gw.notesPerMeasure()).toBe(16);
+        expect(gw.grooveDataFromClickableUI()).toEqual(before);
+      });
+
+      it('replaces the groove with the default triplet groove when the user accepts', () => {
+        putNote();
+
+        gw.changeDivision(12);
+
+        expect(gw.notesPerMeasure()).toBe(12);
+      });
+
+      it('does not ask when the grid is empty, because nothing can be lost', () => {
+        gw.changeDivision(12);
+
+        expect(confirmSpy).not.toHaveBeenCalled();
+        expect(gw.notesPerMeasure()).toBe(12);
+      });
+
+      it('does not ask for a change between two straight divisions', () => {
+        putNote();
+
+        gw.changeDivision(8);
+
+        expect(confirmSpy).not.toHaveBeenCalled();
+      });
     });
 
     it('changes notesPerMeasure to match the new division (16ths -> 8ths)', () => {
@@ -435,6 +493,7 @@ describe('GrooveWriter core state & undo/redo', () => {
       gw.changeDivision(8); // 16ths(non-triplet) -> 8ths(non-triplet): usingTriplets() unchanged -> notes preserved
       expect(gw.grooveDataFromClickableUI().sticking_array[0]).toBe('"R"x');
 
+      vi.spyOn(window, 'confirm').mockReturnValue(true); // the user accepts losing the notes
       gw.changeDivision(12); // 8ths(non-triplet) -> 12(triplet): usingTriplets() flips -> resets to the default groove
       expect(gw.grooveDataFromClickableUI().sticking_array[0]).toBe('""x'); // constant_ABC_STICK_OFF
     });

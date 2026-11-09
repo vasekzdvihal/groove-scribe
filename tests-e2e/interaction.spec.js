@@ -291,16 +291,52 @@ test.describe('change division', () => {
     );
   });
 
-  // This test pins today's behaviour on purpose. The straight-to-triplet switch drops the
-  // hi-hat note and loads a default triplet groove with no warning. PR 3 task T3.5
-  // ("ask before straight to triplet") changes this, and then this test needs an update.
-  test('1/8 triplets switch to 12 notes and load the default triplet notes', async ({ page }) => {
+  // A switch between straight notes and triplets cannot keep the notes. The editor asks first
+  // and names what will be lost.
+  test('1/8 triplets ask first, then load the default triplet notes when accepted', async ({
+    page,
+  }) => {
+    const messages = collectDialogs(page);
     await open(page, HH0);
     await chooseDivision(page, 'subdivision_12ths');
     await expectQuery(
       page,
       '?TimeSig=4/4&Div=12&Tempo=80&Measures=1&H=|------------|&S=|---O-----O--|&K=|o-----o-----|'
     );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toMatch(/lose the notes/);
+  });
+
+  test('dismissing the triplet question leaves the groove and the division as they were', async ({
+    page,
+  }) => {
+    const messages = [];
+    page.on('dialog', (dialog) => {
+      messages.push(dialog.message());
+      dialog.dismiss();
+    });
+    await open(page, HH0);
+    await chooseDivision(page, 'subdivision_12ths');
+    await expect.poll(() => messages).toHaveLength(1);
+
+    await expectQuery(page, HH0);
+    await expect(page.locator('#divisionMenuLabel')).toHaveText('1/16 notes');
+    expect(await page.evaluate(() => window.myGrooveWriter.notesPerMeasure())).toBe(16);
+
+    // The dismissed change added no undo step.
+    await page.click('#undoButton');
+    await expectQuery(page, HH0);
+  });
+
+  test('an empty groove switches to triplets without a question', async ({ page }) => {
+    const messages = collectDialogs(page);
+    await open(page, START);
+    await chooseDivision(page, 'subdivision_12ths');
+    await expectQuery(
+      page,
+      '?TimeSig=4/4&Div=12&Tempo=80&Measures=1&H=|------------|&S=|---O-----O--|&K=|o-----o-----|'
+    );
+    expect(messages).toEqual([]);
   });
 
   test('undo takes back a division change', async ({ page }) => {
@@ -308,6 +344,35 @@ test.describe('change division', () => {
     await chooseDivision(page, 'subdivision_8ths');
     await page.click('#undoButton');
     await expectQuery(page, HH0_SN4_K8);
+  });
+});
+
+test.describe('change division on a touch tablet', () => {
+  test.use({ viewport: { width: 1180, height: 820 }, hasTouch: true });
+
+  test('a tap on 1/8 triplets asks first and Cancel keeps the groove', async ({ page }) => {
+    const messages = [];
+    page.on('dialog', (dialog) => {
+      messages.push(dialog.message());
+      dialog.dismiss();
+    });
+    await open(page, HH0);
+    await page.tap('#divisionMenuButton');
+    await page.tap('#subdivision_12ths');
+    await expect.poll(() => messages).toHaveLength(1);
+    await expectQuery(page, HH0);
+    await expect(page.locator('#divisionMenuLabel')).toHaveText('1/16 notes');
+  });
+
+  test('a tap on 1/8 triplets switches after OK', async ({ page }) => {
+    collectDialogs(page);
+    await open(page, HH0);
+    await page.tap('#divisionMenuButton');
+    await page.tap('#subdivision_12ths');
+    await expectQuery(
+      page,
+      '?TimeSig=4/4&Div=12&Tempo=80&Measures=1&H=|------------|&S=|---O-----O--|&K=|o-----o-----|'
+    );
   });
 });
 
