@@ -15,17 +15,18 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 ### Verify loop (run after every change; all must stay green)
 
-| Command                | Expectation                                                                                                                                                                         |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **771 pass**                                                                                                                                                    |
-| `npm run test:e2e`     | Playwright golden-master and UI — **110 pass**. Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
-| `npm run lint`         | ESLint — **0 errors** (~83 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                       |
-| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc — ~254 known errors baseline; changes should be typecheck-**neutral**                                                                              |
-| `npm run knip`         | no unused exports/files                                                                                                                                                             |
-| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                            |
-| `npm run check`        | lint + typecheck + format:check + test in one shot                                                                                                                                  |
-| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                          |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                       |
+| Command                | Expectation                                                                                                                                                                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`             | Vitest unit suite — **815 pass**                                                                                                                                                                                                                         |
+| `npm run test:e2e`     | Playwright golden-master and UI — **129 pass**, 11 skipped as `test.fixme` (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
+| `npm run lint`         | ESLint — **0 errors** (~81 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                            |
+| `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (246 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`.  |
+| `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                  |
+| `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                                                                                                 |
+| `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                   |
+| `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                           |
+| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                                                                                               |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                                                                                            |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -82,7 +83,11 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - `tests/` — Vitest (jsdom). Subdirs per subject (`groove_utils/`, `groove_writer/`,
   `groove_display/`). Legacy source is loaded via `tests/helpers/` shims. See `tests/README.md`.
 - `tests-e2e/` — Playwright (Chromium). `golden-master.spec.js` snapshots SVG+MIDI for a
-  groove corpus; `fixtures.js` blocks non-localhost requests for hermetic runs.
+  groove corpus; `fixtures.js` blocks non-localhost requests for hermetic runs. Each run builds
+  `www/` and serves it, so the tests see what production deploys. `tests-cloud/` does the same.
+  The only addition is `html_examples_and_tests/`, overlaid by `scripts/test-server.py` for two
+  embed tests; it is never copied into `www/`. A new runtime file must be added to `ITEMS` in
+  `scripts/build-www.mjs`, or the deployed site and the tests will not have it.
 
 ### Accounts and library (`js/cloud/`)
 
@@ -106,8 +111,12 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - `index.html?emulator=1` on localhost uses the emulators. Tests sign in with an emulator
   credential because the emulator popup loads external scripts and sometimes hangs.
 - Golden-master baselines are Linux-only. On macOS Playwright writes new `*-chromium-darwin*`
-  files and reports a failure. To verify there, compare those files with the Linux baselines
-  using `cmp`, then delete them. Never commit them.
+  files and reports a failure. To verify there, run `npm run test:e2e:verify`. It compares those
+  files with the Linux baselines byte for byte, skips the two smoke PNGs that differ on a Mac,
+  deletes the darwin files, and exits non-zero on any real failure or difference. On Linux it runs
+  plain Playwright. Never commit darwin files.
+- Test servers use fixed ports: `npm run test:e2e` uses 8010 and `npm run test:cloud` uses 8001.
+  `reuseExistingServer` is false, so a busy port fails the run. Stop the other process first.
 
 ## Conventions & gotchas
 
