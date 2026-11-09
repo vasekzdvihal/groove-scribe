@@ -17,7 +17,7 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'python3 scripts/test-server.py 8001 .',
+    command: 'node scripts/build-www.mjs && python3 scripts/test-server.py 8001 www',
     url: 'http://localhost:8001/index.html',
     reuseExistingServer: false,
     timeout: 30_000,

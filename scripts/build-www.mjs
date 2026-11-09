@@ -1,12 +1,14 @@
 // Assemble www/ from the app's runtime files. www/ is what ships: Firebase Hosting
-// deploys it and Capacitor copies it into the native iOS/Android projects.
+// deploys it, Capacitor copies it into the native iOS/Android projects, and the
+// Playwright suites serve it, so the tests exercise exactly what users get.
 //
 // www/ must contain only what the app needs at runtime, and NOT node_modules, the
 // test suites, dev config, or the example/test HTML pages. We deliberately list the
 // runtime assets rather than copying the repo root.
 //
-// Run via `npm run build:www`. Firebase `predeploy` and `cap:sync` run this script,
-// so each one builds a fresh www/ and enforces checkWwwContents.
+// Run via `npm run build:www`. Firebase `predeploy`, `cap:sync` and the Playwright
+// `webServer` commands all run this script, so each one builds a fresh www/ and
+// enforces checkWwwContents.
 
 import {
   rmSync,

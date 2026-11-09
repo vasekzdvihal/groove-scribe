@@ -17,8 +17,8 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **799 pass**                                                                                                                                                                                                                        |
-| `npm run test:e2e`     | Playwright golden-master and UI — **128 pass**, 9 skipped as `test.fixme` (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
+| `npm test`             | Vitest unit suite — **812 pass**                                                                                                                                                                                                                        |
+| `npm run test:e2e`     | Playwright golden-master and UI — **129 pass**, 9 skipped as `test.fixme` (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design. |
 | `npm run lint`         | ESLint — **0 errors** (~83 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (246 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
@@ -83,7 +83,11 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - `tests/` — Vitest (jsdom). Subdirs per subject (`groove_utils/`, `groove_writer/`,
   `groove_display/`). Legacy source is loaded via `tests/helpers/` shims. See `tests/README.md`.
 - `tests-e2e/` — Playwright (Chromium). `golden-master.spec.js` snapshots SVG+MIDI for a
-  groove corpus; `fixtures.js` blocks non-localhost requests for hermetic runs.
+  groove corpus; `fixtures.js` blocks non-localhost requests for hermetic runs. Each run builds
+  `www/` and serves it, so the tests see what production deploys. `tests-cloud/` does the same.
+  The only addition is `html_examples_and_tests/`, overlaid by `scripts/test-server.py` for two
+  embed tests; it is never copied into `www/`. A new runtime file must be added to `ITEMS` in
+  `scripts/build-www.mjs`, or the deployed site and the tests will not have it.
 
 ### Accounts and library (`js/cloud/`)
 

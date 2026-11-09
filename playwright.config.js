@@ -27,7 +27,11 @@ export default defineConfig({
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'python3 scripts/test-server.py 8010 .',
+    // Serve the built site that production deploys. Two embed tests use test-only pages in
+    // html_examples_and_tests, which never ship, so the server overlays that one folder.
+    // Those pages still load the shipped js/ from www/ through ../js/.
+    command:
+      'node scripts/build-www.mjs && python3 scripts/test-server.py 8010 www html_examples_and_tests',
     url: 'http://localhost:8010/index.html',
     reuseExistingServer: false,
     timeout: 30_000,
