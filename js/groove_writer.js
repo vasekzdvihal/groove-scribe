@@ -2519,6 +2519,9 @@ function GrooveWriter() {
   // remove a measure from the page
   // measureNum is indexed starting at 1, not 0
   root.closeMeasureButtonClick = function (measureNum) {
+    // a groove always keeps at least one measure
+    if (class_number_of_measures <= 1) return;
+
     var uiStickings = '';
     var uiHH = '';
     var uiTom1 = '';

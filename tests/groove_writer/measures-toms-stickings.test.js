@@ -129,21 +129,18 @@ describe('addMeasureButtonClick / closeMeasureButtonClick', () => {
     expect(gw.grooveDataFromClickableUI().hh_array).toHaveLength(gw.notesPerMeasure());
   });
 
-  // BUG (observed, not asserting it's desirable): closeMeasureButtonClick has no
-  // lower-bound guard. The "remove measure" button is only *rendered* when
-  // numberOfMeasures() > 1 (see HTMLforStaffContainer), so normal UI use can't
-  // reach this path -- but the function itself will happily decrement a
-  // 1-measure groove to 0 measures. changeDivisionWithNotes then rewrites
-  // #measureContainer to an empty string (the "for measure = 1; measure <= 0"
-  // loop body never runs), and the very next updateSheetMusic() call throws
-  // because it reads notes from DOM ids (hh0, kick0, ...) that no longer exist.
-  it('has no lower-bound guard: closing the last measure corrupts state and throws on the next redraw', () => {
+  // The "remove measure" button is only rendered when there is more than one
+  // measure, but the function must also refuse to go below one on its own.
+  it('keeps the last measure: closing it changes nothing and the next redraw works', () => {
     expect(gw.numberOfMeasures()).toBe(1);
 
-    expect(() => gw.closeMeasureButtonClick(1)).toThrow();
+    expect(() => gw.closeMeasureButtonClick(1)).not.toThrow();
 
-    // class_number_of_measures was already decremented to 0 before the throw.
-    expect(gw.numberOfMeasures()).toBe(0);
+    expect(gw.numberOfMeasures()).toBe(1);
+    expect(
+      document.getElementById('measureContainer').querySelectorAll('.staff-container')
+    ).toHaveLength(1);
+    expect(() => gw.grooveDataFromClickableUI()).not.toThrow();
   });
 });
 
