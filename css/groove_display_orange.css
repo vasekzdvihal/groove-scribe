@@ -438,5 +438,6 @@ input[type='range']:active::-webkit-slider-thumb {
   top: 0;
   left: 100%;
   margin-left: 6px;
-  white-space: nowrap;
+  width: max-content;
+  max-width: calc(100vw - 110px);
 }

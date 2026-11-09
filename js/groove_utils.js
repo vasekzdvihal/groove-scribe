@@ -178,7 +178,7 @@ function startSoundLoad() {
   watchSoundfontRequests();
 
   attempt.fail = function () {
-    if (attempt.done) return;
+    if (attempt.done || global_midiInitialized) return;
     attempt.done = true;
     clearTimeout(attempt.timer);
     if (attempt.request && attempt.request.abort) attempt.request.abort();
@@ -188,6 +188,7 @@ function startSoundLoad() {
       state.failures++;
       state.retryTimer = setTimeout(function () {
         state.retryTimer = null;
+        if (global_midiInitialized) return;
         startSoundLoad();
       }, delay);
     } else {
@@ -208,7 +209,10 @@ function startSoundLoad() {
       state.loading = false;
       clearTimeout(state.retryTimer);
       state.retryTimer = null;
-      if (state.attempt) clearTimeout(state.attempt.timer);
+      if (state.attempt) {
+        clearTimeout(state.attempt.timer);
+        state.attempt.done = true; // a running retry must not fail and start another load
+      }
       attempt.done = true;
       state.attempt = null;
       MIDI.programChange(9, 127); // use "Gunshot" instrument because I don't know how to create new ones
