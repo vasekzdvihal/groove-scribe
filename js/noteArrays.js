@@ -37,6 +37,7 @@ import {
   constant_NUMBER_OF_TOMS,
 } from './constants.js';
 import { calc_notes_per_measure, isTripletDivision } from './musicMath.js';
+import { safeDecode } from './urlSerialization.js';
 
 function tablatureToABCNotationPerNote(drumType, tablatureChar) {
   switch (tablatureChar) {
@@ -269,7 +270,7 @@ export function noteArraysFromURLData(drumType, noteString, notesPerMeasure, num
   var retArray = [];
 
   // decode the %7C url encoding types
-  noteString = decodeURIComponent(noteString);
+  noteString = safeDecode(noteString);
 
   var retArraySize = notesPerMeasure * numberOfMeasures;
 

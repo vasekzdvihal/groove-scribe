@@ -40,4 +40,46 @@ describe('urlSerialization module (direct import)', () => {
     const gd = getGrooveDataFromUrlString(URL);
     expect(getUrlStringFromGrooveData(gd)).toBe(gu.getUrlStringFromGrooveData(gd));
   });
+
+  describe('bad links', () => {
+    it('does not throw on a malformed percent escape in Title', () => {
+      expect(() => getGrooveDataFromUrlString('?Title=100%')).not.toThrow();
+      expect(getGrooveDataFromUrlString('?Title=100%').title).toBe('100%');
+    });
+
+    it('reads an unencoded + in an old link as a space and %2B as a plus', () => {
+      expect(getGrooveDataFromUrlString('?Title=Rock+Roll').title).toBe('Rock Roll');
+      expect(getGrooveDataFromUrlString('?Title=Rock%2BRoll').title).toBe('Rock+Roll');
+    });
+
+    it.each(['100% Funk', 'Rock+Roll', 'a=b & c', 'Čeština?'])('round-trips %s', (text) => {
+      const gd = getGrooveDataFromUrlString(URL);
+      gd.title = text;
+      gd.author = text;
+      gd.comments = text;
+      const back = getGrooveDataFromUrlString(getUrlStringFromGrooveData(gd));
+      expect(back.title).toBe(text);
+      expect(back.author).toBe(text);
+      expect(back.comments).toBe(text);
+    });
+
+    it('keeps + as the closed hi-hat in note strings', () => {
+      const gd = getGrooveDataFromUrlString('?Div=16&H=|+---+---+---+---|');
+      expect(gd.hh_array.filter(Boolean)).toHaveLength(4);
+    });
+
+    it('does not read a parameter without a value as the text "undefined"', () => {
+      expect(getGrooveDataFromUrlString('?Title&Div=16').title).toBe('');
+    });
+
+    it.each(['abc', '', '7', '0', '-8', '999'])('turns Div=%s into 16', (div) => {
+      const gd = getGrooveDataFromUrlString('?Measures=2&Div=' + div);
+      expect(gd.timeDivision).toBe(16);
+      expect(gd.notesPerMeasure).toBe(16);
+    });
+
+    it.each([4, 8, 12, 16, 24, 32, 48])('keeps Div=%i', (div) => {
+      expect(getGrooveDataFromUrlString('?Div=' + div).timeDivision).toBe(div);
+    });
+  });
 });

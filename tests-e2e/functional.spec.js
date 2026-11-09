@@ -118,3 +118,12 @@ test.describe('export', () => {
     await expect(page.locator('#downloadContextMenu')).toBeVisible();
   });
 });
+
+test.describe('bad links', () => {
+  test('?Measures=2&Div=abc loads with Div 16 within 5 s', async ({ page }) => {
+    await loadGroove(page, grooveUrl('?Measures=2&Div=abc'), 5000);
+    const gd = await grooveData(page);
+    expect(gd.timeDivision).toBe(16);
+    expect(gd.numberOfMeasures).toBe(2);
+  });
+});

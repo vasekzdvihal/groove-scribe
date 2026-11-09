@@ -25,6 +25,7 @@
 // Vendored libraries (Midi, MIDI, Pablo, ShareButton) remain window globals
 // provided by the classic <script> tags loaded before this module.
 import { GrooveUtils } from './groove_utils.js';
+import { parseDivision, safeDecode } from './urlSerialization.js';
 import {
   constant_ABC_HH_Accent,
   constant_ABC_HH_Close,
@@ -100,7 +101,7 @@ function GrooveWriter() {
 
   // public class vars
   var class_number_of_measures = 1;
-  var class_time_division = parseInt(root.myGrooveUtils.getQueryVariableFromURL('Div', '16'), 10); // default to 16ths
+  var class_time_division = parseDivision(root.myGrooveUtils.getQueryVariableFromURL('Div', '16')); // default to 16ths
   var class_num_beats_per_measure = 4; // TimeSigTop
   var class_note_value_per_measure = 4; // TimeSigBottom
   var class_notes_per_measure = root.myGrooveUtils.calc_notes_per_measure(
@@ -1867,17 +1868,18 @@ function GrooveWriter() {
       myGrooveData.toms_array = [[], [], [], []];
 
       // query the clickable UI and generate a arrays representing the notes of all measures
-      for (i = 0; i < total_notes; i++) {
+      for (var noteIndex = 0; noteIndex < total_notes; noteIndex++) {
         // only grab the stickings if they are visible
-        if (isStickingsVisible()) myGrooveData.sticking_array.push(get_sticking_state(i, 'ABC'));
+        if (isStickingsVisible())
+          myGrooveData.sticking_array.push(get_sticking_state(noteIndex, 'ABC'));
 
-        myGrooveData.hh_array.push(get_hh_state(i, 'ABC'));
-        myGrooveData.snare_array.push(get_snare_state(i, 'ABC'));
-        myGrooveData.kick_array.push(get_kick_state(i, 'ABC'));
+        myGrooveData.hh_array.push(get_hh_state(noteIndex, 'ABC'));
+        myGrooveData.snare_array.push(get_snare_state(noteIndex, 'ABC'));
+        myGrooveData.kick_array.push(get_kick_state(noteIndex, 'ABC'));
 
         if (isTomsVisible()) {
-          myGrooveData.toms_array[0].push(get_tom_state(i, 1, 'ABC'));
-          myGrooveData.toms_array[3].push(get_tom_state(i, 4, 'ABC'));
+          myGrooveData.toms_array[0].push(get_tom_state(noteIndex, 1, 'ABC'));
+          myGrooveData.toms_array[3].push(get_tom_state(noteIndex, 4, 'ABC'));
         } else {
           myGrooveData.toms_array[0].push(false);
           myGrooveData.toms_array[3].push(false);
@@ -3048,7 +3050,7 @@ function GrooveWriter() {
     }
 
     // decode the %7C url encoding types
-    noteString = decodeURIComponent(noteString);
+    noteString = safeDecode(noteString);
 
     // ignore ":" and "|" by removing them
     var notes = noteString.replace(/:|\|/g, '');
