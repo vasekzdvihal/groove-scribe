@@ -657,5 +657,21 @@ test.describe('known bugs', () => {
     await chooseDivision(page, 'subdivision_8ths');
     await expect.poll(() => query(page)).not.toContain('T2=');
     await expect.poll(() => query(page)).not.toContain('T3=');
+    await page.click('#undoButton');
+    await expectQuery(page, withToms);
+  });
+
+  test('Clear all notes removes toms 2 and 3, and undo brings them back', async ({ page }) => {
+    const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
+    const withToms =
+      START + `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('-', 0)}`;
+    await open(page, withToms);
+    await expectQuery(page, withToms);
+    await page.click('#moreButton');
+    await page.click('#clearAllNotesButton');
+    await expect.poll(() => query(page)).not.toContain('T2=');
+    await expect.poll(() => query(page)).not.toContain('T3=');
+    await page.click('#undoButton');
+    await expectQuery(page, withToms);
   });
 });

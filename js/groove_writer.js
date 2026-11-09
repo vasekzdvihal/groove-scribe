@@ -99,14 +99,6 @@ function GrooveWriter() {
   // The grid has rows for toms 1 and 4 only. Toms 2 and 3 of a loaded groove are kept here and
   // written back with it. They are valid only for the bar layout they were loaded with.
   var class_kept_toms = null; // { layout: string, lanes: [T2 array, T3 array] } or null
-  function tomLayoutKey() {
-    return [
-      class_number_of_measures,
-      class_time_division,
-      class_num_beats_per_measure,
-      class_note_value_per_measure,
-    ].join('/');
-  }
   var class_undo_stack = [];
   var class_redo_stack = [];
   var constant_undo_stack_max_size = 40;
@@ -121,6 +113,14 @@ function GrooveWriter() {
     class_num_beats_per_measure,
     class_note_value_per_measure
   );
+  function tomLayoutKey() {
+    return [
+      class_number_of_measures,
+      class_time_division,
+      class_num_beats_per_measure,
+      class_note_value_per_measure,
+    ].join('/');
+  }
   var class_metronome_auto_speed_up_active = false;
   var class_metronome_count_in_active = false;
   var class_metronome_count_in_is_playing = false;
@@ -2683,6 +2683,7 @@ function GrooveWriter() {
       set_snare_state(i, 'off');
       set_kick_state(i, 'off');
     }
+    class_kept_toms = null; // toms 2 and 3 have no grid row, so Clear All must drop them here
     updateSheetMusic();
   };
 
