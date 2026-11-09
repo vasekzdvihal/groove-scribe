@@ -977,6 +977,17 @@ function GrooveWriter() {
     }
   }
 
+  // Turn the permutation off without a redraw or a URL update, so a restore can use it.
+  function clearPermutation() {
+    showHideCSS_ClassVisibility('.kick-container', true, true); // show it
+    showHideCSS_ClassVisibility('.snare-container', true, true); // show it
+    class_permutation_type = 'none';
+
+    unselectButton(document.getElementById('permutationAnchor'));
+    document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
+    addOrRemoveKeywordFromClassById('PermutationOptions', 'displayed', false);
+  }
+
   root.permutationPopupClick = function (perm_type) {
     if (class_permutation_type == perm_type) return;
 
@@ -1008,13 +1019,7 @@ function GrooveWriter() {
       case 'none':
       /* falls through */
       default:
-        showHideCSS_ClassVisibility('.kick-container', true, true); // show it
-        showHideCSS_ClassVisibility('.snare-container', true, true); // show it
-        class_permutation_type = 'none';
-
-        unselectButton(document.getElementById('permutationAnchor'));
-        document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
-        addOrRemoveKeywordFromClassById('PermutationOptions', 'displayed', false);
+        clearPermutation();
         break;
     }
 
@@ -2058,7 +2063,7 @@ function GrooveWriter() {
       // the one we want to load is behind the head, since all changes go on the undo stack immediately
       // no need to pop, since it would just get added right back on anyways
       undoURL = class_undo_stack[class_undo_stack.length - 1];
-      set_Default_notes(undoURL);
+      applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(undoURL));
     }
   };
 
@@ -2066,7 +2071,7 @@ function GrooveWriter() {
     if (class_redo_stack.length > 0) {
       var redoURL = class_redo_stack.pop();
       root.AddItemToUndoOrRedoStack(redoURL, class_undo_stack); // add to undo stack
-      set_Default_notes(redoURL);
+      applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(redoURL));
     }
   };
 
@@ -2093,7 +2098,8 @@ function GrooveWriter() {
 
     var searchData = fullURL.indexOf('?');
 
-    urlFragment = fullURL.slice(searchData);
+    // view mode is not part of the groove, so it must not create or break a history step
+    urlFragment = fullURL.slice(searchData).replace('Mode=view&', '');
 
     // clear redo array whenever we add a new valid element to the stack
     // when we undo, we end up with a null push that returns false here
@@ -2828,7 +2834,7 @@ function GrooveWriter() {
     root.myGrooveUtils.AddMidiPlayerToPage('midiPlayer', class_time_division);
 
     // load the groove from the URL data if it was passed in.
-    set_Default_notes(window.location.search);
+    applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(window.location.search));
 
     root.myGrooveUtils.midiEventCallbacks.loadMidiDataEvent = function (myroot, playStarting) {
       var midiURL;
@@ -2871,7 +2877,7 @@ function GrooveWriter() {
 
     // enable or disable swing
     root.myGrooveUtils.swingEnabled(
-      root.myGrooveUtils.doesDivisionSupportSwing(class_notes_per_measure)
+      root.myGrooveUtils.doesDivisionSupportSwing(class_time_division)
     );
 
     window.onresize = root.refresh_ABC;
@@ -3518,45 +3524,52 @@ function GrooveWriter() {
     }
   };
 
-  function set_Default_notes(encodedURLData) {
-    var myGrooveData = root.myGrooveUtils.getGrooveDataFromUrlString(encodedURLData);
+  // The one path that puts a groove into the editor: startup, loadNewGroove, undo and redo.
+  // A permutation is not part of the groove data, so a restore always clears it.
+  function applyGrooveData(grooveData) {
+    if (class_permutation_type != 'none') clearPermutation();
 
-    class_num_beats_per_measure = myGrooveData.numBeats; // TimeSigTop
-    class_note_value_per_measure = myGrooveData.noteValue; // TimeSigBottom
+    var timeSigChanged =
+      grooveData.numBeats != class_num_beats_per_measure ||
+      grooveData.noteValue != class_note_value_per_measure;
+
+    class_num_beats_per_measure = grooveData.numBeats; // TimeSigTop
+    class_note_value_per_measure = grooveData.noteValue; // TimeSigBottom
 
     if (
-      myGrooveData.notesPerMeasure != class_notes_per_measure ||
-      myGrooveData.timeDivision != class_time_division ||
-      class_number_of_measures != myGrooveData.numberOfMeasures
+      timeSigChanged ||
+      grooveData.notesPerMeasure != class_notes_per_measure ||
+      grooveData.timeDivision != class_time_division ||
+      class_number_of_measures != grooveData.numberOfMeasures
     ) {
-      class_number_of_measures = myGrooveData.numberOfMeasures;
-      changeDivisionWithNotes(myGrooveData.timeDivision);
+      class_number_of_measures = grooveData.numberOfMeasures;
+      changeDivisionWithNotes(grooveData.timeDivision);
     }
 
     root.expandAuthoringViewWhenNecessary(class_notes_per_measure, class_number_of_measures);
 
-    setNotesFromABCArray('Stickings', myGrooveData.sticking_array, class_number_of_measures);
-    setNotesFromABCArray('H', myGrooveData.hh_array, class_number_of_measures);
-    setNotesFromABCArray('T1', myGrooveData.toms_array[0], class_number_of_measures);
-    setNotesFromABCArray('T4', myGrooveData.toms_array[3], class_number_of_measures);
-    setNotesFromABCArray('S', myGrooveData.snare_array, class_number_of_measures);
-    setNotesFromABCArray('K', myGrooveData.kick_array, class_number_of_measures);
+    setNotesFromABCArray('Stickings', grooveData.sticking_array, class_number_of_measures);
+    setNotesFromABCArray('H', grooveData.hh_array, class_number_of_measures);
+    setNotesFromABCArray('T1', grooveData.toms_array[0], class_number_of_measures);
+    setNotesFromABCArray('T4', grooveData.toms_array[3], class_number_of_measures);
+    setNotesFromABCArray('S', grooveData.snare_array, class_number_of_measures);
+    setNotesFromABCArray('K', grooveData.kick_array, class_number_of_measures);
 
-    if (myGrooveData.showToms) root.showHideToms(true, true, true);
+    root.showHideToms(true, grooveData.showToms, true);
 
-    if (myGrooveData.showStickings) root.stickingsShowHide(true, true, true);
+    root.stickingsShowHide(true, grooveData.showStickings, true);
 
-    document.getElementById('tuneTitle').value = myGrooveData.title;
+    document.getElementById('tuneTitle').value = grooveData.title;
 
-    document.getElementById('tuneAuthor').value = myGrooveData.author;
+    document.getElementById('tuneAuthor').value = grooveData.author;
 
-    document.getElementById('tuneComments').value = myGrooveData.comments;
+    document.getElementById('tuneComments').value = grooveData.comments;
 
-    root.myGrooveUtils.setTempo(myGrooveData.tempo);
+    root.myGrooveUtils.setTempo(grooveData.tempo);
 
-    root.myGrooveUtils.setSwing(myGrooveData.swingPercent);
+    root.myGrooveUtils.setSwing(grooveData.swingPercent);
 
-    root.setMetronomeFrequency(myGrooveData.metronomeFrequency);
+    root.setMetronomeFrequency(grooveData.metronomeFrequency);
 
     updateSheetMusic();
   }
@@ -3564,7 +3577,7 @@ function GrooveWriter() {
   // nameWhenUntitled names the groove in the top bar when its URL has no title.
   root.loadNewGroove = function (encodedURLData, nameWhenUntitled) {
     grooveNameWhenUntitled = nameWhenUntitled || '';
-    set_Default_notes(encodedURLData);
+    applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(encodedURLData));
   };
 
   function getABCDataWithLineEndings() {

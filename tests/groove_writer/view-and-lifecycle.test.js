@@ -112,7 +112,7 @@ describe('GrooveWriter view & lifecycle', () => {
     // numberOfMeasures **parameter is never referenced**. On a fresh
     // GrooveWriter, class_number_of_measures defaults to 1, so passing a large
     // numberOfMeasures argument has zero effect unless something else (e.g.
-    // changeDivision/set_Default_notes) has actually mutated the closure state.
+    // changeDivision/applyGrooveData) has actually mutated the closure state.
 
     it('adds "expanded" when numNotesPerMeasure > 16', async () => {
       const gw = await newGrooveWriter();
@@ -369,7 +369,7 @@ describe('GrooveWriter view & lifecycle', () => {
     //   -> swapViewEditMode(true) (needs .edit-block, optionally #view-edit-switch)
     //   -> selectButton(#subdivision_<N>ths)
     //   -> myGrooveUtils.AddMidiPlayerToPage("midiPlayer", ...) (needs #midiPlayer)
-    //   -> set_Default_notes(window.location.search) (needs the note-grid DOM,
+    //   -> applyGrooveData(window.location.search) (needs the note-grid DOM,
     //      #ABCsource/#svgTarget/#diverr/#measureContainer/#tuneTitle/#tuneAuthor/
     //      #tuneComments, and calls all the way down into displayNewSVG ->
     //      myGrooveUtils.renderABCtoSVG, myGrooveUtils.setTempo/setSwing, and

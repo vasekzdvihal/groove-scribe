@@ -177,17 +177,16 @@ test.describe('toggle toms', () => {
     await expectQuery(page, WITH_TOMS.replace('&T1=|-', '&T1=|o'));
   });
 
-  test.fixme('undo takes back the toms toggle (audit item 14)', async ({ page }) => {
+  test('undo takes back the toms toggle (audit item 14)', async ({ page }) => {
     await open(page);
     await page.click('#hi-hat0');
     await page.click('#showHideTomsButton');
     await expectQuery(page, WITH_TOMS);
     await page.click('#undoButton');
-    // Today the URL still has the tom lanes, and the next undo is lost too.
     await expectQuery(page, HH0);
   });
 
-  test.fixme('undo takes back the view mode toggle (audit item 14)', async ({ page }) => {
+  test('undo takes back the view mode toggle (audit item 14)', async ({ page }) => {
     await open(page);
     await page.click('#hi-hat0');
     await expectQuery(page, HH0);
@@ -196,19 +195,27 @@ test.describe('toggle toms', () => {
     await page.click('#view-edit-switch');
     await expect(page.locator('#view-edit-switch')).toHaveText('View mode');
     // A view toggle is not an edit. One undo must take back the hi-hat note.
-    // Today the toggles add history steps, so the first undo changes nothing visible.
     await page.click('#undoButton');
     await expectQuery(page, START);
   });
 
-  test.fixme('undo takes back the stickings toggle (audit item 14)', async ({ page }) => {
+  test('undo works while the editor is in view mode (audit item 14)', async ({ page }) => {
+    await open(page);
+    await page.click('#hi-hat0');
+    await expectQuery(page, HH0);
+    await page.click('#view-edit-switch');
+    await expect(page.locator('#view-edit-switch')).toHaveText('Edit mode');
+    await page.keyboard.press('Control+z');
+    await expectQuery(page, START.replace('?', '?Mode=view&'));
+  });
+
+  test('undo takes back the stickings toggle (audit item 14)', async ({ page }) => {
     await open(page);
     await page.click('#hi-hat0');
     await page.click('#stickingsButton');
     await page.locator('#stickingsContextMenu li').filter({ hasText: 'Show or Hide' }).click();
     await expect.poll(() => query(page)).toContain('&Stickings=');
     await page.click('#undoButton');
-    // Today the URL keeps the stickings lane, and the next undo is lost too.
     await expectQuery(page, HH0);
   });
 });
@@ -291,52 +298,108 @@ test.describe('change time signature', () => {
     await expectQuery(page, HH0_SN4_K8);
     await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
   });
+
+  // 8/8 at 1/16 notes has the same 16 note grid as 4/4, so nothing but the label shows the change.
+  const EIGHT_EIGHT =
+    '?TimeSig=8/8&Div=16&Tempo=80&Measures=1&H=|----------------|&S=|----------------|&K=|----------------|';
+
+  test('the label is right after load', async ({ page }) => {
+    await open(page, EIGHT_EIGHT);
+    await expect(page.locator('#timeSigLabel')).toHaveText('8/8');
+  });
+
+  test('the label is right after loading another groove', async ({ page }) => {
+    await open(page);
+    await page.evaluate((q) => window.myGrooveWriter.loadNewGroove(q), EIGHT_EIGHT);
+    await expect(page.locator('#timeSigLabel')).toHaveText('8/8');
+  });
+
+  test('the label follows undo and redo', async ({ page }) => {
+    await open(page);
+    await chooseTimeSignature(page, '8', '8');
+    await expectQuery(page, EIGHT_EIGHT);
+    await expect(page.locator('#timeSigLabel')).toHaveText('8/8');
+    await page.click('#undoButton');
+    await expectQuery(page, START);
+    await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
+    await page.click('#redoButton');
+    await expectQuery(page, EIGHT_EIGHT);
+    await expect(page.locator('#timeSigLabel')).toHaveText('8/8');
+  });
 });
 
 // Known bugs. Each test states the correct behaviour. PR 3 removes the modifier.
 test.describe('known bugs', () => {
-  test.fixme('toms hide when the next loaded groove has none', async ({ page }) => {
-    // The expected URL below is a best guess. PR 3 may correct it.
+  test('toms hide when the next loaded groove has none', async ({ page }) => {
     await open(page, `${START}&T1=|o---------------|&T4=|---o------------|`);
     await page.click('#groovesAnchor');
     await page.locator('.grooveListLI').first().click();
     // The first built-in groove is the empty 16th note groove. It has no toms.
-    // Today the toms stay visible and the URL keeps empty T1 and T4 lanes.
     await expectQuery(page, START);
   });
 
-  test.fixme('stickings hide when the next loaded groove has none', async ({ page }) => {
-    // The expected URL below is a best guess. PR 3 may correct it.
+  test('stickings hide when the next loaded groove has none', async ({ page }) => {
     await open(page, `${START}&Stickings=|R---------------|`);
     await page.click('#groovesAnchor');
     await page.locator('.grooveListLI').first().click();
-    // Today the URL keeps an empty Stickings lane.
     await expectQuery(page, START);
   });
 
-  test.fixme('swing stays on a 12 note measure after load (audit item 16)', async ({ page }) => {
+  test('swing stays on a 12 note measure after load (audit item 16)', async ({ page }) => {
     // 6/8 at 1/16 notes is a 12 note measure that supports swing.
     await open(
       page,
       '?TimeSig=6/8&Div=16&Tempo=80&Measures=1&Swing=40&H=|------------|&S=|------------|&K=|------------|'
     );
     await page.click('#hi-hat0');
-    // Today the first edit drops Swing from the URL.
     await expectQuery(
       page,
       '?TimeSig=6/8&Div=16&Tempo=80&Swing=40&Measures=1&H=|x-----------|&S=|------------|&K=|------------|'
     );
   });
 
-  test.fixme('a permutation survives a restore', async ({ page }) => {
-    await open(page);
+  test('swing stays on a 24 note measure after load (audit item 16)', async ({ page }) => {
+    // 3/4 at 1/32 notes is a 24 note measure that supports swing.
+    const lane = '-'.repeat(24);
+    await open(
+      page,
+      `?TimeSig=3/4&Div=32&Tempo=80&Measures=1&Swing=40&H=|${lane}|&S=|${lane}|&K=|${lane}|`
+    );
+    await page.click('#hi-hat0');
+    await expectQuery(
+      page,
+      `?TimeSig=3/4&Div=32&Tempo=80&Swing=40&Measures=1&H=|x${'-'.repeat(23)}|&S=|${lane}|&K=|${lane}|`
+    );
+  });
+
+  async function choosePermutation(page, name) {
     await page.click('#permutationAnchor');
-    await page.locator('#permutationContextMenu li').filter({ hasText: 'Kick' }).click();
+    await page.locator('#permutationContextMenu li').filter({ hasText: name }).click();
     await expect(page.locator('#PermutationOptions')).toHaveClass(/displayed/);
-    await page.reload();
-    await page.waitForSelector('#svgTarget svg');
-    // Today the permutation is not in the URL and is gone after the reload.
-    await expect(page.locator('#PermutationOptions')).toHaveClass(/displayed/);
+  }
+
+  async function expectNoPermutation(page) {
+    await expect(page.locator('#PermutationOptions')).not.toHaveClass(/displayed/);
+    await expect(page.locator('#permutationAnchor')).not.toHaveClass(/buttonSelected/);
+    await expect(page.locator('.kick-container').first()).toBeVisible();
+  }
+
+  test('undo clears an active permutation', async ({ page }) => {
+    await open(page);
+    await page.click('#hi-hat0');
+    await expectQuery(page, HH0);
+    await choosePermutation(page, 'Kick');
+    await page.click('#undoButton');
+    await expectQuery(page, START);
+    await expectNoPermutation(page);
+  });
+
+  test('loading another groove clears an active permutation', async ({ page }) => {
+    await open(page);
+    await choosePermutation(page, 'Kick');
+    await page.click('#groovesAnchor');
+    await page.locator('.grooveListLI').first().click();
+    await expectNoPermutation(page);
   });
 
   test.fixme('add measure at 10 measures changes nothing (audit item 2)', async ({ page }) => {

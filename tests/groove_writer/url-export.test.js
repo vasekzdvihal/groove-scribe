@@ -474,7 +474,7 @@ describe('GrooveWriter url-export (js/groove_writer.js)', () => {
   });
 
   describe('loadNewGroove', () => {
-    // loadNewGroove -> set_Default_notes -> setNotesFromABCArray decodes the URL
+    // loadNewGroove -> applyGrooveData -> setNotesFromABCArray decodes the URL
     // groove and writes it into the clickable grid + metadata fields. This
     // exercises the note-setting engine (setNotesFromURLData/setNotesFromABCArray)
     // and the metadata/tempo wiring. The shared helper reproduces the browser's

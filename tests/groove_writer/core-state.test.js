@@ -7,7 +7,7 @@ import { newGrooveWriter, buildGridDOM } from '../helpers/loadGrooveWriter.js';
 //   undoCommand, redoCommand, changeDivision, metronomeAutoSpeedUpTempoUpdate,
 //   and the private `usingTriplets()` helper (covered indirectly).
 //
-// Several of these methods cascade into a private `set_Default_notes()` (used by
+// Several of these methods cascade into a private `applyGrooveData()` (used by
 // undoCommand/redoCommand) and into `updateSheetMusic()` (used by changeDivision),
 // which in turn touch a lot of DOM and re-generate ABC notation. Per the task
 // brief we stub the purely-cosmetic cascading calls (`updateCurrentURL`,
@@ -20,7 +20,7 @@ import { newGrooveWriter, buildGridDOM } from '../helpers/loadGrooveWriter.js';
 // top-level `var`s attach to the shared `window` object, so groove_writer.js
 // can see them for free. Under Vitest's ES-module transform every file gets
 // its own module scope, so those vars never reach the global object and the
-// bare reference throws a ReferenceError deep inside set_Default_notes /
+// bare reference throws a ReferenceError deep inside applyGrooveData /
 // changeDivision. We shim them on globalThis (values copied verbatim from
 // groove_utils.js) so the real code path can run unmodified.
 //
@@ -97,7 +97,7 @@ const ABC_CONSTANTS = {
 };
 for (const [k, v] of Object.entries(ABC_CONSTANTS)) globalThis[k] = v;
 
-// Fixture mirroring the slice of index.html that changeDivision / set_Default_notes
+// Fixture mirroring the slice of index.html that changeDivision / applyGrooveData
 // / updateSheetMusic touch: the note grid plus the surrounding chrome elements they
 // read or write (ABC source textarea, SVG target, tempo/swing controls, etc).
 function buildFixture(gw, measures = 1) {
