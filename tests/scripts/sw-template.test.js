@@ -133,11 +133,11 @@ describe('install', () => {
     world.open(OLD).entries.set(url('index.html'), response('old'));
   });
 
-  it('stores every file, bypasses the HTTP cache, then takes over', async () => {
+  it('stores every file, asks the server about each one, then takes over', async () => {
     world.respond = (request) => response(`new ${request.url}`);
     await lifecycle(world, 'install');
     expect([...world.stores.get(CURRENT).entries.keys()]).toEqual(FILES.map(url));
-    expect(world.requests.map((request) => request.cache)).toEqual(FILES.map(() => 'reload'));
+    expect(world.requests.map((request) => request.cache)).toEqual(FILES.map(() => 'no-cache'));
     expect(world.skipWaiting).toHaveBeenCalledOnce();
   });
 
@@ -194,7 +194,7 @@ describe('fetch: navigations use the network first', () => {
     const event = navigate(world, 'page.html?TimeSig=4/4');
     expect((await event.result).body).toBe('fresh page');
     await settled(event);
-    expect(world.requests[0].cache).toBe('reload');
+    expect(world.requests[0].cache).toBe('no-cache');
     const { entries } = world.stores.get(CURRENT);
     expect(entries.get(url('page.html')).body).toBe('fresh page');
     expect(entries.has(url('page.html?TimeSig=4/4'))).toBe(false);
@@ -205,7 +205,7 @@ describe('fetch: navigations use the network first', () => {
     const event = navigate(world, 'index.html?TimeSig=4/4');
     expect((await event.result).body).toBe('other content');
     await settled(event);
-    expect(world.requests[0].cache).toBe('reload');
+    expect(world.requests[0].cache).toBe('no-cache');
     expect(world.stores.get(CURRENT).entries.get(url('index.html')).body).toBe('cached page');
   });
 
@@ -258,6 +258,31 @@ describe('fetch: a precached file never changes within a version', () => {
       expect(world.stores.get(CURRENT).entries.get(url(path)).body).toBe('cached');
     }
   );
+});
+
+describe('fetch: a retry import of a precached file', () => {
+  const SDK = 'js/vendor/firebase.js';
+
+  it('finds the precached file and fetches nothing', async () => {
+    const world = makeWorld(renderServiceWorker('v2', [SDK]));
+    world.open(CURRENT).entries.set(url(SDK), response('cached sdk'));
+    world.respond = () => response('other content');
+    const event = dispatchFetch(world, { url: url(`${SDK}?retry=1`) });
+    expect((await event.result).body).toBe('cached sdk');
+    await settled(event);
+    expect(world.requests).toEqual([]);
+    expect([...world.stores.get(CURRENT).entries.keys()]).toEqual([url(SDK)]);
+  });
+
+  it('stores no extra copy under the retry URL when the file is not cached yet', async () => {
+    const world = makeWorld(renderServiceWorker('v2', [SDK]));
+    world.open(CURRENT);
+    world.respond = () => response('sdk');
+    const event = dispatchFetch(world, { url: url(`${SDK}?retry=2`) });
+    expect((await event.result).body).toBe('sdk');
+    await settled(event);
+    expect([...world.stores.get(CURRENT).entries.keys()]).toEqual([url(SDK)]);
+  });
 });
 
 describe('fetch: files outside the precache use the cache and refresh in the background', () => {

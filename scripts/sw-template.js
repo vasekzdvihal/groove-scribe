@@ -24,6 +24,8 @@ const NAVIGATION_TIMEOUT_MS = 3000;
 // Firebase Hosting keeps /__/ for itself. Sign-in runs through /__/auth/ and must stay live.
 const RESERVED_PATH = '/__/';
 
+const RETRY_PARAM = 'retry';
+
 // Firebase Hosting sends Vary. Without ignoreVary a cached file can miss for a request that
 // has different headers.
 const MATCH_OPTIONS = { ignoreVary: true };
@@ -37,14 +39,16 @@ function isCacheable(response) {
 }
 
 // Sound, fonts and images have a max-age of 30 days, so a normal fetch could store an old file.
-// cache: 'reload' always downloads the file: precache and pages use it. cache: 'no-cache' asks
-// the server first, so an unchanged file costs only headers: background refresh uses it.
-function fetchFresh(event, cacheMode) {
-  return fetch(new Request(event.request, { cache: cacheMode }));
+// cache: 'no-cache' asks the server first, so files stay current and an unchanged file costs a
+// 304 on each deploy.
+const FRESH = 'no-cache';
+
+function fetchFresh(event) {
+  return fetch(new Request(event.request, { cache: FRESH }));
 }
 
-function fetchAndStore(event, cache, key, cacheMode) {
-  const network = fetchFresh(event, cacheMode);
+function fetchAndStore(event, cache, key) {
+  const network = fetchFresh(event);
   // Clone here, first in line, so the body is unread even if the page takes the response next.
   const store = (response) => (isCacheable(response) ? cache.put(key, response.clone()) : null);
   event.waitUntil(network.then(store).catch(noop));
@@ -65,9 +69,7 @@ async function networkFirst(event) {
   // The Cache object stays valid. Opening it again later could recreate a deleted old cache.
   const cache = await caches.open(CACHE_NAME);
   const key = pageKey(event.request.url);
-  const network = PRECACHED_URLS.has(key)
-    ? fetchFresh(event, 'reload')
-    : fetchAndStore(event, cache, key, 'reload');
+  const network = PRECACHED_URLS.has(key) ? fetchFresh(event) : fetchAndStore(event, cache, key);
   const timedOut = new Promise((resolve) => setTimeout(resolve, NAVIGATION_TIMEOUT_MS));
   const fresh = await Promise.race([network, timedOut]).catch(noop);
   if (fresh?.ok) return fresh;
@@ -76,11 +78,20 @@ async function networkFirst(event) {
   return cached ?? fresh ?? network;
 }
 
+// A failed import is retried under a new URL (see firebaseClient.js), but it is the same file.
+// Checking first matters: delete() would rewrite the query of every other URL as well.
+function assetKey(requestUrl) {
+  const url = new URL(requestUrl);
+  if (url.searchParams.has(RETRY_PARAM)) url.searchParams.delete(RETRY_PARAM);
+  return url.href;
+}
+
 async function cacheFirst(event) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(event.request, MATCH_OPTIONS);
-  if (cached && PRECACHED_URLS.has(event.request.url)) return cached;
-  const network = fetchAndStore(event, cache, event.request.url, 'no-cache');
+  const key = assetKey(event.request.url);
+  const cached = await cache.match(key, MATCH_OPTIONS);
+  if (cached && PRECACHED_URLS.has(key)) return cached;
+  const network = fetchAndStore(event, cache, key);
   return cached ?? network;
 }
 
@@ -98,7 +109,7 @@ async function precache() {
     const entries = await Promise.all(
       PRECACHE_FILES.map(async (path) => {
         const url = new URL(path, self.location.href).href;
-        const response = await fetch(new Request(url, { cache: 'reload' }));
+        const response = await fetch(new Request(url, { cache: FRESH }));
         if (!isCacheable(response)) {
           throw new Error(`Precache failed for ${url}: status ${response.status}`);
         }
