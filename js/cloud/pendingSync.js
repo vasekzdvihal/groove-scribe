@@ -54,6 +54,17 @@ export function createPendingSync({
   let slowTimer = null;
   let checkTimer = null;
   let endCacheCheck = null;
+  let hasPendingRows = false;
+  let firstUpdateDone = false;
+  // A queued delete leaves no row to mark it, so count every write the server has not answered.
+  let unansweredWrites = 0;
+
+  // Only the memory cache loses a queued write when the tab closes.
+  function updateLeaveWarning() {
+    const canLose = !persistent && isActive() && (hasPendingRows || unansweredWrites > 0);
+    if (canLose) window.addEventListener('beforeunload', warnBeforeLeaving);
+    else window.removeEventListener('beforeunload', warnBeforeLeaving);
+  }
 
   // In a tab that started after a write was queued, the SDK wait can hang. The cache says when
   // the write is gone, so check it now and then.
@@ -62,7 +73,7 @@ export function createPendingSync({
       endCacheCheck = resolve;
       checkTimer = setInterval(async () => {
         try {
-          if (!(await readHasPending())) resolve();
+          if (unansweredWrites === 0 && !(await readHasPending())) resolve();
         } catch (error) {
           console.warn('The library cache could not be read:', error);
         }
@@ -81,13 +92,16 @@ export function createPendingSync({
   }
 
   // One waiter per session. The wait covers every write queued so far. A write queued later
-  // shows as a pending row in the update after it, and that starts the next wait.
+  // starts the next wait, from changeRan or from the pending row in the update after it.
   async function follow() {
     if (waiting) return;
     waiting = true;
-    startSlowTimer();
+    let confirmed;
     try {
-      await Promise.race([waitForServer(), untilCacheIsClear()]);
+      confirmed = await Promise.race([
+        waitForServer().then(() => true),
+        untilCacheIsClear().then(() => false),
+      ]);
     } catch (error) {
       // The SDK rejects the wait when the user changes. The new session has its own waiter.
       console.warn('Stopped waiting for the sync:', error);
@@ -96,28 +110,53 @@ export function createPendingSync({
       clearInterval(checkTimer);
       waiting = false;
     }
-    if (isActive()) await onSynced();
+    if (!isActive()) return;
+    // A write made during the wait is not covered by it.
+    if (confirmed && unansweredWrites === 0) writePendingWritesFlag(false);
+    await onSynced();
   }
 
   function update(items) {
-    const pending = items.some(isPending);
-    // Only the memory cache loses a queued write when the tab closes.
-    if (pending && !persistent) window.addEventListener('beforeunload', warnBeforeLeaving);
-    else window.removeEventListener('beforeunload', warnBeforeLeaving);
-    if (pending) {
+    hasPendingRows = items.some(isPending);
+    updateLeaveWarning();
+    // A delete from an earlier visit shows no row, and only the wait can clear its flag.
+    const inherited = !firstUpdateDone && persistent && readPendingWritesFlag();
+    firstUpdateDone = true;
+    if (hasPendingRows) {
       if (persistent) writePendingWritesFlag(true);
-      follow();
+      startSlowTimer();
     } else {
       clearTimeout(slowTimer);
       slowTimer = null;
       slow = false;
     }
+    if (hasPendingRows || inherited) follow();
   }
 
-  // A server answer with no pending row: the device has nothing left to send.
+  // A change ran. It may have queued a write that no row shows, such as a delete.
+  function changeRan(written) {
+    if (persistent) writePendingWritesFlag(true);
+    if (written) {
+      unansweredWrites += 1;
+      const answered = () => {
+        unansweredWrites -= 1;
+        updateLeaveWarning();
+      };
+      written.committed.then(answered, answered);
+    }
+    updateLeaveWarning();
+    follow();
+  }
+
+  // After a wait that may not have covered everything: a server answer with no pending row and
+  // no unanswered write says the device has nothing left to send.
   function forgetIfSynced(...answers) {
     const fromServer = answers.every((answer) => !answer.fromCache);
-    if (fromServer && !answers.some((answer) => answer.items.some(isPending))) {
+    if (
+      fromServer &&
+      unansweredWrites === 0 &&
+      !answers.some((answer) => answer.items.some(isPending))
+    ) {
       writePendingWritesFlag(false);
     }
   }
@@ -130,5 +169,5 @@ export function createPendingSync({
     window.removeEventListener('beforeunload', warnBeforeLeaving);
   }
 
-  return { update, isSlow: () => slow, forgetIfSynced, stop };
+  return { update, changeRan, isSlow: () => slow, forgetIfSynced, stop };
 }

@@ -493,6 +493,32 @@ test.describe('without a network', () => {
     await expect(retryButton(page)).toBeHidden();
   });
 
+  test('a list that fails after a cached draw keeps the grooves and offers Retry', async ({
+    page,
+  }) => {
+    await patchLibrary(page, (source) =>
+      source.replace(
+        'async function listOwned(ref, sortField, direction) {',
+        'async function listOwned(ref, sortField, direction) {\n' +
+          "if (window.failLists) throw new Error('Simulated list failure');"
+      )
+    );
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+
+    // Only the next page load has the failing list.
+    await page.addInitScript(() => {
+      window.failLists = true;
+    });
+    await openEditor(page);
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
+    await expect(page.locator('#lpLibrary')).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('did not work');
+    await expect(retryButton(page)).toBeVisible();
+    await expect(page.locator('#lpLoading')).toBeHidden();
+  });
+
   test('deleting a lesson offline is refused and changes nothing', async ({ page }) => {
     await signedInWithWorker(page);
     await createLesson(page, 'Week 1');
@@ -742,6 +768,15 @@ test.describe('without a network', () => {
         };
       });
 
+    const pendingFlag = (page) => page.evaluate((key) => localStorage.getItem(key), PENDING_KEY);
+
+    async function deleteGroove(page, title) {
+      page.once('dialog', (dialog) => dialog.accept());
+      await page.getByRole('button', { name: `Options for ${title}` }).click();
+      await page.getByRole('button', { name: 'Delete', exact: true }).click();
+      await expect(grooveButton(page, title)).toHaveCount(0);
+    }
+
     const spyOnSdk = (page, body) =>
       patchLibrary(page, (source) =>
         source.replace(
@@ -863,6 +898,40 @@ test.describe('without a network', () => {
       await changeOwner(page, `grooves/${saved.id}`);
       await goOnline(page);
       await expect(alert(page)).toHaveText(REFUSED);
+    });
+
+    test('a queued delete keeps the flag until the server has it', async ({ page }) => {
+      await signedInPanel(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      await synced(page);
+      await goOffline(page);
+      await deleteGroove(page, 'Paradiddle');
+      expect(await pendingFlag(page)).toBe('true');
+
+      await goOnline(page);
+      await synced(page);
+      expect(await savedDocs(page, 'grooves')).toEqual([]);
+    });
+
+    test('a server load does not clear the flag while a delete is queued', async ({ page }) => {
+      await patchLibrary(page, countListAnswers);
+      await signedInPanel(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      await synced(page);
+      await goOffline(page);
+      await deleteGroove(page, 'Paradiddle');
+
+      // The reads answer from the server, but the delete cannot reach it.
+      const release = await hold(page, /Firestore\/Write/);
+      await goOnline(page);
+      await openEditor(page);
+      await listsAnswered(page);
+      await page.waitForTimeout(500); // time for code that follows the answer
+      expect(await pendingFlag(page)).toBe('true');
+
+      release();
+      await synced(page);
+      expect(await savedDocs(page, 'grooves')).toEqual([]);
     });
 
     test('a save refused after a reload names the groove', async ({ page }) => {
@@ -1076,15 +1145,16 @@ test.describe('without a network', () => {
         await goOffline(page);
         await addLink(page, QUERY, 'Queued');
 
-        await goOnline(page);
         await page.evaluate(() => {
           // A reload that stays closed: this width does not dock the panel.
           localStorage.setItem('grooveScribe.libraryOpen', 'false');
         });
         const sdkRequests = watchSdk(page);
+        // Reload while offline, so the write is still queued when the next visit starts.
         await openEditor(page, OFFLINE_EDITOR);
         await expect.poll(() => sdkRequests.length).toBeGreaterThan(0);
         await expect(page.locator('#libraryPanel')).toBeHidden();
+        await goOnline(page);
         await expect
           .poll(async () => (await savedDocs(page, 'grooves')).map((d) => d.title.stringValue))
           .toEqual(['Queued']);
@@ -1152,6 +1222,44 @@ test.describe('without a network', () => {
         expect(dialogs).toEqual(['beforeunload']);
         await openPanel(page);
         await expect(grooveButton(page, 'Queued')).toHaveCount(0);
+      });
+
+      test('a queued delete asks before the page leaves', async ({ page }) => {
+        await breakIndexedDb(page);
+        await signedInWithWorker(page);
+        await workerReady(page);
+        await addLink(page, QUERY, 'Saved online');
+        await expect.poll(async () => (await savedDocs(page, 'grooves')).length).toBe(1);
+        await expect(page.locator('.lp-sync')).toHaveCount(0);
+        await goOffline(page);
+        await deleteGroove(page, 'Saved online');
+
+        const dialogs = [];
+        page.on('dialog', (dialog) => {
+          dialogs.push(dialog.type());
+          dialog.accept();
+        });
+        await openEditor(page, OFFLINE_EDITOR);
+        expect(dialogs).toEqual(['beforeunload']);
+      });
+
+      test('a delete the server has answered does not ask', async ({ page }) => {
+        await breakIndexedDb(page);
+        await signedInWithWorker(page);
+        await addLink(page, QUERY, 'Saved online');
+        await expect.poll(async () => (await savedDocs(page, 'grooves')).length).toBe(1);
+        await expect(page.locator('.lp-sync')).toHaveCount(0);
+        await deleteGroove(page, 'Saved online');
+        await expect.poll(async () => (await savedDocs(page, 'grooves')).length).toBe(0);
+        await page.waitForTimeout(500); // time for the answer to reach the page
+
+        const dialogs = [];
+        page.on('dialog', (dialog) => {
+          dialogs.push(dialog.type());
+          dialog.accept();
+        });
+        await openEditor(page, OFFLINE_EDITOR);
+        expect(dialogs).toEqual([]);
       });
 
       test('a reload with nothing queued does not ask', async ({ page }) => {

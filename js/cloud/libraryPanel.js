@@ -361,13 +361,13 @@ function startLibrary({ library, isActive: isSignedIn, persistent, editor, after
     try {
       const written = await change?.();
       if (written) reportIfRefused(written);
+      if (change) sync.changeRan(written);
       const [nextLessons, nextGrooves] = await (change ? readCached() : readServer());
       // A slow response must not draw into another user's session.
       if (!isActive()) return { ok: false };
       // Only a change closes a menu. A load that finishes must not close one the user opened.
       if (change) menuGrooveId = null;
       draw(nextLessons.items, nextGrooves.items, Boolean(change));
-      sync.forgetIfSynced(nextLessons, nextGrooves);
       return {
         ok: true,
         fromCache: nextLessons.fromCache || nextGrooves.fromCache,
