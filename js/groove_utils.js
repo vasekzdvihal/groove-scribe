@@ -145,6 +145,14 @@ function watchSoundfontRequests() {
     if (!attempt || !conf || typeof conf.url !== 'string' || !/\.js(\?|$)/.test(conf.url)) {
       return original.call(this, conf);
     }
+    var previousOnLoad = conf.onload;
+    // The download is over: the stall timer must not run while MIDI.js decodes the audio.
+    // A try that was already settled (set-up done) must not connect a second time.
+    conf.onload = function () {
+      if (attempt.done || global_midiInitialized) return;
+      clearTimeout(attempt.timer);
+      if (previousOnLoad) return previousOnLoad.apply(this, arguments);
+    };
     var previousOnError = conf.onerror;
     conf.onerror = function () {
       if (previousOnError) previousOnError.apply(this, arguments);
@@ -186,6 +194,7 @@ function startSoundLoad() {
     if (state.failures < settings.delays.length) {
       var delay = settings.delays[state.failures];
       state.failures++;
+      notifySoundWaiters('midiInitRetrying');
       state.retryTimer = setTimeout(function () {
         state.retryTimer = null;
         if (global_midiInitialized) return;
@@ -212,6 +221,8 @@ function startSoundLoad() {
       if (state.attempt) {
         clearTimeout(state.attempt.timer);
         state.attempt.done = true; // a running retry must not fail and start another load
+        var running = state.attempt.request;
+        if (running && running.abort) running.abort(); // and must not download or connect again
       }
       attempt.done = true;
       state.attempt = null;
@@ -1119,23 +1130,36 @@ function GrooveUtils() {
         root.startOrStopMIDI_playback();
       }; // enable play button
       setupHotKeys(); // spacebar to play
-      root.showSoundFailed(false);
+      root.showSoundNote('');
     };
 
     // The sound file did not load after the retries (failed is true), or the user started
     // a new try (failed is false). Shows the message and lets Play start a new try.
+    // The first try failed and the retries run. Play does nothing yet, so say so.
+    this.midiInitRetrying = function (root) {
+      root.showSoundNote('loading');
+    };
+
     this.midiInitFailed = function (root, failed) {
-      root.showSoundFailed(failed);
+      root.showSoundNote(failed ? 'failed' : '');
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
       if (icon) icon.onclick = failed ? retrySoundLoad : null;
     };
   };
 
-  root.showSoundFailed = function (failed) {
+  // state: '' (no note), 'loading' (retries run) or 'failed' (tap to retry).
+  root.showSoundNote = function (state) {
     var note = document.getElementById('soundRetryNote' + root.grooveUtilsUniqueIndex);
     if (!note) return;
     note.textContent = '';
-    if (!failed) return;
+    if (state === 'loading') {
+      var loading = document.createElement('span');
+      loading.className = 'soundLoading';
+      loading.textContent = 'Loading sound\u2026';
+      note.appendChild(loading);
+      return;
+    }
+    if (state !== 'failed') return;
     var button = document.createElement('button');
     button.type = 'button';
     button.className = 'soundRetry';
@@ -1890,7 +1914,7 @@ function GrooveUtils() {
         '"></span>';
 
     newHTML += '</div>';
-    // Holds the "Sound failed. Tap to retry." button. role=status announces it when it appears.
+    // Holds the "Loading sound…" note and the "Sound failed. Tap to retry." button. role=status announces it when it appears.
     newHTML +=
       '<div class="soundRetryNote" role="status" id="soundRetryNote' +
       root.grooveUtilsUniqueIndex +

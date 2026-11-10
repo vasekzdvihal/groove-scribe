@@ -119,6 +119,23 @@ describe('GrooveUtils MIDI playback controls', () => {
         expect(note.querySelector('button').textContent).toBe('Sound failed. Tap to retry.');
       });
 
+      it('shows "Loading sound…" after the first failed try, then the button, then nothing on success', () => {
+        gu.oneTimeInitializeMidi();
+        expect(note.textContent).toBe('');
+        vi.advanceTimersByTime(1000); // the first try timed out
+        expect(note.textContent).toBe('Loading sound\u2026');
+        expect(note.querySelector('button')).toBeNull();
+        vi.advanceTimersByTime(10000); // the retries fail too
+        expect(note.textContent).toBe('Sound failed. Tap to retry.');
+
+        note.querySelector('button').click(); // a new round starts
+        expect(note.textContent).toBe('');
+        vi.advanceTimersByTime(1000);
+        expect(note.textContent).toBe('Loading sound\u2026');
+        callbacks[callbacks.length - 1]();
+        expect(note.textContent).toBe('');
+      });
+
       it('a tap on the button starts a new load, and success removes the message', () => {
         gu.oneTimeInitializeMidi();
         vi.advanceTimersByTime(10000);
@@ -170,6 +187,58 @@ describe('GrooveUtils MIDI playback controls', () => {
         expect(globalThis.MIDI.loadPlugin).toHaveBeenCalledTimes(2);
         expect(note.querySelector('button')).toBeNull();
         delete globalThis.DOMLoader;
+      });
+
+      describe('with the real request wrapper', () => {
+        let requests; // { conf, abort } of each sound request, in order
+        let connects; // what MIDI.js does after each download: connect and decode
+
+        beforeEach(() => {
+          requests = [];
+          connects = [];
+          globalThis.DOMLoader = {
+            sendRequest: vi.fn((conf) => {
+              const request = { conf, abort: vi.fn() };
+              requests.push(request);
+              return request;
+            }),
+          };
+          globalThis.MIDI.loadPlugin = vi.fn((opts) => {
+            callbacks.push(opts.callback);
+            connects.push(vi.fn());
+            globalThis.DOMLoader.sendRequest({
+              url: 'gunshot-ogg.js',
+              onload: connects[connects.length - 1],
+            });
+          });
+        });
+
+        afterEach(() => {
+          delete globalThis.DOMLoader;
+        });
+
+        it('a finished download is not cut off while it decodes', () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(900);
+          requests[0].conf.onload(); // the download is over, MIDI.js decodes now
+          vi.advanceTimersByTime(60000); // decoding takes longer than the stall timeout
+          expect(callbacks).toHaveLength(1); // no second download
+          expect(requests[0].abort).not.toHaveBeenCalled();
+          callbacks[0]();
+          expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+        });
+
+        it('a success stops a running retry, so it never connects again', () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(1010); // the first try timed out, the retry is running
+          expect(requests).toHaveLength(2);
+
+          callbacks[0](); // the first try succeeds late
+          expect(requests[1].abort).toHaveBeenCalled();
+
+          requests[1].conf.onload(); // its download ends anyway
+          expect(connects[1]).not.toHaveBeenCalled();
+        });
       });
 
       it('several instances share one load and all hear the result', async () => {

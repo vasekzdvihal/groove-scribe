@@ -395,6 +395,16 @@ input[type='range']:active::-webkit-slider-thumb {
   font-size: 16px;
   cursor: pointer;
 }
+.soundLoading {
+  display: inline-block;
+  margin: 4px 6px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  background: #333333;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 16px;
+}
 .soundRetry:hover {
   background: #c02e20;
 }
