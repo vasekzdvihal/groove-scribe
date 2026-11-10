@@ -110,7 +110,7 @@ if (typeof GrooveDisplay === 'undefined') {
     // (groove_utils.js is imported as an ES module above, not injected.)
 
     // stylesheet
-    root.loadjscssfile('https://fonts.googleapis.com/css?family=Lato:400,700,300', 'css');
+    root.loadjscssfile('../css/fonts.css', 'css');
     root.loadjscssfile('../font-awesome/4.3.0/css/font-awesome.min.css', 'css');
     root.loadjscssfile('../css/groove_display.css', 'css');
 
