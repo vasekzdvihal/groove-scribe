@@ -13,22 +13,24 @@ export function createLibrary(sdk, db, uid) {
   const grooves = sdk.collection(db, 'grooves');
   const now = () => sdk.serverTimestamp();
 
-  // Offline, the SDK can wait about 10 s for the server before it answers from the cache.
-  // The browser already knows there is no network, so skip that wait. The cached list is
-  // filtered by owner like the server list, so another account on this device never shows.
+  // The cached list has the same owner filter as the server list, so another account on this
+  // device never shows.
+  const ownedQuery = (ref, sortField, direction) =>
+    sdk.query(ref, sdk.where('ownerId', '==', uid), sdk.orderBy(sortField, direction));
+
+  const toList = (snapshot) => ({
+    items: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+    fromCache: snapshot.metadata.fromCache,
+  });
+
+  // On a network that hangs, the SDK waits about 10 s before it answers from the cache.
   async function listOwned(ref, sortField, direction) {
-    const owned = sdk.query(
-      ref,
-      sdk.where('ownerId', '==', uid),
-      sdk.orderBy(sortField, direction)
-    );
-    const snapshot = await (navigator.onLine === false
-      ? sdk.getDocsFromCache(owned)
-      : sdk.getDocs(owned));
-    return {
-      items: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
-      fromCache: snapshot.metadata.fromCache,
-    };
+    return toList(await sdk.getDocs(ownedQuery(ref, sortField, direction)));
+  }
+
+  // Answers at once and never touches the network, so the panel can draw before the server.
+  async function listCached(ref, sortField, direction) {
+    return toList(await sdk.getDocsFromCache(ownedQuery(ref, sortField, direction)));
   }
 
   return {
@@ -46,6 +48,8 @@ export function createLibrary(sdk, db, uid) {
 
     listLessons: () => listOwned(lessons, 'name', 'asc'),
     listGrooves: () => listOwned(grooves, 'createdAt', 'asc'),
+    listCachedLessons: () => listCached(lessons, 'name', 'asc'),
+    listCachedGrooves: () => listCached(grooves, 'createdAt', 'asc'),
 
     async createLesson(name) {
       const ref = await sdk.addDoc(lessons, {

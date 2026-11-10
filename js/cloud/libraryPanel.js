@@ -23,6 +23,9 @@ const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
 const DOCKED_QUERY = '(min-width: 1100px)';
 const UNFILED = 'unfiled';
 const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
+const LOADING_TEXT = 'Loading…';
+const WAITING_TEXT = 'Waiting for the network…';
+const WAITING_AFTER_MS = 5000;
 
 const PANEL_HTML = `
   <header class="lp-head">
@@ -32,7 +35,7 @@ const PANEL_HTML = `
   <div class="lp-body">
     <p id="lpMessage" role="alert" hidden></p>
     <button id="lpRetry" class="lp-primary" type="button" hidden>Retry</button>
-    <p id="lpLoading" hidden>Loading…</p>
+    <p id="lpLoading" hidden>${LOADING_TEXT}</p>
     <section id="lpSignedOut" hidden>
       <p>Sign in to keep your grooves in lessons and open them on any device.</p>
       <button id="lpSignIn" class="lp-primary" type="button">Sign in with Google</button>
@@ -122,6 +125,22 @@ function reportFailure(error) {
       ? 'This account does not have access.'
       : 'That did not work. Check your connection and try again.'
   );
+}
+
+let waitingTimer = null;
+
+// The Firebase SDK can wait 30 s on a network that hangs. Say why the panel is still empty.
+function setLoading(isLoading) {
+  const loading = byId('lpLoading');
+  if (isLoading && !loading.hidden) return; // already waiting: keep the timer running
+  clearTimeout(waitingTimer);
+  loading.textContent = LOADING_TEXT;
+  loading.hidden = !isLoading;
+  if (isLoading) {
+    waitingTimer = setTimeout(() => {
+      loading.textContent = WAITING_TEXT;
+    }, WAITING_AFTER_MS);
+  }
 }
 
 // Show the Retry button. A click runs the action again and leaves the page as it is.
@@ -230,6 +249,35 @@ function startLibrary({ library, isActive, editor, afterPick }) {
   let menuGrooveId = null;
   let openLesson = readLastLesson();
 
+  let drawn = null;
+
+  // Replace the lists and draw them. An answer that repeats what is on screen leaves the
+  // page alone, unless a change needs a fresh draw.
+  function draw(nextLessons, nextGrooves, redraw) {
+    const next = JSON.stringify([nextLessons, nextGrooves]);
+    lessons = nextLessons;
+    grooves = nextGrooves;
+    if (redraw || next !== drawn) render();
+    drawn = next;
+  }
+
+  // Draw what this device has, before the server answers. A failure here costs nothing: the
+  // server answer comes next.
+  async function drawCached() {
+    try {
+      const [cachedLessons, cachedGrooves] = await Promise.all([
+        library.listCachedLessons(),
+        library.listCachedGrooves(),
+      ]);
+      if (!isActive() || (!cachedLessons.items.length && !cachedGrooves.items.length)) return false;
+      draw(cachedLessons.items, cachedGrooves.items);
+      return true;
+    } catch (error) {
+      console.warn('The library cache could not be read:', error);
+      return false;
+    }
+  }
+
   // Run one change, then redraw from the server. Failures stay on screen.
   async function act(change) {
     showMessage('');
@@ -241,10 +289,9 @@ function startLibrary({ library, isActive, editor, afterPick }) {
       ]);
       // A slow response must not draw into another user's session.
       if (!isActive()) return { ok: false };
-      lessons = nextLessons.items;
-      grooves = nextGrooves.items;
-      menuGrooveId = null;
-      render();
+      // Only a change closes a menu. A load that finishes must not close one the user opened.
+      if (change) menuGrooveId = null;
+      draw(nextLessons.items, nextGrooves.items, Boolean(change));
       return {
         ok: true,
         result,
@@ -455,7 +502,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     if (saved.ok) byId('lpSaveTool').open = false;
   };
 
-  return { load: () => act() };
+  return { drawCached, load: () => act() };
 }
 
 const IDLE_TIMEOUT_MS = 3000;
@@ -477,7 +524,7 @@ async function startCloud(search, editor, afterPick) {
     showMessage('Accounts are not set up on this site yet.');
     return null;
   }
-  byId('lpLoading').hidden = false;
+  setLoading(true);
   const { sdk, auth, db } = await connectCloud(resolved);
 
   byId('lpSignIn').onclick = async () => {
@@ -500,9 +547,11 @@ async function startCloud(search, editor, afterPick) {
     rememberUser(shownUser);
     renderUserMenu(shownUser);
     clearLibrary();
-    byId('lpLoading').hidden = true;
     byId('lpSignedOut').hidden = Boolean(user);
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
     const library = createLibrary(sdk, db, user.uid);
     // Attach the form handlers before the library becomes visible.
@@ -514,12 +563,23 @@ async function startCloud(search, editor, afterPick) {
     });
 
     async function showWhenLoaded() {
-      byId('lpLoading').hidden = false;
+      setLoading(true);
+      const drewCached = await session.drawCached();
+      if (activeUid !== user.uid) return;
+      if (drewCached) {
+        setLoading(false);
+        byId('lpLibrary').hidden = false;
+      }
       const loaded = await session.load();
       if (activeUid !== user.uid) return;
-      byId('lpLoading').hidden = true;
-      // A refused account sees the message only, and the forms stay hidden.
-      if (loaded.denied) return;
+      setLoading(false);
+      // A refused account sees the message only, and the forms stay hidden. The cached list
+      // may be on screen already, so take it away.
+      if (loaded.denied) {
+        byId('lpLibrary').hidden = true;
+        byId('lpLessons').replaceChildren();
+        return;
+      }
       // An empty answer from the cache says nothing about the library on the server.
       const notOnDevice = loaded.ok && loaded.fromCache && loaded.isEmpty;
       if (notOnDevice) showMessage(NOT_ON_DEVICE);
@@ -529,8 +589,8 @@ async function startCloud(search, editor, afterPick) {
       }
       byId('lpLibrary').hidden = false;
       // Offline, the profile would only queue another write for later. The next online load
-      // saves it.
-      if (!loaded.fromCache) library.saveProfile(user).catch(reportFailure);
+      // saves it. A failure here must not show an error over a library that works.
+      if (!loaded.fromCache) library.saveProfile(user).catch(console.error);
     }
     await showWhenLoaded();
   });
@@ -601,7 +661,7 @@ export function initLibraryPanel({ search, editor, whenReady = Promise.resolve()
       if (!docked.matches) closePanel();
     }).catch((error) => {
       started = null;
-      byId('lpLoading').hidden = true;
+      setLoading(false);
       reportFailure(error);
       showRetry(connect);
       return null;
@@ -660,11 +720,11 @@ export function initLibraryPanel({ search, editor, whenReady = Promise.resolve()
     // The panel opens at once, but it has nothing to show until Firebase is there. Play comes
     // first: connect when the sound is ready and the browser has nothing better to do.
     setOpen(true);
-    byId('lpLoading').hidden = false;
+    setLoading(true);
     whenReady.then(() =>
       whenIdle(() => {
         if (panel.classList.contains('open')) connect();
-        else byId('lpLoading').hidden = true; // hidden while it waited: it connects on the next open
+        else setLoading(false); // hidden while it waited: it connects on the next open
       })
     );
   }

@@ -41,6 +41,7 @@ async function allowAccount(request, address) {
     `http://127.0.0.1:8080/v1/projects/demo-groovescribe/databases/(default)/documents/allowedUsers/${localId}`,
     { headers: { Authorization: 'Bearer owner' }, data: { fields: {} } }
   );
+  return localId;
 }
 
 // Sign in with an emulator credential. The emulator popup loads apis.google.com and
@@ -56,9 +57,10 @@ async function signInWithCredential(page, email) {
 
 // Every account in these tests is on the allowlist unless a test signs in on its own.
 async function signIn(page, email) {
-  await allowAccount(page.request, email);
+  const uid = await allowAccount(page.request, email);
   await signInWithCredential(page, email);
   await expect(page.locator('#lpLibrary')).toBeVisible();
+  return uid;
 }
 
 async function signOut(page) {
@@ -352,11 +354,46 @@ test.describe('without a network', () => {
   // not prove that the cache and the sign-in survive a restart.
   const OFFLINE_EDITOR = EDITOR + '&sw=1';
   const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
-  // The SDK waits about 10 s for the server before it answers from the cache.
-  const OFFLINE_ANSWER_MS = 5000;
+  const FIRESTORE = /127\.0\.0\.1:8080/;
+  const AUTH = /127\.0\.0\.1:9099/;
+  const DOCUMENTS =
+    'http://127.0.0.1:8080/v1/projects/demo-groovescribe/databases/(default)/documents';
+  const OWNER = { Authorization: 'Bearer owner' };
 
   const retryButton = (page) => page.getByRole('button', { name: 'Retry' });
   const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
+
+  // Change library.js as the browser receives it, so a test can count or break one call.
+  const patchLibrary = (page, patch) =>
+    page.route('**/js/cloud/library.js', async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, body: patch(await response.text()) });
+    });
+
+  // Count each list call that settled, with an answer or a refusal, in window.listsAnswered.
+  const countListAnswers = (source) =>
+    source.replace(
+      'export function createLibrary(sdk, db, uid) {',
+      'export function createLibrary(realSdk, db, uid) {\n' +
+        'const sdk = { ...realSdk, getDocs: async (...args) => {\n' +
+        '  try { return await realSdk.getDocs(...args); }\n' +
+        '  finally { window.listsAnswered = (window.listsAnswered ?? 0) + 1; }\n' +
+        '} };'
+    );
+  const listsAnswered = (page) => page.waitForFunction(() => window.listsAnswered >= 2);
+
+  const hang = (page, url) => page.route(url, () => {});
+
+  // Hold requests to a server until the test calls the returned function.
+  async function hold(page, url) {
+    let release;
+    const held = new Promise((resolve) => (release = resolve));
+    await page.route(url, async (route) => {
+      await held;
+      await route.continue().catch(() => {}); // the page may have left in the meantime
+    });
+    return release;
+  }
 
   async function signedInWithWorker(page, email = 'ana@example.com') {
     await openEditor(page, OFFLINE_EDITOR);
@@ -377,16 +414,13 @@ test.describe('without a network', () => {
     await addLink(page, QUERY, 'Paradiddle');
 
     await reloadOffline(page);
-    const opened = Date.now();
     await openPanel(page);
     const week = page.locator('.lp-lesson').filter({ hasText: 'Week 1' });
     await expect(week.getByRole('button', { name: 'Paradiddle', exact: true })).toBeVisible();
-    expect(Date.now() - opened).toBeLessThan(OFFLINE_ANSWER_MS);
 
     // The account must still be known, and nothing may report a failure.
     await expect(page.locator('#helpAnchor')).toHaveClass(/signedIn/);
     await expect(page.locator('#lpLibrary')).toBeVisible();
-    await page.waitForTimeout(500); // the profile save runs after the list is on screen
     await expect(page.locator('#lpMessage')).toBeHidden();
     await expect(retryButton(page)).toBeHidden();
   });
@@ -408,13 +442,19 @@ test.describe('without a network', () => {
   });
 
   test('a failed first load shows Retry, and Retry recovers without a reload', async ({ page }) => {
-    await page.route('**/js/vendor/firebase.js', (route) => route.abort());
+    const SDK_URL = '**/js/vendor/firebase.js*';
+    await page.route(SDK_URL, (route) => route.abort());
     await openEditor(page);
     await openPanel(page);
     await expect(retryButton(page)).toBeVisible();
     await expect(page.locator('#lpLoading')).toBeHidden();
 
-    await page.unroute('**/js/vendor/firebase.js');
+    // A retry that also fails offers Retry again.
+    await retryButton(page).click();
+    await expect(page.getByRole('alert')).toContainText('did not work');
+    await expect(retryButton(page)).toBeVisible();
+
+    await page.unroute(SDK_URL);
     await retryButton(page).click();
     await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
     await expect(page.getByRole('alert')).toBeHidden();
@@ -422,19 +462,14 @@ test.describe('without a network', () => {
   });
 
   test('a list that fails shows Retry, and Retry recovers without a reload', async ({ page }) => {
-    await page.route('**/js/cloud/library.js', async (route) => {
-      const response = await route.fetch();
-      const body = await response.text();
-      // A list call rejects for as long as the page sets window.failLists.
-      await route.fulfill({
-        response,
-        body: body.replace(
-          'async function listOwned(ref, sortField, direction) {',
-          'async function listOwned(ref, sortField, direction) {\n' +
-            "if (window.failLists) throw new Error('Simulated list failure');"
-        ),
-      });
-    });
+    // A list call rejects for as long as the page sets window.failLists.
+    await patchLibrary(page, (source) =>
+      source.replace(
+        'async function listOwned(ref, sortField, direction) {',
+        'async function listOwned(ref, sortField, direction) {\n' +
+          "if (window.failLists) throw new Error('Simulated list failure');"
+      )
+    );
     await page.addInitScript(() => {
       window.failLists = true;
     });
@@ -487,6 +522,8 @@ test.describe('without a network', () => {
     await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
   });
 
+  // "is missing" passes without a persistent cache too, so it is no TDD evidence. It guards
+  // against a regression across SDK bumps, where the SDK's own fallback may change.
   for (const [name, breakStorage] of [
     [
       'is missing',
@@ -511,6 +548,166 @@ test.describe('without a network', () => {
       await expect(retryButton(page)).toBeHidden();
     });
   }
+
+  test('the profile is saved after a server answer and not from the cache', async ({ page }) => {
+    await patchLibrary(page, (source) =>
+      countListAnswers(source).replace(
+        'async saveProfile({ displayName, photoURL }) {',
+        'async saveProfile({ displayName, photoURL }) {\n' +
+          'window.saveProfileCalls = (window.saveProfileCalls ?? 0) + 1;'
+      )
+    );
+    const profileCalls = () => page.evaluate(() => window.saveProfileCalls ?? 0);
+
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await expect.poll(profileCalls).toBeGreaterThan(0); // the counter works
+
+    await page.route(FIRESTORE, (route) => route.abort());
+    await openEditor(page);
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
+    await listsAnswered(page);
+    expect(await profileCalls()).toBe(0);
+  });
+
+  test('a profile save that fails shows no error over the library', async ({ page }) => {
+    await patchLibrary(page, (source) =>
+      source.replace(
+        'async saveProfile({ displayName, photoURL }) {',
+        "async saveProfile({ displayName, photoURL }) {\nthrow new Error('Simulated drop');"
+      )
+    );
+    await signedInPanel(page);
+    await expect(page.getByText('Your library is empty.')).toBeVisible();
+    await expect(page.locator('#lpMessage')).toBeHidden();
+    await expect(page.locator('#lpLibrary')).toBeVisible();
+  });
+
+  for (const [name, setUp] of [
+    ['with a network that hangs', () => {}],
+    [
+      'when navigator.onLine is false and Firestore hangs',
+      (page) =>
+        page.addInitScript(() =>
+          Object.defineProperty(Navigator.prototype, 'onLine', { get: () => false })
+        ),
+    ],
+  ]) {
+    test(`the saved grooves appear from the cache ${name}`, async ({ page }) => {
+      await signedInPanel(page);
+      await addLink(page, QUERY, 'Paradiddle');
+
+      await setUp(page);
+      await hang(page, FIRESTORE);
+      await openEditor(page);
+      await openPanel(page);
+      await expect(grooveButton(page, 'Paradiddle')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('#lpLoading')).toBeHidden();
+    });
+  }
+
+  test('a slow answer changes the loading text, and the text goes back', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+
+    const release = await hold(page, AUTH);
+    await openEditor(page);
+    await openPanel(page);
+    await expect(page.locator('#lpLoading')).toHaveText('Loading…');
+    await expect(page.locator('#lpLoading')).toHaveText('Waiting for the network…', {
+      timeout: 7000,
+    });
+
+    release();
+    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
+    await expect(page.locator('#lpLoading')).toBeHidden();
+    await expect(page.locator('#lpLoading')).toHaveText('Loading…');
+  });
+
+  test('the server answer updates the list and keeps an open menu', async ({ page }) => {
+    const uid = await (async () => {
+      await openEditor(page);
+      await openPanel(page);
+      return signIn(page, 'ana@example.com');
+    })();
+    await addLink(page, QUERY, 'Paradiddle');
+
+    const release = await hold(page, FIRESTORE);
+    await openEditor(page);
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
+    await page.getByRole('button', { name: 'Options for Paradiddle' }).click();
+    await expect(page.getByLabel('Lesson for Paradiddle')).toBeVisible();
+
+    await page.request.post(`${DOCUMENTS}/grooves`, {
+      headers: OWNER,
+      data: {
+        fields: {
+          ownerId: { stringValue: uid },
+          lessonId: { nullValue: null },
+          title: { stringValue: 'From the server' },
+          query: { stringValue: QUERY },
+          createdAt: { timestampValue: '2030-01-01T00:00:00Z' },
+        },
+      },
+    });
+    release();
+    await expect(grooveButton(page, 'From the server')).toBeVisible();
+    await expect(page.getByLabel('Lesson for Paradiddle')).toBeVisible();
+  });
+
+  test('a server answer for a signed-out user draws nothing', async ({ page }) => {
+    await patchLibrary(page, countListAnswers);
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+
+    const release = await hold(page, FIRESTORE);
+    await openEditor(page);
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
+    await signOut(page);
+    release();
+    await listsAnswered(page);
+    await openPanel(page);
+    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+    await expect(retryButton(page)).toBeHidden();
+    await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
+    await expect(page.locator('#lpLibrary')).toBeHidden();
+  });
+
+  test('an account that lost access does not keep the cached library', async ({ page }) => {
+    await openEditor(page);
+    await openPanel(page);
+    const uid = await signIn(page, 'ana@example.com');
+    await addLink(page, QUERY, 'Paradiddle');
+
+    await page.request.delete(`${DOCUMENTS}/allowedUsers/${uid}`, { headers: OWNER });
+    await openEditor(page);
+    await openPanel(page);
+    await expect(page.getByRole('alert')).toHaveText('This account does not have access.');
+    await expect(page.locator('#lpLibrary')).toBeHidden();
+    await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
+  });
+
+  test('two tabs both show the library and share the persistent cache', async ({ page }) => {
+    const logs = [];
+    const watch = (tab) => tab.on('console', (line) => logs.push(line.text()));
+    watch(page);
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+
+    const second = await page.context().newPage();
+    watch(second);
+    await openEditor(second);
+    await openPanel(second);
+    await expect(grooveButton(second, 'Paradiddle')).toBeVisible();
+
+    await openEditor(page);
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
+    expect(logs.filter((line) => line.includes('Falling back to memory cache'))).toEqual([]);
+  });
 });
 
 test.describe('docked on a wide screen', () => {
