@@ -3,12 +3,19 @@
 // On a wide screen the panel stays next to the music until the user hides it. On a narrow
 // screen it slides over the editor, and picking a groove closes it.
 //
-// This module is small and loads with the editor. The Firebase SDK loads only when the panel
-// opens. It opens by itself only for people who were signed in on this device or who left it
-// open, so people who open a shared link never download the SDK.
+// This module is small and loads with the editor. The page runs the Firebase SDK only when the
+// panel opens. It opens by itself only for people who were signed in on this device or who left
+// it open, so a shared link does not load the SDK into the page. The service worker still
+// precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
+import {
+  createPendingSync,
+  isPending,
+  readPendingWritesFlag,
+  writePendingWritesFlag,
+} from './pendingSync.js';
 
 const LINK_ERRORS = {
   'short-link':
@@ -22,6 +29,13 @@ const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
 // Keep the same width in css/library-panel.css.
 const DOCKED_QUERY = '(min-width: 1100px)';
 const UNFILED = 'unfiled';
+const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
+const LOADING_TEXT = 'Loading…';
+const WAITING_TEXT = 'Waiting for the network…';
+const WAITING_AFTER_MS = 5000;
+const WILL_SYNC_TEXT = 'Will sync';
+const KEEP_TAB_TEXT = 'Keep this tab open until online';
+const WRITE_REFUSED = 'A change could not be saved. The library shows what is saved.';
 
 const PANEL_HTML = `
   <header class="lp-head">
@@ -30,7 +44,8 @@ const PANEL_HTML = `
   </header>
   <div class="lp-body">
     <p id="lpMessage" role="alert" hidden></p>
-    <p id="lpLoading" hidden>Loading…</p>
+    <button id="lpRetry" class="lp-primary" type="button" hidden>Retry</button>
+    <p id="lpLoading" hidden>${LOADING_TEXT}</p>
     <section id="lpSignedOut" hidden>
       <p>Sign in to keep your grooves in lessons and open them on any device.</p>
       <button id="lpSignIn" class="lp-primary" type="button">Sign in with Google</button>
@@ -73,6 +88,8 @@ const PANEL_HTML = `
 
 const byId = (id) => document.getElementById(id);
 const grooveName = (groove) => groove.title || 'Untitled groove';
+const refusedMessage = (name) =>
+  name ? `"${name}" could not be saved. The library shows what is saved.` : WRITE_REFUSED;
 
 function element(tag, properties = {}, children = []) {
   const node = Object.assign(document.createElement(tag), properties);
@@ -122,6 +139,33 @@ function reportFailure(error) {
   );
 }
 
+let waitingTimer = null;
+
+// The Firebase SDK can wait 30 s on a network that hangs. Say why the panel is still empty.
+function setLoading(isLoading) {
+  const loading = byId('lpLoading');
+  if (isLoading && !loading.hidden) return; // already waiting: keep the timer running
+  clearTimeout(waitingTimer);
+  loading.textContent = LOADING_TEXT;
+  loading.hidden = !isLoading;
+  if (isLoading) {
+    waitingTimer = setTimeout(() => {
+      loading.textContent = WAITING_TEXT;
+    }, WAITING_AFTER_MS);
+  }
+}
+
+// Show the Retry button. A click runs the action again and leaves the page as it is.
+function showRetry(action) {
+  const retry = byId('lpRetry');
+  retry.onclick = () => {
+    retry.hidden = true;
+    showMessage('');
+    action();
+  };
+  retry.hidden = false;
+}
+
 function lessonOptions(lessons, selectedId) {
   return [
     element('option', { value: '', textContent: 'No lesson', selected: !selectedId }),
@@ -135,8 +179,8 @@ function lessonOptions(lessons, selectedId) {
   ];
 }
 
-// The top bar shows the user before the Firebase SDK loads, so people who open a shared
-// link never download it. The name and photo are kept on this device from the last visit.
+// The top bar shows the user before the Firebase SDK loads, so a shared link does not need it.
+// The name and photo are kept on this device from the last visit.
 function readRememberedUser() {
   try {
     return JSON.parse(localStorage.getItem(USER_KEY));
@@ -206,36 +250,143 @@ function clearLibrary() {
   byId('lpSaveLesson').replaceChildren();
   byId('lpLinkLesson').replaceChildren();
   for (const id of ['lpSaveForm', 'lpLinkForm', 'lpLessonForm']) byId(id).reset();
+  byId('lpRetry').hidden = true;
   showMessage('');
 }
 
-function startLibrary({ library, isActive, editor, afterPick }) {
+function startLibrary({ library, isActive: isSignedIn, persistent, editor, afterPick }) {
   let lessons = [];
   let grooves = [];
   let currentGrooveId = null;
   let menuGrooveId = null;
   let openLesson = readLastLesson();
+  let stopped = false;
 
-  // Run one change, then redraw from the server. Failures stay on screen.
+  let drawn = null;
+
+  const isActive = () => !stopped && isSignedIn();
+
+  // Replace the lists and draw them. An answer that repeats what is on screen leaves the
+  // page alone, unless a change needs a fresh draw.
+  function draw(nextLessons, nextGrooves, redraw) {
+    const next = JSON.stringify([nextLessons, nextGrooves]);
+    lessons = nextLessons;
+    grooves = nextGrooves;
+    if (redraw || next !== drawn) render();
+    drawn = next;
+    sync.update([...lessons, ...grooves]);
+  }
+
+  const readCached = () => Promise.all([library.listCachedLessons(), library.listCachedGrooves()]);
+  const readServer = () => Promise.all([library.listLessons(), library.listGrooves()]);
+
+  const sync = createPendingSync({
+    waitForServer: () => library.waitForPendingWrites(),
+    readHasPending: async () => {
+      const [cachedLessons, cachedGrooves] = await readCached();
+      return [...cachedLessons.items, ...cachedGrooves.items].some(isPending);
+    },
+    persistent,
+    isActive,
+    onSynced: redrawAfterSync,
+    onSlow: render,
+  });
+
+  // The session is over: nothing may keep running for it.
+  function stop() {
+    stopped = true;
+    sync.stop();
+  }
+
+  // The server has answered every write, so the labels can go. A write from an earlier visit
+  // has no promise to report a refusal: a pending row that is gone is the sign.
+  async function redrawAfterSync() {
+    const wasPending = [...lessons, ...grooves].filter(isPending);
+    let lists;
+    try {
+      lists = await readServer();
+    } catch (error) {
+      if (!isActive()) return;
+      reportFailure(error);
+      lists = await readCached().catch(() => null);
+    }
+    if (!lists || !isActive()) return;
+    const [nextLessons, nextGrooves] = lists;
+    const answer = new Set([...nextLessons.items, ...nextGrooves.items].map((item) => item.id));
+    const refused = wasPending.find((item) => !answer.has(item.id));
+    draw(nextLessons.items, nextGrooves.items);
+    sync.forgetIfSynced(nextLessons, nextGrooves);
+    if (refused && byId('lpMessage').hidden) {
+      showMessage(refusedMessage(refused.title || refused.name));
+    }
+  }
+
+  // Report a refused write, and draw the library without it. The local cache has already
+  // dropped the change when the promise rejects.
+  async function reportIfRefused({ committed, title }) {
+    try {
+      await committed;
+    } catch (error) {
+      console.error(error);
+      if (!isActive()) return;
+      showMessage(refusedMessage(title));
+      try {
+        const [nextLessons, nextGrooves] = await readCached();
+        if (isActive()) draw(nextLessons.items, nextGrooves.items);
+      } catch (readError) {
+        console.warn('The library cache could not be read:', readError);
+      }
+    }
+  }
+
+  // Draw what this device has, before the server answers. A failure here costs nothing: the
+  // server answer comes next.
+  async function drawCached() {
+    try {
+      const [cachedLessons, cachedGrooves] = await readCached();
+      if (!isActive() || (!cachedLessons.items.length && !cachedGrooves.items.length)) return false;
+      draw(cachedLessons.items, cachedGrooves.items);
+      return true;
+    } catch (error) {
+      console.warn('The library cache could not be read:', error);
+      return false;
+    }
+  }
+
+  // Run one change and draw it from the cache, so it shows at once, also offline. Without a
+  // change, load from the server. Failures stay on screen.
+  // A change makes one write and returns its `queued` result, or nothing if it already finished.
   async function act(change) {
     showMessage('');
     try {
-      const result = await change?.();
-      const [nextLessons, nextGrooves] = await Promise.all([
-        library.listLessons(),
-        library.listGrooves(),
-      ]);
+      const written = await change?.();
+      if (written) reportIfRefused(written);
+      if (change) sync.changeRan(written);
+      const [nextLessons, nextGrooves] = await (change ? readCached() : readServer());
       // A slow response must not draw into another user's session.
       if (!isActive()) return { ok: false };
-      lessons = nextLessons;
-      grooves = nextGrooves;
-      menuGrooveId = null;
-      render();
-      return { ok: true, result };
+      // Only a change closes a menu. A load that finishes must not close one the user opened.
+      if (change) menuGrooveId = null;
+      draw(nextLessons.items, nextGrooves.items, Boolean(change));
+      return {
+        ok: true,
+        fromCache: nextLessons.fromCache || nextGrooves.fromCache,
+        isEmpty: lessons.length === 0 && grooves.length === 0,
+      };
     } catch (error) {
       if (isActive()) reportFailure(error);
       return { ok: false, denied: isDenied(error) };
     }
+  }
+
+  function syncLabel(item) {
+    if (!isPending(item) || (navigator.onLine && !sync.isSlow())) return [];
+    return [
+      element('small', {
+        className: persistent ? 'lp-sync' : 'lp-sync lp-sync-wide',
+        textContent: persistent ? WILL_SYNC_TEXT : KEEP_TAB_TEXT,
+      }),
+    ];
   }
 
   function selectLesson(id) {
@@ -293,6 +444,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     more.setAttribute('aria-expanded', String(isMenuOpen));
     return element('li', { className: 'lp-groove' }, [
       open,
+      ...syncLabel(groove),
       more,
       ...(isMenuOpen ? [grooveActions(groove)] : []),
     ]);
@@ -321,6 +473,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     const section = element('details', { className: 'lp-lesson', open: isOpen }, [
       element('summary', {}, [
         element('span', { textContent: lesson?.name ?? 'No lesson' }),
+        ...(lesson ? syncLabel(lesson) : []),
         element('small', { textContent: String(lessonGrooves.length) }),
       ]),
       lessonGrooves.length
@@ -382,10 +535,10 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     event.preventDefault();
     const name = byId('lpLessonName').value.trim();
     if (!name) return;
-    const created = await act(async () => {
-      const id = await library.createLesson(name);
-      selectLesson(id);
-      return id;
+    const created = await act(() => {
+      const written = library.createLesson(name);
+      selectLesson(written.id);
+      return written;
     });
     if (created.ok) byId('lpLessonName').value = '';
   };
@@ -423,20 +576,20 @@ function startLibrary({ library, isActive, editor, afterPick }) {
       return;
     }
     const lessonId = byId('lpSaveLesson').value || null;
-    const saved = await act(async () => {
-      const id = await library.saveGroove({
+    const saved = await act(() => {
+      const written = library.saveGroove({
         query: parsed.query,
         title: byId('lpSaveTitle').value.trim(),
         lessonId,
       });
-      currentGrooveId = id;
+      currentGrooveId = written.id;
       selectLesson(lessonId ?? UNFILED);
-      return id;
+      return written;
     });
     if (saved.ok) byId('lpSaveTool').open = false;
   };
 
-  return act();
+  return { drawCached, load: () => act(), stop };
 }
 
 const IDLE_TIMEOUT_MS = 3000;
@@ -458,8 +611,8 @@ async function startCloud(search, editor, afterPick) {
     showMessage('Accounts are not set up on this site yet.');
     return null;
   }
-  byId('lpLoading').hidden = false;
-  const { sdk, auth, db } = await connectCloud(resolved);
+  setLoading(true);
+  const { sdk, auth, db, persistent } = await connectCloud(resolved);
 
   byId('lpSignIn').onclick = async () => {
     showMessage('');
@@ -471,9 +624,12 @@ async function startCloud(search, editor, afterPick) {
   };
 
   let activeUid = null;
+  let currentSession = null;
 
   sdk.onAuthStateChanged(auth, async (user) => {
     activeUid = user?.uid ?? null;
+    currentSession?.stop();
+    currentSession = null;
     const shownUser = user && {
       name: user.displayName || user.email || 'Signed in',
       photoURL: user.photoURL,
@@ -481,25 +637,57 @@ async function startCloud(search, editor, afterPick) {
     rememberUser(shownUser);
     renderUserMenu(shownUser);
     clearLibrary();
-    byId('lpLoading').hidden = true;
     byId('lpSignedOut').hidden = Boolean(user);
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      // Queued writes wait for the next sign-in of their user, and that loads the SDK anyway.
+      writePendingWritesFlag(false);
+      return;
+    }
 
     const library = createLibrary(sdk, db, user.uid);
-    byId('lpLoading').hidden = false;
     // Attach the form handlers before the library becomes visible.
-    const started = await startLibrary({
+    const session = startLibrary({
       library,
       isActive: () => activeUid === user.uid,
+      persistent,
       editor,
       afterPick,
     });
-    if (activeUid !== user.uid) return;
-    byId('lpLoading').hidden = true;
-    // A refused account sees the message only, and the forms stay hidden.
-    if (started.denied) return;
-    byId('lpLibrary').hidden = false;
-    library.saveProfile(user).catch(reportFailure);
+
+    currentSession = session;
+
+    async function showWhenLoaded() {
+      setLoading(true);
+      const drewCached = await session.drawCached();
+      if (activeUid !== user.uid) return;
+      if (drewCached) {
+        setLoading(false);
+        byId('lpLibrary').hidden = false;
+      }
+      const loaded = await session.load();
+      if (activeUid !== user.uid) return;
+      setLoading(false);
+      // A refused account sees the message only, and the forms stay hidden. The cached list
+      // may be on screen already, so take it away.
+      if (loaded.denied) {
+        byId('lpLibrary').hidden = true;
+        byId('lpLessons').replaceChildren();
+        return;
+      }
+      // An empty answer from the cache says nothing about the library on the server.
+      const notOnDevice = loaded.ok && loaded.fromCache && loaded.isEmpty;
+      if (notOnDevice) showMessage(NOT_ON_DEVICE);
+      if (!loaded.ok || notOnDevice) {
+        showRetry(showWhenLoaded);
+        return;
+      }
+      byId('lpLibrary').hidden = false;
+      // Offline, the profile would only queue another write for later. The next online load
+      // saves it. A failure here must not show an error over a library that works.
+      if (!loaded.fromCache) library.saveProfile(user).catch(console.error);
+    }
+    await showWhenLoaded();
   });
 
   return { signOut: () => sdk.signOut(auth) };
@@ -568,8 +756,9 @@ export function initLibraryPanel({ search, editor, whenReady = Promise.resolve()
       if (!docked.matches) closePanel();
     }).catch((error) => {
       started = null;
-      byId('lpLoading').hidden = true;
+      setLoading(false);
       reportFailure(error);
+      showRetry(connect);
       return null;
     });
     return started;
@@ -621,16 +810,18 @@ export function initLibraryPanel({ search, editor, whenReady = Promise.resolve()
   );
 
   docked.addEventListener('change', followScreenWidth);
+  // A write queued on an earlier visit goes out when the SDK loads, also with the panel closed.
+  if (readPendingWritesFlag()) whenReady.then(() => whenIdle(connect));
   if (location.hash === '#library') openPanel();
   else if (docked.matches && keepOpen) {
     // The panel opens at once, but it has nothing to show until Firebase is there. Play comes
     // first: connect when the sound is ready and the browser has nothing better to do.
     setOpen(true);
-    byId('lpLoading').hidden = false;
+    setLoading(true);
     whenReady.then(() =>
       whenIdle(() => {
         if (panel.classList.contains('open')) connect();
-        else byId('lpLoading').hidden = true; // hidden while it waited: it connects on the next open
+        else setLoading(false); // hidden while it waited: it connects on the next open
       })
     );
   }

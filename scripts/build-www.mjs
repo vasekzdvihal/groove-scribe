@@ -10,14 +10,17 @@
 // `webServer` commands all run this script, so each one builds a fresh www/ and
 // enforces checkWwwContents.
 
+import { createHash } from 'node:crypto';
 import {
   rmSync,
   mkdirSync,
   cpSync,
   existsSync,
   readdirSync,
+  readFileSync,
   realpathSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,6 +37,7 @@ const SOUNDFONTS = ['soundfont/gunshot-ogg.js', 'soundfont/gunshot-mp3.js'];
 // The app entry + app-wired pages, plus every asset they load.
 const ITEMS = [
   'index.html',
+  'manifest.webmanifest',
   'profile.html',
   'GrooveEmbed.html',
   'gscribe_help.html',
@@ -47,17 +51,115 @@ const ITEMS = [
   'fonts',
 ];
 
+// What the service worker stores for offline use, matched against the files in www/, so a new
+// module or stylesheet joins by itself. It is the editor page and everything that page loads.
+// Both sound formats are included (about 470 KB together): the browser picks one at run time.
+// The manifest and its icons (under images/) are here so the app installs offline.
+// Left out on purpose: the embed page, the old Font Awesome and its other font formats, and
+// SoundManager2, which nothing loads.
+const PRECACHED = [
+  /^(index|profile|gscribe_help|gscribe_about)\.html$/,
+  /^manifest\.webmanifest$/,
+  /^js\/.+\.js$/,
+  /^css\/.+\.css$/,
+  /^soundfont\/.+\.js$/,
+  /^MIDI\.js\/(?!inc\/SoundManager2\/).+\.js$/,
+  /^font-awesome\/4\.7\.0\/css\/font-awesome\.min\.css$/,
+  /^font-awesome\/4\.7\.0\/fonts\/fontawesome-webfont\.woff2$/,
+  /^fonts\/.+\.woff2$/,
+  /^images\/.+\.(svg|png)$/,
+];
+
+// A precached file is found by its exact URL, so these must match what the stylesheet asks
+// for. tests-e2e/offline.spec.js fails if the font is requested under another URL.
+const PRECACHE_QUERIES = {
+  'font-awesome/4.7.0/fonts/fontawesome-webfont.woff2': '?v=4.7.0',
+};
+
+const SW_TEMPLATE = join(repoRoot, 'scripts/sw-template.js');
+const SW_EMERGENCY_TEMPLATE = join(repoRoot, 'scripts/sw-emergency-template.js');
+const SW_VERSION_PLACEHOLDER = "'__VERSION__'";
+const SW_FILES_PLACEHOLDER = "['__PRECACHE_FILES__']";
+
+/**
+ * @param {string} dir
+ * @returns {string[]} every file under dir, as sorted relative paths
+ */
+function listFiles(dir) {
+  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
+    .filter((path) => statSync(join(dir, path)).isFile())
+    .sort();
+}
+
+/**
+ * @param {string} dir the assembled tree
+ * @returns {string[]} the files the service worker precaches, as sorted relative paths
+ */
+export function precacheList(dir) {
+  return listFiles(dir).filter((path) => PRECACHED.some((pattern) => pattern.test(path)));
+}
+
+/**
+ * The hash of every precached file and its URL. The template is in the hash too: a changed
+ * worker then gets its own cache, so a failed install cannot delete the cache in use.
+ * @param {string} dir the assembled tree
+ * @param {Record<string, string>} [queries] URL queries of precached files
+ * @returns {string} a short hex version
+ */
+export function serviceWorkerVersion(dir, queries = PRECACHE_QUERIES) {
+  const hash = createHash('sha256').update(readFileSync(SW_TEMPLATE));
+  for (const path of precacheList(dir)) {
+    hash.update(`\0${path}${queries[path] ?? ''}\0`).update(readFileSync(join(dir, path)));
+  }
+  return hash.digest('hex').slice(0, 16);
+}
+
+/**
+ * @param {string} version
+ * @param {string[]} files URLs relative to the worker
+ * @returns {string} the source of sw.js
+ */
+export function renderServiceWorker(version, files) {
+  const template = readFileSync(SW_TEMPLATE, 'utf8');
+  for (const placeholder of [SW_VERSION_PLACEHOLDER, SW_FILES_PLACEHOLDER]) {
+    if (!template.includes(placeholder)) {
+      throw new Error(`build-www: sw-template.js has no ${placeholder}`);
+    }
+  }
+  return template
+    .replace(SW_VERSION_PLACEHOLDER, () => `'${version}'`)
+    .replace(SW_FILES_PLACEHOLDER, () => JSON.stringify(files));
+}
+
+/** @returns {string} the source of the emergency sw.js. See sw-emergency-template.js. */
+export function renderEmergencyServiceWorker() {
+  return readFileSync(SW_EMERGENCY_TEMPLATE, 'utf8');
+}
+
+/**
+ * Writes sw.js into the assembled tree. SW_EMERGENCY=1 writes the emergency worker.
+ * @param {string} dir the assembled tree
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function writeServiceWorker(dir, env = process.env) {
+  if (env.SW_EMERGENCY === '1') {
+    console.warn('build-www: SW_EMERGENCY=1, writing the emergency service worker.');
+    writeFileSync(join(dir, 'sw.js'), renderEmergencyServiceWorker());
+    return;
+  }
+  const urls = precacheList(dir).map((path) => path + (PRECACHE_QUERIES[path] ?? ''));
+  const source = renderServiceWorker(serviceWorkerVersion(dir), urls);
+  writeFileSync(join(dir, 'sw.js'), source);
+}
+
 /**
  * Finds files that must not ship: .wav files, and anything in soundfont/ the app does not load.
  * @param {string} dir the assembled tree
  * @returns {string[]} one problem per file, sorted by path; empty when the tree is clean
  */
 export function checkWwwContents(dir) {
-  const files = readdirSync(dir, { recursive: true, encoding: 'utf8' })
-    .filter((path) => statSync(join(dir, path)).isFile())
-    .sort();
   const problems = [];
-  for (const path of files) {
+  for (const path of listFiles(dir)) {
     if (/\.wav$/i.test(path)) {
       problems.push(`${path}: .wav files must not ship`);
     } else if (path.startsWith('soundfont/') && !SOUNDFONTS.includes(path)) {
@@ -89,6 +191,8 @@ function main() {
     for (const problem of problems) console.error(`build-www: ${problem}`);
     process.exit(1);
   }
+
+  writeServiceWorker(OUT);
 
   console.log(`Assembled www/ with ${ITEMS.length} runtime items.`);
 }

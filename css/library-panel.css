@@ -143,6 +143,7 @@
 }
 
 #lpMessage {
+  overflow-wrap: anywhere;
   padding: 8px 12px;
   background: var(--lp-surface);
   border: 1px solid var(--lp-danger);
@@ -156,6 +157,7 @@
 
 #libraryPanel summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   min-height: 44px;
@@ -229,6 +231,31 @@
   color: var(--lp-muted);
   background: none;
   border-color: transparent;
+}
+
+#libraryPanel .lp-sync {
+  flex: none;
+  align-self: center;
+  color: var(--lp-muted);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+/* The longer text needs its own line, between the row and its menu. */
+#libraryPanel .lp-sync-wide {
+  flex-basis: 100%;
+  order: 3;
+  white-space: normal;
+}
+
+.lp-groove .lp-sync-wide {
+  margin-top: -4px;
+  padding-left: 12px;
+}
+
+.lp-groove .lp-actions {
+  order: 3;
 }
 
 .lp-actions {

@@ -78,6 +78,14 @@ describe('Firebase Hosting security headers', () => {
   });
 });
 
+describe('Firebase Hosting precache safety', () => {
+  // cleanUrls redirects /index.html to /index. A redirect on one precached file fails the
+  // service worker install on every device.
+  it('does not set cleanUrls', () => {
+    expect(config.hosting).not.toHaveProperty('cleanUrls');
+  });
+});
+
 describe('Firebase Hosting cache headers', () => {
   const CACHE = 'public, max-age=2592000';
 
@@ -98,6 +106,11 @@ describe('Firebase Hosting cache headers', () => {
       expect(headersFor(p)).not.toHaveProperty('Cache-Control');
     }
   );
+
+  it('asks the browser to check /sw.js on every update', () => {
+    expect(headersFor('/sw.js')['Cache-Control']).toBe('no-cache');
+    expect(headersFor('sw.js')['Cache-Control']).toBe('no-cache');
+  });
 
   it('keeps the security headers on cached files', () => {
     expect(headersFor('soundfont/gunshot-ogg.js')).toMatchObject({

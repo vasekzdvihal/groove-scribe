@@ -13,6 +13,7 @@ import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
 import { createWakeLock } from './wakeLock.js';
+import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
 
 // Inline HTML handlers (onclick="myGrooveWriter.…") and other consumers still
 // reference these as globals, so expose them on window.
@@ -140,6 +141,11 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
       currentTitle: () => document.getElementById('tuneTitle').value.trim(),
     },
   });
+}
+
+// Read the location now: the editor rewrites the URL on load, and that drops ?sw=1.
+if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(window.Capacitor))) {
+  registerServiceWorker(navigator.serviceWorker, soundOrTimeout);
 }
 
 initPopovers();
