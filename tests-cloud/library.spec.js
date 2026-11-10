@@ -1091,11 +1091,15 @@ test.describe('without a network', () => {
         await synced(page);
       });
 
-      test('and a device with nothing queued loads no SDK on a shared link', async ({ page }) => {
+      test('and a device with nothing queued imports no SDK on a shared link', async ({ page }) => {
         await signedInWithWorker(page);
         await addLink(page, QUERY, 'Saved online');
         await synced(page);
 
+        // page.on('request') shows what this page asks for, also when the worker answers it.
+        // It does not show the downloads of the worker itself, and the worker precaches the
+        // SDK file for every visitor. So this proves the page does not load the SDK, not that
+        // the device never downloads it.
         const sdkRequests = watchSdk(page);
         await openEditor(page, OFFLINE_EDITOR + '&' + QUERY.slice(1));
         await page.waitForTimeout(1500); // longer than the idle wait the SDK would need

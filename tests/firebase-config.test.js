@@ -78,6 +78,14 @@ describe('Firebase Hosting security headers', () => {
   });
 });
 
+describe('Firebase Hosting precache safety', () => {
+  // cleanUrls redirects /index.html to /index. A redirect on one precached file fails the
+  // service worker install on every device.
+  it('does not set cleanUrls', () => {
+    expect(config.hosting).not.toHaveProperty('cleanUrls');
+  });
+});
+
 describe('Firebase Hosting cache headers', () => {
   const CACHE = 'public, max-age=2592000';
 

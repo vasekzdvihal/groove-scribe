@@ -3,9 +3,10 @@
 // On a wide screen the panel stays next to the music until the user hides it. On a narrow
 // screen it slides over the editor, and picking a groove closes it.
 //
-// This module is small and loads with the editor. The Firebase SDK loads only when the panel
-// opens. It opens by itself only for people who were signed in on this device or who left it
-// open, so people who open a shared link never download the SDK.
+// This module is small and loads with the editor. The page runs the Firebase SDK only when the
+// panel opens. It opens by itself only for people who were signed in on this device or who left
+// it open, so a shared link does not load the SDK into the page. The service worker still
+// precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
@@ -178,8 +179,8 @@ function lessonOptions(lessons, selectedId) {
   ];
 }
 
-// The top bar shows the user before the Firebase SDK loads, so people who open a shared
-// link never download it. The name and photo are kept on this device from the last visit.
+// The top bar shows the user before the Firebase SDK loads, so a shared link does not need it.
+// The name and photo are kept on this device from the last visit.
 function readRememberedUser() {
   try {
     return JSON.parse(localStorage.getItem(USER_KEY));

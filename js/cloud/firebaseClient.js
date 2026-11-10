@@ -1,9 +1,11 @@
-// Lazy Firebase startup. The SDK loads when the library panel connects: when the user opens
-// it, or when a docked panel opens by itself, after Play is ready and the browser is idle.
-// The editor does not download it on page load, and the embed pages never do.
+// Lazy Firebase startup. The page runs the SDK only when the library panel connects: when the
+// user opens it, or when a docked panel opens by itself, after Play is ready and the browser is
+// idle. The service worker still precaches the file for offline use, once per version. The
+// embed pages never download it.
 import { firebaseConfig } from './firebaseConfig.js';
 
 const EMULATOR_PROJECT_ID = 'demo-groovescribe';
+const STORAGE_PROBE_TIMEOUT_MS = 3000;
 
 /**
  * Choose the Firebase project for this page.
@@ -46,20 +48,31 @@ async function importSdk() {
 
 // Open a small database of our own first. The SDK has a memory fallback for the errors it
 // expects, but a thrown DOMException such as SecurityError stops Firestore for the whole page.
-// No timer: a version 1 open of an unused database has nothing to wait for.
+// The timer: a hung open must not leave the panel waiting for ever.
 function canOpenIndexedDb() {
   return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(false), STORAGE_PROBE_TIMEOUT_MS);
+    const finish = (canOpen) => {
+      clearTimeout(timer);
+      resolve(canOpen);
+    };
     try {
       const probe = indexedDB.open('grooveScribe.storageProbe');
-      probe.onerror = () => resolve(false);
+      probe.onerror = () => finish(false);
       probe.onsuccess = () => {
         probe.result.close();
-        resolve(true);
+        finish(true);
       };
     } catch {
-      resolve(false);
+      finish(false);
     }
   });
+}
+
+// Ask the browser not to evict the queued writes and the cached library. A refusal changes
+// nothing: the cache still works, and the browser may evict it under storage pressure.
+function askForDurableStorage() {
+  navigator.storage?.persist?.().catch(() => {});
 }
 
 export async function connectCloud({ config, useEmulator }) {
@@ -79,5 +92,6 @@ export async function connectCloud({ config, useEmulator }) {
     sdk.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
     sdk.connectFirestoreEmulator(db, '127.0.0.1', 8080);
   }
+  if (persistent) askForDurableStorage();
   return { sdk, auth, db, persistent };
 }
