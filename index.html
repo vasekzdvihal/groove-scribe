@@ -48,7 +48,10 @@
 			// MIDI.js picks Ogg when the browser can play it and MP3 otherwise, and fetches the
 			// file with XHR. A preload with the same URL, as=fetch and crossorigin is reused by
 			// that request, so the file is downloaded once. Only the format that will be used is
-			// preloaded. A failed preload costs nothing: the app's own retry still runs.
+			// preloaded. The format is a guess from canPlayType. The loader also needs a real
+			// canplaythrough, so a mismatch costs one extra download. A failed preload is not
+			// free: in Chromium the XHR joins it and fails at once, so the first attempt costs the
+			// 1 s retry wait before the app's own retry runs.
 			(function () {
 				try {
 					var audio = new Audio();

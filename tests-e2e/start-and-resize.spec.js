@@ -97,5 +97,7 @@ test('the sound file is requested once, before the app asks for it', async ({ pa
   // Chromium plays Ogg, so that is the file the preload names.
   expect(sound[0]).toMatch(/gunshot-ogg\.js$/);
   // The preload is in the page's head, so the request starts before the module code runs.
-  expect(await page.locator('head link[rel="preload"]').count()).toBe(1);
+  expect(
+    await page.locator('head link[rel="preload"][href$="soundfont/gunshot-ogg.js"]').count()
+  ).toBe(1);
 });

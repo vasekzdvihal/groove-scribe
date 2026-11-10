@@ -44,11 +44,13 @@ function collectDialogs(page) {
   return messages;
 }
 
-async function chooseTimeSignature(page, top, bottom) {
+// A refused change keeps the popup open, so a refusal passes { refused: true }.
+async function chooseTimeSignature(page, top, bottom, { refused = false } = {}) {
   await page.click('#timeLabel');
   await page.selectOption('#timeSigPopupTimeSigTop', top);
   await page.selectOption('#timeSigPopupTimeSigBottom', bottom);
   await page.click('#timeSigPopupOK');
+  if (!refused) await expect(page.locator('#timeSigPopup')).toBeHidden();
 }
 
 const HH0 =
@@ -594,7 +596,7 @@ test.describe('change time signature', () => {
     await page.click('#hi-hat3');
     await expectQuery(page, edited);
 
-    await chooseTimeSignature(page, '4', '8');
+    await chooseTimeSignature(page, '4', '8', { refused: true });
     await expect.poll(() => messages).toHaveLength(1);
 
     await expectQuery(page, edited);
@@ -619,7 +621,7 @@ test.describe('change time signature', () => {
     const messages = collectDialogs(page);
     const triplets = empty(12);
     await open(page, triplets);
-    await chooseTimeSignature(page, '7', '8');
+    await chooseTimeSignature(page, '7', '8', { refused: true });
     await expect
       .poll(() => messages)
       .toEqual(['Triplets are disabled in 7/8 time.  Use x/4 time for triplets.']);
@@ -631,7 +633,7 @@ test.describe('change time signature', () => {
   }) => {
     collectDialogs(page);
     await open(page, empty(12));
-    await chooseTimeSignature(page, '7', '8');
+    await chooseTimeSignature(page, '7', '8', { refused: true });
     await page.click('#timeSigPopupCancel');
     await page.click('#timeLabel');
     await expect(page.locator('#timeSigPopupTimeSigTop')).toHaveValue('4');
@@ -662,7 +664,7 @@ test.describe('change time signature', () => {
     const messages = collectDialogs(page);
     const eighths = empty(8);
     await open(page, eighths);
-    await chooseTimeSignature(page, '3', '16');
+    await chooseTimeSignature(page, '3', '16', { refused: true });
     await expect
       .poll(() => messages)
       .toEqual([
@@ -759,7 +761,7 @@ test.describe('editor state regressions', () => {
     const triplets =
       '?TimeSig=4/4&Div=12&Tempo=80&Measures=1&H=|x-----------|&S=|------------|&K=|------------|';
     await open(page, triplets);
-    await chooseTimeSignature(page, '4', '8');
+    await chooseTimeSignature(page, '4', '8', { refused: true });
     await expect
       .poll(() => messages)
       .toEqual(['Triplets are disabled in 4/8 time.  Use x/4 time for triplets.']);
