@@ -68,7 +68,8 @@ export async function connectCloud({ config, useEmulator }) {
   const auth = sdk.getAuth(app);
   // The library stays readable with no network. Without IndexedDB the SDK keeps its default
   // memory cache, so the app works as it did before.
-  const settings = (await canOpenIndexedDb())
+  const persistent = await canOpenIndexedDb();
+  const settings = persistent
     ? {
         localCache: sdk.persistentLocalCache({ tabManager: sdk.persistentMultipleTabManager() }),
       }
@@ -78,5 +79,5 @@ export async function connectCloud({ config, useEmulator }) {
     sdk.connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
     sdk.connectFirestoreEmulator(db, '127.0.0.1', 8080);
   }
-  return { sdk, auth, db };
+  return { sdk, auth, db, persistent };
 }

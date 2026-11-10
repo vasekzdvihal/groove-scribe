@@ -698,7 +698,11 @@ test.describe('without a network', () => {
 
   test.describe('offline writes', () => {
     const WILL_SYNC = 'Will sync';
+    const KEEP_TAB = 'Keep this tab open until online';
     const REFUSED = 'A change could not be saved. The library shows what is saved.';
+    const refusedSave = (title) =>
+      `"${title}" could not be saved. The library shows what is saved.`;
+    const PENDING_KEY = 'grooveScribe.pendingWrites';
 
     const syncLabel = (page, title) =>
       page.locator('.lp-groove', { has: grooveButton(page, title) }).locator('.lp-sync');
@@ -712,19 +716,39 @@ test.describe('without a network', () => {
       return documents.map((item) => ({ id: item.name.split('/').pop(), ...item.fields }));
     }
 
-    // The input has a maxlength, so set the value directly. The rules refuse a title over 200
-    // characters, and they still let the account read its library.
-    async function addRefusedLink(page) {
-      const tool = page.locator('.lp-tool', { hasText: 'Add a groove link' });
-      if (!(await tool.getByLabel('Groove link').isVisible()))
-        await tool.locator('summary').click();
-      await tool.getByLabel('Groove link').fill('https://montulli.github.io/GrooveScribe/' + QUERY);
-      await tool.getByLabel('Title').evaluate((input) => {
-        input.value = 'x'.repeat(201);
+    // The flag goes away when the server has answered, also when no label was on screen.
+    const synced = (page) =>
+      page.waitForFunction((key) => localStorage.getItem(key) === null, PENDING_KEY);
+
+    const changeOwner = (page, path) =>
+      page.request.patch(`${DOCUMENTS}/${path}?updateMask.fieldPaths=ownerId`, {
+        headers: OWNER,
+        data: { fields: { ownerId: { stringValue: 'someone-else' } } },
       });
-      await tool.getByRole('button', { name: 'Add groove' }).click();
-      await expect(page.locator('.lp-sync')).toHaveCount(1);
+
+    // Wait for the panel to be open on a lesson first. The rules refuse a groove in a lesson
+    // the caller does not own, and they still let the account read its library.
+    async function addRefusedLink(page, title = 'Refused') {
+      await addLink(page, QUERY, title);
+      await expect(syncLabel(page, title)).toHaveText(WILL_SYNC);
+      const [lesson] = await savedDocs(page, 'lessons');
+      await changeOwner(page, `lessons/${lesson.id}`);
     }
+
+    const breakIndexedDb = (page) =>
+      page.addInitScript(() => {
+        IDBFactory.prototype.open = () => {
+          throw new DOMException('Storage refused', 'UnknownError');
+        };
+      });
+
+    const spyOnSdk = (page, body) =>
+      patchLibrary(page, (source) =>
+        source.replace(
+          'export function createLibrary(sdk, db, uid) {',
+          `export function createLibrary(realSdk, db, uid) {\nconst sdk = { ...realSdk, ${body} };`
+        )
+      );
 
     test('a save shows at once with the label, and syncs when back online', async ({ page }) => {
       await signedInPanel(page);
@@ -792,6 +816,7 @@ test.describe('without a network', () => {
     test('a reload keeps the queued groove, its label and its sync', async ({ page }) => {
       await signedInWithWorker(page);
       await addLink(page, QUERY, 'Saved online');
+      await synced(page);
       await workerReady(page);
       await goOffline(page);
       await addLink(page, QUERY, 'Queued');
@@ -809,13 +834,15 @@ test.describe('without a network', () => {
       );
     });
 
-    test('a refused write says so and takes the label away', async ({ page }) => {
+    test('a refused save names the groove and takes the label away', async ({ page }) => {
       await signedInPanel(page);
+      await createLesson(page, 'Week 1');
+      await synced(page);
       await goOffline(page);
       await addRefusedLink(page);
 
       await goOnline(page);
-      await expect(alert(page)).toHaveText(REFUSED);
+      await expect(alert(page)).toHaveText(refusedSave('Refused'));
       await expect(page.locator('.lp-sync')).toHaveCount(0);
       await expect(page.locator('.lp-open')).toHaveCount(0);
       expect(await savedDocs(page, 'grooves')).toEqual([]);
@@ -833,17 +860,16 @@ test.describe('without a network', () => {
 
       // A delete leaves no row to compare, so only the write promise can report it.
       const [saved] = await savedDocs(page, 'grooves');
-      await page.request.patch(`${DOCUMENTS}/grooves/${saved.id}?updateMask.fieldPaths=ownerId`, {
-        headers: OWNER,
-        data: { fields: { ownerId: { stringValue: 'someone-else' } } },
-      });
+      await changeOwner(page, `grooves/${saved.id}`);
       await goOnline(page);
       await expect(alert(page)).toHaveText(REFUSED);
     });
 
-    test('a write refused after a reload says so too', async ({ page }) => {
+    test('a save refused after a reload names the groove', async ({ page }) => {
       await signedInWithWorker(page);
+      await createLesson(page, 'Week 1');
       await addLink(page, QUERY, 'Saved online');
+      await synced(page);
       await workerReady(page);
       await goOffline(page);
       await addRefusedLink(page);
@@ -853,7 +879,7 @@ test.describe('without a network', () => {
       await expect(page.locator('.lp-sync')).toHaveCount(1);
 
       await goOnline(page);
-      await expect(alert(page)).toHaveText(REFUSED);
+      await expect(alert(page)).toHaveText(refusedSave('Refused'));
       await expect(page.locator('.lp-sync')).toHaveCount(0);
       await expect(page.locator('.lp-open')).toHaveText(['Saved online']);
     });
@@ -873,17 +899,14 @@ test.describe('without a network', () => {
     });
 
     test('many saves share one waiter, and sign-out drops it', async ({ page }) => {
-      await patchLibrary(page, (source) =>
-        source.replace(
-          'export function createLibrary(sdk, db, uid) {',
-          'export function createLibrary(realSdk, db, uid) {\n' +
-            'const sdk = { ...realSdk, waitForPendingWrites: async (...args) => {\n' +
-            '  window.waitsStarted = (window.waitsStarted ?? 0) + 1;\n' +
-            '  window.waitsOpen = (window.waitsOpen ?? 0) + 1;\n' +
-            '  try { return await realSdk.waitForPendingWrites(...args); }\n' +
-            '  finally { window.waitsOpen -= 1; }\n' +
-            '} };'
-        )
+      await spyOnSdk(
+        page,
+        `waitForPendingWrites: async (...args) => {
+          window.waitsStarted = (window.waitsStarted ?? 0) + 1;
+          window.waitsOpen = (window.waitsOpen ?? 0) + 1;
+          try { return await realSdk.waitForPendingWrites(...args); }
+          finally { window.waitsOpen -= 1; }
+        }`
       );
       const waits = () => page.evaluate(() => [window.waitsStarted ?? 0, window.waitsOpen ?? 0]);
 
@@ -895,42 +918,253 @@ test.describe('without a network', () => {
       await signOut(page);
       await expect.poll(waits).toEqual([1, 0]);
 
+      // A waiter that outlived the session would start again here.
       await goOnline(page);
-      await expect(alert(page)).toBeHidden();
-      await expect(grooveButton(page, 'One')).toHaveCount(0);
-      expect(await waits()).toEqual([1, 0]);
+      await expect.poll(waits).toEqual([1, 0]);
     });
 
-    test('without IndexedDB an offline save keeps the other grooves', async ({ page }) => {
-      await page.addInitScript(() => {
-        IDBFactory.prototype.open = () => {
-          throw new DOMException('Storage refused', 'UnknownError');
-        };
+    test('a write made during the server read after a sync still syncs', async ({ page }) => {
+      await spyOnSdk(
+        page,
+        `getDocs: async (...args) => {
+          if (window.holdReads) {
+            window.heldRead ??= new Promise((resolve) => { window.releaseReads = resolve; });
+            window.readsHeld = (window.readsHeld ?? 0) + 1;
+            await window.heldRead;
+          }
+          return realSdk.getDocs(...args);
+        }`
+      );
+      await signedInPanel(page);
+      await goOffline(page);
+      await addLink(page, QUERY, 'First');
+
+      await page.evaluate(() => {
+        window.holdReads = true;
       });
-      await openEditor(page);
-      await openPanel(page);
-      const uid = await signIn(page, 'ana@example.com');
-      // This groove only ever comes from a server answer, like an older part of a library.
-      await page.request.post(`${DOCUMENTS}/grooves`, {
-        headers: OWNER,
-        data: {
-          fields: {
-            ownerId: { stringValue: uid },
-            lessonId: { nullValue: null },
-            title: { stringValue: 'From the server' },
-            query: { stringValue: QUERY },
-            createdAt: { timestampValue: '2020-01-01T00:00:00Z' },
-          },
-        },
-      });
-      await addLink(page, QUERY, 'Saved online');
-      await expect(grooveButton(page, 'From the server')).toBeVisible();
-      await page.waitForTimeout(500); // the last list has let go of its documents
+      await goOnline(page);
+      await page.waitForFunction(() => window.readsHeld >= 2);
 
       await goOffline(page);
-      await addLink(page, QUERY, 'Queued');
-      await expect(grooveButton(page, 'From the server')).toBeVisible();
-      await expect(syncLabel(page, 'Queued')).toHaveText(WILL_SYNC);
+      await addLink(page, QUERY, 'Second');
+      await page.evaluate(() => {
+        window.holdReads = false;
+        window.releaseReads();
+      });
+      await expect(syncLabel(page, 'Second')).toHaveText(WILL_SYNC);
+
+      await goOnline(page);
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      const titles = (await savedDocs(page, 'grooves')).map((item) => item.title.stringValue);
+      expect(titles.sort()).toEqual(['First', 'Second']);
+    });
+
+    // In a second tab the SDK wait can hang for a write that an earlier tab queued.
+    const hangingWait = (page) =>
+      spyOnSdk(page, 'waitForPendingWrites: () => new Promise(() => {})');
+
+    test('a wait that never answers still ends when the cache is clear', async ({ page }) => {
+      await hangingWait(page);
+      await signedInPanel(page);
+      await goOffline(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      await expect(syncLabel(page, 'Paradiddle')).toHaveText(WILL_SYNC);
+
+      await goOnline(page);
+      await expect(syncLabel(page, 'Paradiddle')).toHaveCount(0, { timeout: 12_000 });
+    });
+
+    test('sign-out stops the cache check of a wait that never answers', async ({ page }) => {
+      await page.addInitScript(() => {
+        const realSet = window.setInterval;
+        const realClear = window.clearInterval;
+        window.syncChecks = new Set();
+        window.setInterval = (task, delay, ...rest) => {
+          const id = realSet(task, delay, ...rest);
+          if (delay === 5000) window.syncChecks.add(id);
+          return id;
+        };
+        window.clearInterval = (id) => {
+          window.syncChecks.delete(id);
+          realClear(id);
+        };
+      });
+      const checks = () => page.evaluate(() => window.syncChecks.size);
+      await hangingWait(page);
+      await signedInPanel(page);
+      await goOffline(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      expect(await checks()).toBe(1);
+
+      await signOut(page);
+      await expect.poll(checks).toBe(0);
+    });
+
+    test('online the label appears only when the sync is slow', async ({ page }) => {
+      await signedInPanel(page);
+      await synced(page);
+      const release = await hold(page, FIRESTORE);
+      await addLink(page, QUERY, 'Paradiddle');
+      expect(await page.locator('.lp-sync').count()).toBe(0);
+
+      await expect(syncLabel(page, 'Paradiddle')).toHaveText(WILL_SYNC, { timeout: 4000 });
+      release();
+      await expect(syncLabel(page, 'Paradiddle')).toHaveCount(0);
+    });
+
+    test('names over the limit of the rules are cut, and they sync', async ({ page }) => {
+      const LONG = 'x'.repeat(250);
+      await signedInPanel(page);
+      await goOffline(page);
+
+      // The inputs have a maxlength, so set the values directly.
+      await page.locator('summary', { hasText: 'New lesson' }).click();
+      await page.getByLabel('Lesson name').evaluate((input, value) => {
+        input.value = value;
+      }, LONG);
+      await page.getByRole('button', { name: 'Create lesson' }).click();
+      const tool = page.locator('.lp-tool', { hasText: 'Add a groove link' });
+      await tool.locator('summary').click();
+      await tool.getByLabel('Groove link').fill('https://montulli.github.io/GrooveScribe/' + QUERY);
+      await tool.getByLabel('Title').evaluate((input, value) => {
+        input.value = `  ${value}`;
+      }, LONG);
+      await tool.getByRole('button', { name: 'Add groove' }).click();
+      await expect(page.locator('.lp-open')).toHaveCount(1);
+
+      await goOnline(page);
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      await expect(alert(page)).toBeHidden();
+      const [lesson] = await savedDocs(page, 'lessons');
+      const [groove] = await savedDocs(page, 'grooves');
+      expect(lesson.name.stringValue).toBe('x'.repeat(200));
+      expect(groove.title.stringValue).toBe('x'.repeat(200));
+
+      await synced(page);
+      await goOffline(page);
+      const longName = 'y'.repeat(250);
+      page.once('dialog', (dialog) => dialog.accept(longName));
+      await page.getByRole('button', { name: /^Options for/ }).click();
+      await page.getByRole('button', { name: 'Rename', exact: true }).click();
+      await expect(page.locator('.lp-open')).toHaveText('y'.repeat(200));
+      page.once('dialog', (dialog) => dialog.accept(longName));
+      await page.getByRole('button', { name: 'Rename lesson' }).click();
+      await expect(page.locator('.lp-lesson summary span').first()).toHaveText('y'.repeat(200));
+
+      await goOnline(page);
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      await expect(alert(page)).toBeHidden();
+      const [renamedLesson] = await savedDocs(page, 'lessons');
+      const [renamedGroove] = await savedDocs(page, 'grooves');
+      expect(renamedLesson.name.stringValue).toBe('y'.repeat(200));
+      expect(renamedGroove.title.stringValue).toBe('y'.repeat(200));
+    });
+
+    test.describe('a queued write on a device that did not open the panel', () => {
+      const watchSdk = (page) => {
+        const requests = [];
+        page.on('request', (request) => {
+          if (request.url().includes('vendor/firebase.js')) requests.push(request.url());
+        });
+        return requests;
+      };
+
+      test('is sent without opening the panel', async ({ page }) => {
+        await signedInWithWorker(page);
+        await synced(page);
+        await workerReady(page);
+        await goOffline(page);
+        await addLink(page, QUERY, 'Queued');
+
+        await goOnline(page);
+        await page.evaluate(() => {
+          // A reload that stays closed: this width does not dock the panel.
+          localStorage.setItem('grooveScribe.libraryOpen', 'false');
+        });
+        const sdkRequests = watchSdk(page);
+        await openEditor(page, OFFLINE_EDITOR);
+        await expect.poll(() => sdkRequests.length).toBeGreaterThan(0);
+        await expect(page.locator('#libraryPanel')).toBeHidden();
+        await expect
+          .poll(async () => (await savedDocs(page, 'grooves')).map((d) => d.title.stringValue))
+          .toEqual(['Queued']);
+        await synced(page);
+      });
+
+      test('and a device with nothing queued loads no SDK on a shared link', async ({ page }) => {
+        await signedInWithWorker(page);
+        await addLink(page, QUERY, 'Saved online');
+        await synced(page);
+
+        const sdkRequests = watchSdk(page);
+        await openEditor(page, OFFLINE_EDITOR + '&' + QUERY.slice(1));
+        await page.waitForTimeout(1500); // longer than the idle wait the SDK would need
+        expect(sdkRequests).toEqual([]);
+      });
+    });
+
+    test.describe('without IndexedDB', () => {
+      test('an offline save keeps the grooves the server sent, and warns', async ({ page }) => {
+        await breakIndexedDb(page);
+        await openEditor(page);
+        await openPanel(page);
+        const uid = await signIn(page, 'ana@example.com');
+        // This groove only ever comes from a server answer, like an older part of a library.
+        await page.request.post(`${DOCUMENTS}/grooves`, {
+          headers: OWNER,
+          data: {
+            fields: {
+              ownerId: { stringValue: uid },
+              lessonId: { nullValue: null },
+              title: { stringValue: 'From the server' },
+              query: { stringValue: QUERY },
+              createdAt: { timestampValue: '2020-01-01T00:00:00Z' },
+            },
+          },
+        });
+        await addLink(page, QUERY, 'Saved online');
+        await expect(grooveButton(page, 'From the server')).toBeVisible();
+
+        await goOffline(page);
+        await addLink(page, QUERY, 'Queued');
+        await expect(grooveButton(page, 'From the server')).toBeVisible();
+        await expect(syncLabel(page, 'Queued')).toHaveText(KEEP_TAB);
+      });
+
+      test('a reload with a queued write asks first, and loses the write', async ({ page }) => {
+        await breakIndexedDb(page);
+        await signedInWithWorker(page);
+        await workerReady(page);
+        await goOffline(page);
+        await addLink(page, QUERY, 'Queued');
+        await expect(syncLabel(page, 'Queued')).toHaveText(KEEP_TAB);
+
+        const dialogs = [];
+        page.on('dialog', (dialog) => {
+          dialogs.push(dialog.type());
+          dialog.accept();
+        });
+        await openEditor(page, OFFLINE_EDITOR);
+        expect(dialogs).toEqual(['beforeunload']);
+        await openPanel(page);
+        await expect(grooveButton(page, 'Queued')).toHaveCount(0);
+      });
+
+      test('a reload with nothing queued does not ask', async ({ page }) => {
+        await breakIndexedDb(page);
+        await signedInWithWorker(page);
+        await addLink(page, QUERY, 'Saved online');
+        await expect.poll(async () => (await savedDocs(page, 'grooves')).length).toBe(1);
+
+        const dialogs = [];
+        page.on('dialog', (dialog) => {
+          dialogs.push(dialog.type());
+          dialog.accept();
+        });
+        await page.waitForFunction(() => !window.document.querySelector('.lp-sync'));
+        await openEditor(page, OFFLINE_EDITOR);
+        expect(dialogs).toEqual([]);
+      });
     });
   });
 
