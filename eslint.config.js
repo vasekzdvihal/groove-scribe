@@ -113,6 +113,7 @@ export default [
       'js/groove_display.js',
       'js/editorChrome.js',
       'js/wakeLock.js',
+      'js/registerServiceWorker.js',
       'js/main.js',
       'js/cloud/**/*.js',
     ],

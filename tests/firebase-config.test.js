@@ -99,6 +99,11 @@ describe('Firebase Hosting cache headers', () => {
     }
   );
 
+  it('asks the browser to check /sw.js on every update', () => {
+    expect(headersFor('/sw.js')['Cache-Control']).toBe('no-cache');
+    expect(headersFor('sw.js')['Cache-Control']).toBe('no-cache');
+  });
+
   it('keeps the security headers on cached files', () => {
     expect(headersFor('soundfont/gunshot-ogg.js')).toMatchObject({
       'X-Content-Type-Options': 'nosniff',
