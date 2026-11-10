@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import vm from 'node:vm';
-import { renderServiceWorker } from '../../scripts/build-www.mjs';
+import { renderEmergencyServiceWorker, renderServiceWorker } from '../../scripts/build-www.mjs';
 
 // Runs the real generated worker against small fakes of the Cache and fetch APIs. The e2e
 // spec proves the happy paths in Chromium. These tests cover what a browser test cannot
@@ -38,7 +38,7 @@ function makeCache() {
   };
 }
 
-function makeWorld() {
+function makeWorld(source = renderServiceWorker('v2', FILES)) {
   const stores = new Map();
   const world = {
     stores,
@@ -49,6 +49,8 @@ function makeWorld() {
     },
     skipWaiting: vi.fn(async () => {}),
     claim: vi.fn(async () => {}),
+    unregister: vi.fn(async () => true),
+    navigate: vi.fn(async () => {}),
     open(name) {
       if (!stores.has(name)) stores.set(name, makeCache());
       return stores.get(name);
@@ -82,9 +84,13 @@ function makeWorld() {
       world.listeners[type] = listener;
     },
     skipWaiting: world.skipWaiting,
-    clients: { claim: world.claim },
+    clients: {
+      claim: world.claim,
+      matchAll: async () => [{ navigate: world.navigate }],
+    },
+    registration: { unregister: world.unregister },
   };
-  vm.runInNewContext(renderServiceWorker('v2', FILES), sandbox);
+  vm.runInNewContext(source, sandbox);
   return world;
 }
 
@@ -322,5 +328,36 @@ describe('fetch: files outside the precache use the cache and refresh in the bac
     world.stores.get(CURRENT).entries.clear();
     world.respond = () => Promise.reject(new TypeError('offline'));
     await expect(fetchAsset().result).rejects.toThrow('offline');
+  });
+});
+
+describe('the emergency worker', () => {
+  let world;
+  beforeEach(() => {
+    world = makeWorld(renderEmergencyServiceWorker());
+    for (const name of [OLD, CURRENT, 'some-other-cache']) world.open(name);
+  });
+
+  it('has no fetch listener, so every request goes to the network', () => {
+    expect(Object.keys(world.listeners).sort()).toEqual(['activate', 'install']);
+  });
+
+  it('takes over from a bad worker without waiting for tabs to close', async () => {
+    await lifecycle(world, 'install');
+    expect(world.skipWaiting).toHaveBeenCalledOnce();
+  });
+
+  it('deletes the precache caches only, then claims the pages', async () => {
+    await lifecycle(world, 'activate');
+    expect([...world.stores.keys()]).toEqual(['some-other-cache']);
+    expect(world.claim).toHaveBeenCalledOnce();
+  });
+
+  // The app registers the worker on every load, so either of these would loop.
+  it('does not unregister and does not navigate the pages', async () => {
+    await lifecycle(world, 'install');
+    await lifecycle(world, 'activate');
+    expect(world.unregister).not.toHaveBeenCalled();
+    expect(world.navigate).not.toHaveBeenCalled();
   });
 });

@@ -119,6 +119,18 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - Test servers use fixed ports: `npm run test:e2e` uses 8010 and `npm run test:cloud` uses 8001.
   `reuseExistingServer` is false, so a busy port fails the run. Stop the other process first.
 
+### Recovery from a bad service worker
+
+- Never roll back Hosting to a release from before the first service worker release, and never
+  deploy without `/sw.js`. The browser keeps a worker when its update check gets a 404, so a
+  bad worker then stays on every device.
+- To recover, ship the emergency worker: `SW_EMERGENCY=1 npx firebase deploy --only hosting
+--project groove-scribe-zdvihal`. The predeploy build reads `SW_EMERGENCY`. It writes a
+  `www/sw.js` that has no fetch handler and deletes the precache, so every request goes to the
+  network. It must not unregister or navigate: the app registers the worker on every load, and
+  that would loop. A later normal deploy brings the normal worker back, so hold merges to `master`
+  until the bad worker is fixed.
+
 ## Conventions & gotchas
 
 - **Hosted files and the cache:** `fonts/` holds the Lato font files, served from our own host.

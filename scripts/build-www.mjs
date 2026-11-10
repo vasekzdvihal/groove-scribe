@@ -77,6 +77,7 @@ const PRECACHE_QUERIES = {
 };
 
 const SW_TEMPLATE = join(repoRoot, 'scripts/sw-template.js');
+const SW_EMERGENCY_TEMPLATE = join(repoRoot, 'scripts/sw-emergency-template.js');
 const SW_VERSION_PLACEHOLDER = "'__VERSION__'";
 const SW_FILES_PLACEHOLDER = "['__PRECACHE_FILES__']";
 
@@ -130,11 +131,22 @@ export function renderServiceWorker(version, files) {
     .replace(SW_FILES_PLACEHOLDER, () => JSON.stringify(files));
 }
 
+/** @returns {string} the source of the emergency sw.js. See sw-emergency-template.js. */
+export function renderEmergencyServiceWorker() {
+  return readFileSync(SW_EMERGENCY_TEMPLATE, 'utf8');
+}
+
 /**
- * Writes sw.js into the assembled tree.
+ * Writes sw.js into the assembled tree. SW_EMERGENCY=1 writes the emergency worker.
  * @param {string} dir the assembled tree
+ * @param {Record<string, string | undefined>} [env]
  */
-export function writeServiceWorker(dir) {
+export function writeServiceWorker(dir, env = process.env) {
+  if (env.SW_EMERGENCY === '1') {
+    console.warn('build-www: SW_EMERGENCY=1, writing the emergency service worker.');
+    writeFileSync(join(dir, 'sw.js'), renderEmergencyServiceWorker());
+    return;
+  }
   const urls = precacheList(dir).map((path) => path + (PRECACHE_QUERIES[path] ?? ''));
   const source = renderServiceWorker(serviceWorkerVersion(dir), urls);
   writeFileSync(join(dir, 'sw.js'), source);

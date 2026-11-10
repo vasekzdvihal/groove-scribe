@@ -178,4 +178,17 @@ describe('the service worker build', () => {
     writeServiceWorker(dir);
     expect(checkWwwContents(dir)).toEqual([]);
   });
+
+  it('writes the emergency worker with SW_EMERGENCY=1 and precaches nothing', () => {
+    writeServiceWorker(dir, { SW_EMERGENCY: '1' });
+    const source = readFileSync(join(dir, 'sw.js'), 'utf8');
+    expect(source).toContain('Emergency');
+    expect(source).not.toContain('js/main.js');
+    expect(source).not.toContain("addEventListener('fetch'");
+  });
+
+  it('writes the normal worker when SW_EMERGENCY is not 1', () => {
+    writeServiceWorker(dir, { SW_EMERGENCY: '0' });
+    expect(readFileSync(join(dir, 'sw.js'), 'utf8')).toContain("addEventListener('fetch'");
+  });
 });
