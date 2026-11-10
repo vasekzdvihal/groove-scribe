@@ -49,8 +49,13 @@ const test = base.extend({
     });
     const origin = `http://localhost:${port}`;
     await waitUntilServing(origin);
-    await use({ dir, origin, stop: () => server.kill() });
-    server.kill();
+    const exited = new Promise((resolve) => server.once('exit', resolve));
+    const stop = () => {
+      server.kill();
+      return exited;
+    };
+    await use({ dir, origin, stop });
+    await stop();
     rmSync(dir, { recursive: true, force: true });
   },
   baseURL: async ({ site }, use) => {
@@ -62,6 +67,13 @@ const test = base.extend({
 async function waitForWorker(page) {
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+}
+
+/** Stops the server and proves it is gone, so nothing after this comes from the network. */
+async function goOffline(context, site) {
+  await site.stop();
+  await expect(fetch(site.origin)).rejects.toThrow();
+  await context.setOffline(true);
 }
 
 const cacheNames = (page) => page.evaluate(() => caches.keys());
@@ -81,9 +93,7 @@ test('an offline reload shows the editor and Play works', async ({ page, context
   await page.waitForSelector('#svgTarget svg');
   await waitForWorker(page);
 
-  // The stopped server proves that nothing below comes from the network.
-  site.stop();
-  await context.setOffline(true);
+  await goOffline(context, site);
 
   const failed = [];
   page.on('requestfailed', (request) => {
@@ -113,14 +123,38 @@ test('an offline reload shows the editor and Play works', async ({ page, context
   expect(failed, failed.join('\n')).toEqual([]);
 });
 
-test('after a rebuild the new version takes over and the old cache is gone', async ({
-  page,
-  site,
-}) => {
-  test.setTimeout(60_000);
+test('the help page loads offline', async ({ page, context, site }) => {
   await page.goto('/index.html?sw=1');
   await page.waitForSelector('#svgTarget svg');
   await waitForWorker(page);
+  await goOffline(context, site);
+
+  const failed = [];
+  page.on('requestfailed', (request) => failed.push(request.url()));
+  const response = await page.goto('/gscribe_help.html');
+  expect(response?.ok()).toBe(true);
+  await expect(page.locator('h1')).toContainText('Help!');
+  expect(failed, failed.join('\n')).toEqual([]);
+});
+
+test('after a rebuild the new version takes over and the old cache is gone', async ({
+  page,
+  context,
+  site,
+}) => {
+  test.setTimeout(60_000);
+  const play = page.locator('[id^="midiPlayImage"]');
+  let navigations = 0;
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) navigations += 1;
+  });
+
+  await page.goto('/index.html?sw=1');
+  await page.waitForSelector('#svgTarget svg');
+  await waitForWorker(page);
+  await expect(play).toHaveClass(/Stopped/);
+  // A clean load counts more than one: the editor also rewrites its URL.
+  const navigationsPerLoad = navigations;
   const before = await cacheNames(page);
   expect(before).toHaveLength(1);
 
@@ -129,11 +163,9 @@ test('after a rebuild the new version takes over and the old cache is gone', asy
 
   // This load finds the new worker. The update runs behind a page the user may be playing
   // on, so the page must not reload.
+  navigations = 0;
   await page.goto('/index.html?sw=1');
   await page.waitForSelector('#svgTarget svg');
-  await page.evaluate(() => {
-    window.__sameDocument = true;
-  });
   await expect
     .poll(
       async () => {
@@ -143,9 +175,14 @@ test('after a rebuild the new version takes over and the old cache is gone', asy
       { timeout: 30_000 }
     )
     .toBe(true);
-  expect(await page.evaluate(() => window.__sameDocument)).toBe(true);
+  await expect(play).toHaveClass(/Stopped/);
+  // Time for a reload that the takeover might start. The old cache is deleted just before it.
+  await page.waitForTimeout(500);
+  expect(navigations).toBe(navigationsPerLoad);
 
-  await page.goto('/index.html?sw=1');
+  // Offline, so the changed module can only come from the new cache.
+  await goOffline(context, site);
+  await page.reload();
   await page.waitForSelector('#svgTarget svg');
   expect(await page.evaluate(() => window.__swBuild)).toBe('second');
   expect(await cacheNames(page)).toHaveLength(1);

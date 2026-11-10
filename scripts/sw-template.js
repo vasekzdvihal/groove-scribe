@@ -2,14 +2,20 @@
 // the result to www/sw.js. This is a classic worker script, not a module.
 //
 // The app must start and play in a rehearsal room with no network. HTML uses the network
-// first, so a deployed page shows at once. Every other file comes from the cache and is
-// refreshed in the background. All of them are precached in one step during install.
+// first, so a deployed page shows at once. Other files come from the cache.
+//
+// A precached file never changes within a version. The modules link to each other, so a mix of
+// two versions can fail to start offline. New content arrives only as a complete new version.
+// Files outside the precache are stored on first use and refreshed in the background.
 
 const VERSION = '__VERSION__';
 const PRECACHE_FILES = ['__PRECACHE_FILES__'];
 
 const CACHE_PREFIX = 'groove-scribe-precache-';
 const CACHE_NAME = CACHE_PREFIX + VERSION;
+const PRECACHED_URLS = new Set(
+  PRECACHE_FILES.map((path) => new URL(path, self.location.href).href)
+);
 
 // A page that does not answer in this time counts as offline. Weak Wi-Fi must not hold up the
 // editor when a good copy is on the device.
@@ -33,8 +39,12 @@ function isCacheable(response) {
 // Sound, fonts and images have a max-age of 30 days, so a normal fetch could store an old file.
 // cache: 'reload' always downloads the file: precache and pages use it. cache: 'no-cache' asks
 // the server first, so an unchanged file costs only headers: background refresh uses it.
+function fetchFresh(event, cacheMode) {
+  return fetch(new Request(event.request, { cache: cacheMode }));
+}
+
 function fetchAndStore(event, cache, key, cacheMode) {
-  const network = fetch(new Request(event.request, { cache: cacheMode }));
+  const network = fetchFresh(event, cacheMode);
   // Clone here, first in line, so the body is unread even if the page takes the response next.
   const store = (response) => (isCacheable(response) ? cache.put(key, response.clone()) : null);
   event.waitUntil(network.then(store).catch(noop));
@@ -55,7 +65,9 @@ async function networkFirst(event) {
   // The Cache object stays valid. Opening it again later could recreate a deleted old cache.
   const cache = await caches.open(CACHE_NAME);
   const key = pageKey(event.request.url);
-  const network = fetchAndStore(event, cache, key, 'reload');
+  const network = PRECACHED_URLS.has(key)
+    ? fetchFresh(event, 'reload')
+    : fetchAndStore(event, cache, key, 'reload');
   const timedOut = new Promise((resolve) => setTimeout(resolve, NAVIGATION_TIMEOUT_MS));
   const fresh = await Promise.race([network, timedOut]).catch(noop);
   if (fresh?.ok) return fresh;
@@ -67,12 +79,13 @@ async function networkFirst(event) {
 async function cacheFirst(event) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(event.request, MATCH_OPTIONS);
+  if (cached && PRECACHED_URLS.has(event.request.url)) return cached;
   const network = fetchAndStore(event, cache, event.request.url, 'no-cache');
   return cached ?? network;
 }
 
 function shouldHandle(request) {
-  if (request.method !== 'GET') return false;
+  if (request.method !== 'GET' || request.headers.has('range')) return false;
   const url = new URL(request.url);
   return url.origin === self.location.origin && !url.pathname.startsWith(RESERVED_PATH);
 }

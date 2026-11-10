@@ -10,7 +10,7 @@ const ORIGIN = 'https://app.test';
 const url = (path) => `${ORIGIN}/${path}`;
 const CURRENT = 'groove-scribe-precache-v2';
 const OLD = 'groove-scribe-precache-v1';
-const FILES = ['index.html', 'js/main.js'];
+const FILES = ['index.html', 'js/main.js', 'fonts/icons.woff2?v=1'];
 
 function response(body, overrides = {}) {
   return {
@@ -102,7 +102,7 @@ function lifecycle(world, type) {
 /** Fires a fetch event. `handled` is false when the worker leaves the request to the browser. */
 function dispatchFetch(world, request) {
   const event = {
-    request: { method: 'GET', mode: 'no-cors', ...request },
+    request: { method: 'GET', mode: 'no-cors', headers: { has: () => false }, ...request },
     pending: [],
     handled: false,
     respondWith(promise) {
@@ -131,7 +131,7 @@ describe('install', () => {
     world.respond = (request) => response(`new ${request.url}`);
     await lifecycle(world, 'install');
     expect([...world.stores.get(CURRENT).entries.keys()]).toEqual(FILES.map(url));
-    expect(world.requests.map((request) => request.cache)).toEqual(['reload', 'reload']);
+    expect(world.requests.map((request) => request.cache)).toEqual(FILES.map(() => 'reload'));
     expect(world.skipWaiting).toHaveBeenCalledOnce();
   });
 
@@ -165,6 +165,10 @@ describe('fetch: requests the worker must not touch', () => {
     ['a cross-origin request', { url: 'https://firestore.googleapis.com/v1/x' }],
     ['Firebase sign-in', { url: url('__/auth/handler?x=1'), mode: 'navigate' }],
     ['the Firebase auth iframe', { url: url('__/auth/iframe') }],
+    [
+      'a range request',
+      { url: url('images/extra.svg'), headers: { has: (name) => name === 'range' } },
+    ],
   ])('leaves %s to the browser', (_name, request) => {
     const world = makeWorld();
     expect(dispatchFetch(world, request).handled).toBe(false);
@@ -176,16 +180,27 @@ describe('fetch: navigations use the network first', () => {
   beforeEach(() => {
     world = makeWorld();
     world.open(CURRENT).entries.set(url('index.html'), response('cached page'));
+    world.open(CURRENT).entries.set(url('page.html'), response('cached other page'));
   });
 
-  it('returns the fresh page and stores it without the groove query', async () => {
+  it('returns a fresh page that is not precached and stores it without the query', async () => {
     world.respond = () => response('fresh page');
-    const event = navigate(world, 'index.html?TimeSig=4/4');
+    const event = navigate(world, 'page.html?TimeSig=4/4');
     expect((await event.result).body).toBe('fresh page');
     await settled(event);
     expect(world.requests[0].cache).toBe('reload');
-    expect([...world.stores.get(CURRENT).entries.keys()]).toEqual([url('index.html')]);
-    expect(world.stores.get(CURRENT).entries.get(url('index.html')).body).toBe('fresh page');
+    const { entries } = world.stores.get(CURRENT);
+    expect(entries.get(url('page.html')).body).toBe('fresh page');
+    expect(entries.has(url('page.html?TimeSig=4/4'))).toBe(false);
+  });
+
+  it('returns a fresh precached page but keeps the stored copy unchanged', async () => {
+    world.respond = () => response('other content');
+    const event = navigate(world, 'index.html?TimeSig=4/4');
+    expect((await event.result).body).toBe('other content');
+    await settled(event);
+    expect(world.requests[0].cache).toBe('reload');
+    expect(world.stores.get(CURRENT).entries.get(url('index.html')).body).toBe('cached page');
   });
 
   it.each(['index.html?TimeSig=4/4&H=|x|', 'index.html', ''])(
@@ -198,10 +213,10 @@ describe('fetch: navigations use the network first', () => {
 
   it('serves the cached page and stores nothing on a server error', async () => {
     world.respond = () => response('error page', { ok: false, status: 503 });
-    const event = navigate(world, 'index.html');
-    expect((await event.result).body).toBe('cached page');
+    const event = navigate(world, 'page.html');
+    expect((await event.result).body).toBe('cached other page');
     await settled(event);
-    expect(world.stores.get(CURRENT).entries.get(url('index.html')).body).toBe('cached page');
+    expect(world.stores.get(CURRENT).entries.get(url('page.html')).body).toBe('cached other page');
   });
 
   describe('when the network hangs', () => {
@@ -223,9 +238,25 @@ describe('fetch: navigations use the network first', () => {
   });
 });
 
-describe('fetch: other files use the cache and refresh in the background', () => {
+describe('fetch: a precached file never changes within a version', () => {
+  it.each(['js/main.js', 'fonts/icons.woff2?v=1'])(
+    'returns %s from the cache with no fetch and leaves it unchanged',
+    async (path) => {
+      const world = makeWorld();
+      world.open(CURRENT).entries.set(url(path), response('cached'));
+      world.respond = () => response('other content');
+      const event = dispatchFetch(world, { url: url(path) });
+      expect((await event.result).body).toBe('cached');
+      await settled(event);
+      expect(world.requests).toEqual([]);
+      expect(world.stores.get(CURRENT).entries.get(url(path)).body).toBe('cached');
+    }
+  );
+});
+
+describe('fetch: files outside the precache use the cache and refresh in the background', () => {
   let world;
-  const asset = url('js/main.js');
+  const asset = url('images/extra.svg');
   const fetchAsset = () => dispatchFetch(world, { url: asset });
   const stored = () => world.stores.get(CURRENT).entries.get(asset)?.body;
 

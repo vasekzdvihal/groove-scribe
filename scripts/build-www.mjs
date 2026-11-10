@@ -53,10 +53,10 @@ const ITEMS = [
 // What the service worker stores for offline use, matched against the files in www/, so a new
 // module or stylesheet joins by itself. It is the editor page and everything that page loads.
 // Both sound formats are included (about 470 KB together): the browser picks one at run time.
-// Left out on purpose: the embed, help and about pages, the old Font Awesome and its other
-// font formats, and SoundManager2, which nothing loads.
+// Left out on purpose: the embed page, the old Font Awesome and its other font formats, and
+// SoundManager2, which nothing loads.
 const PRECACHED = [
-  /^index\.html$/,
+  /^(index|profile|gscribe_help|gscribe_about)\.html$/,
   /^js\/.+\.js$/,
   /^css\/.+\.css$/,
   /^soundfont\/.+\.js$/,
@@ -96,15 +96,16 @@ export function precacheList(dir) {
 }
 
 /**
- * The hash of every precached file and its path. The template is in the hash too: a changed
+ * The hash of every precached file and its URL. The template is in the hash too: a changed
  * worker then gets its own cache, so a failed install cannot delete the cache in use.
  * @param {string} dir the assembled tree
+ * @param {Record<string, string>} [queries] URL queries of precached files
  * @returns {string} a short hex version
  */
-export function serviceWorkerVersion(dir) {
+export function serviceWorkerVersion(dir, queries = PRECACHE_QUERIES) {
   const hash = createHash('sha256').update(readFileSync(SW_TEMPLATE));
   for (const path of precacheList(dir)) {
-    hash.update(`\0${path}\0`).update(readFileSync(join(dir, path)));
+    hash.update(`\0${path}${queries[path] ?? ''}\0`).update(readFileSync(join(dir, path)));
   }
   return hash.digest('hex').slice(0, 16);
 }

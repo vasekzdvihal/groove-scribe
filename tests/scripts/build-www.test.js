@@ -138,6 +138,16 @@ describe('the service worker build', () => {
     expect(serviceWorkerVersion(dir)).not.toBe(before);
   });
 
+  it('changes the version when the query of a precached URL changes', () => {
+    const first = serviceWorkerVersion(dir, { 'js/main.js': '?v=1' });
+    expect(serviceWorkerVersion(dir, { 'js/main.js': '?v=2' })).not.toBe(first);
+  });
+
+  it.each(['profile.html', 'gscribe_help.html', 'gscribe_about.html'])('precaches %s', (path) => {
+    put(path);
+    expect(precacheList(dir)).toContain(path);
+  });
+
   it('keeps the version when a file outside the precache changes', () => {
     const before = serviceWorkerVersion(dir);
     put('GrooveEmbed.html', 'changed');
