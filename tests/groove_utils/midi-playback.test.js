@@ -84,6 +84,244 @@ describe('GrooveUtils MIDI playback controls', () => {
   }
 
   describe('oneTimeInitializeMidi', () => {
+    describe('when the sound file does not load', () => {
+      let icon;
+      let note;
+      let callbacks; // the callback of each MIDI.loadPlugin call, in order
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        globalThis.__groovescribeSoundLoad = { delays: [10, 30, 90], timeoutMs: 1000 };
+        icon = addElement('midiPlayImage' + gu.grooveUtilsUniqueIndex);
+        note = addElement('soundRetryNote' + gu.grooveUtilsUniqueIndex);
+        callbacks = [];
+        globalThis.MIDI.loadPlugin = vi.fn((opts) => callbacks.push(opts.callback));
+      });
+
+      afterEach(() => {
+        delete globalThis.__groovescribeSoundLoad;
+      });
+
+      it('gives up on a stalled load after the timeout and retries after 1, 3 and 9 s steps', () => {
+        gu.oneTimeInitializeMidi();
+        expect(callbacks).toHaveLength(1);
+        vi.advanceTimersByTime(999);
+        expect(callbacks).toHaveLength(1);
+        vi.advanceTimersByTime(1 + 10); // timeout, then the first delay
+        expect(callbacks).toHaveLength(2);
+        vi.advanceTimersByTime(1000 + 30);
+        expect(callbacks).toHaveLength(3);
+        vi.advanceTimersByTime(1000 + 90);
+        expect(callbacks).toHaveLength(4);
+        expect(note.querySelector('button')).toBeNull();
+        vi.advanceTimersByTime(1000); // the last try fails too
+        expect(callbacks).toHaveLength(4);
+        expect(note.querySelector('button').textContent).toBe('Sound failed. Tap to retry.');
+      });
+
+      it('shows "Loading sound…" after the first failed try, then the button, then nothing on success', () => {
+        gu.oneTimeInitializeMidi();
+        expect(note.textContent).toBe('');
+        vi.advanceTimersByTime(1000); // the first try timed out
+        expect(note.textContent).toBe('Loading sound\u2026');
+        expect(note.querySelector('button')).toBeNull();
+        vi.advanceTimersByTime(10000); // the retries fail too
+        expect(note.textContent).toBe('Sound failed. Tap to retry.');
+
+        note.querySelector('button').click(); // a new round starts
+        expect(note.textContent).toBe('');
+        vi.advanceTimersByTime(1000);
+        expect(note.textContent).toBe('Loading sound\u2026');
+        callbacks[callbacks.length - 1]();
+        expect(note.textContent).toBe('');
+      });
+
+      it('a tap on the button starts a new load, and success removes the message', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(10000);
+        const button = note.querySelector('button');
+        expect(button).not.toBeNull();
+
+        button.click();
+        expect(callbacks).toHaveLength(5);
+        expect(note.querySelector('button')).toBeNull();
+
+        callbacks[4]();
+        expect(icon.className).toBe('midiPlayImage Stopped');
+        expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+      });
+
+      it('the Play button retries while the message shows', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(10000);
+        icon.onclick();
+        expect(callbacks).toHaveLength(5);
+      });
+
+      it('a late success after the timeout sets up once and cancels the retry', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(1000); // the first try timed out, the retry is waiting
+        callbacks[0](); // the first try finishes late
+        expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+        expect(icon.className).toBe('midiPlayImage Stopped');
+
+        vi.advanceTimersByTime(60000);
+        expect(callbacks).toHaveLength(1); // the waiting retry never started
+      });
+
+      it('a request error of a running retry after a late success starts no new load', () => {
+        const errorHandlers = [];
+        globalThis.DOMLoader = { sendRequest: vi.fn((conf) => errorHandlers.push(conf.onerror)) };
+        globalThis.MIDI.loadPlugin = vi.fn((opts) => {
+          callbacks.push(opts.callback);
+          globalThis.DOMLoader.sendRequest({ url: 'gunshot-ogg.js', onerror() {} });
+        });
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(1010); // the first try timed out, the retry is running
+        expect(callbacks).toHaveLength(2);
+
+        callbacks[0](); // the first try finishes late: set-up is done
+        errorHandlers[1](); // then the running retry's request errors
+        vi.advanceTimersByTime(60000);
+
+        expect(globalThis.MIDI.loadPlugin).toHaveBeenCalledTimes(2);
+        expect(note.querySelector('button')).toBeNull();
+        delete globalThis.DOMLoader;
+      });
+
+      describe('with the real request wrapper', () => {
+        let requests; // { conf, abort } of each sound request, in order
+        let connects; // what MIDI.js does after each download: connect and decode
+
+        beforeEach(() => {
+          requests = [];
+          connects = [];
+          globalThis.DOMLoader = {
+            sendRequest: vi.fn((conf) => {
+              const request = { conf, abort: vi.fn() };
+              requests.push(request);
+              return request;
+            }),
+          };
+          globalThis.MIDI.loadPlugin = vi.fn((opts) => {
+            callbacks.push(opts.callback);
+            connects.push(vi.fn());
+            globalThis.DOMLoader.sendRequest({
+              url: 'gunshot-ogg.js',
+              onload: connects[connects.length - 1],
+            });
+          });
+        });
+
+        afterEach(() => {
+          delete globalThis.DOMLoader;
+        });
+
+        it('a finished download is not cut off while it decodes', () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(900);
+          requests[0].conf.onload(); // the download is over, MIDI.js decodes now
+          vi.advanceTimersByTime(25000); // decoding takes longer than the stall timeout
+          expect(callbacks).toHaveLength(1); // no second download
+          expect(requests[0].abort).not.toHaveBeenCalled();
+          callbacks[0]();
+          expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+        });
+
+        it('a decode that never reports fails the try after 30 s, then retries', () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(900);
+          requests[0].conf.onload(); // downloaded, but the callback never runs
+          vi.advanceTimersByTime(29999);
+          expect(callbacks).toHaveLength(1);
+          vi.advanceTimersByTime(1 + 10); // decode limit, then the first delay
+          expect(callbacks).toHaveLength(2);
+          expect(note.textContent).toBe('Loading sound\u2026');
+        });
+
+        it('shows the failure message when every decode hangs', () => {
+          gu.oneTimeInitializeMidi();
+          for (let i = 0; i < 4; i++) {
+            requests[i].conf.onload();
+            vi.advanceTimersByTime(30000 + 100);
+          }
+          expect(callbacks).toHaveLength(4);
+          expect(note.querySelector('button').textContent).toBe('Sound failed. Tap to retry.');
+        });
+
+        it('a success during the decode wait cancels the decode timer', () => {
+          gu.oneTimeInitializeMidi();
+          requests[0].conf.onload();
+          callbacks[0]();
+          vi.advanceTimersByTime(60000);
+          expect(callbacks).toHaveLength(1);
+          expect(note.querySelector('button')).toBeNull();
+        });
+
+        it('an instance that joins during a retry sees the loading note at once', async () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(1000); // the first try timed out
+          const late = await newGrooveUtils();
+          addElement('midiPlayImage' + late.grooveUtilsUniqueIndex);
+          const lateNote = addElement('soundRetryNote' + late.grooveUtilsUniqueIndex);
+          late.oneTimeInitializeMidi();
+          expect(lateNote.textContent).toBe('Loading sound\u2026');
+        });
+
+        it('a success stops a running retry, so it never connects again', () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(1010); // the first try timed out, the retry is running
+          expect(requests).toHaveLength(2);
+
+          callbacks[0](); // the first try succeeds late
+          expect(requests[1].abort).toHaveBeenCalled();
+
+          requests[1].conf.onload(); // its download ends anyway
+          expect(connects[1]).not.toHaveBeenCalled();
+        });
+      });
+
+      it('several instances share one load and all hear the result', async () => {
+        const second = await newGrooveUtils();
+        const secondIcon = addElement('midiPlayImage' + second.grooveUtilsUniqueIndex);
+        const secondNote = addElement('soundRetryNote' + second.grooveUtilsUniqueIndex);
+        gu.oneTimeInitializeMidi();
+        second.oneTimeInitializeMidi();
+        expect(callbacks).toHaveLength(1);
+
+        callbacks[0]();
+        expect(icon.className).toBe('midiPlayImage Stopped');
+        expect(secondIcon.className).toBe('midiPlayImage Stopped');
+        expect(secondNote.textContent).toBe('');
+      });
+
+      it('an instance that asks after the load failed gets the message', async () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(10000);
+        expect(note.querySelector('button')).not.toBeNull();
+
+        const late = await newGrooveUtils();
+        addElement('midiPlayImage' + late.grooveUtilsUniqueIndex);
+        const lateNote = addElement('soundRetryNote' + late.grooveUtilsUniqueIndex);
+        late.oneTimeInitializeMidi();
+        expect(callbacks).toHaveLength(4); // no new load
+        expect(lateNote.querySelector('button').textContent).toBe('Sound failed. Tap to retry.');
+
+        note.querySelector('button').click(); // a tap reaches the late instance too
+        expect(lateNote.querySelector('button')).toBeNull();
+      });
+
+      it('a second success from a retry that was already running does nothing', () => {
+        gu.oneTimeInitializeMidi();
+        vi.advanceTimersByTime(1010); // the retry is running now
+        callbacks[0]();
+        callbacks[1]();
+        expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+        vi.advanceTimersByTime(60000);
+        expect(note.querySelector('button')).toBeNull();
+      });
+    });
+
     it('calls MIDI.loadPlugin (with a soundfont URL + callback) on first invocation', () => {
       addElement('midiPlayImage' + gu.grooveUtilsUniqueIndex);
 

@@ -17,8 +17,8 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **841 pass**                                                                                                                                                                                                                        |
-| `npm run test:e2e`     | Playwright golden-master and UI — **178 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
+| `npm test`             | Vitest unit suite — **884 pass**                                                                                                                                                                                                                        |
+| `npm run test:e2e`     | Playwright golden-master and UI — **193 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~81 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
@@ -76,6 +76,7 @@ Pure / low-coupling core (extracted from the two big files, imported back):
 
 Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` etc.),
 `editorChrome.js` (popovers, BPM buttons and swing in the editor's bars),
+`wakeLock.js` (keeps the screen on while a groove plays; see the wake lock note below),
 `grooves.js` (built-in groove library).
 
 ### Tests
@@ -119,6 +120,17 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
   `reuseExistingServer` is false, so a busy port fails the run. Stop the other process first.
 
 ## Conventions & gotchas
+
+- **Hosted files and the cache:** `fonts/` holds the Lato font files, served from our own host.
+  Firebase Hosting caches `soundfont/`, `font-awesome/`, `images/` and `fonts/` for 30 days
+  (`firebase.json`). A changed file in one of these folders needs a new file name, and every
+  reference must point to the new name. Same name, same bytes for 30 days.
+- **Wake lock:** `js/wakeLock.js` runs in the editor only, not in the embeds. Play takes a screen
+  wake lock. Stop or pause starts a 10 minute timer, and the lock is released when it ends.
+  Playing again before then keeps the lock.
+- **Sound loading:** `index.html` preloads the sound file, and `groove_utils.js` retries a failed
+  or stalled download (1, 3 and 9 s waits, 45 s stall timer that ends with the download, then a 30 s decode timer).
+  The docked library waits for the sound, but never more than 10 s (`main.js`).
 
 - **Adding a new `js/*.js` ES module:** add it to the module-files list in
   `eslint.config.js` (else "import/export only allowed with sourceType: module").

@@ -2444,20 +2444,34 @@ function GrooveWriter() {
   // this is called by a bunch of places anytime we modify the musical notes on the page
   // this will recreate the ABC code and will then use the ABC to rerender the sheet music
   // on the page.
-  function updateSheetMusic() {
+  // The width the music is drawn to, from the width of its container.
+  function sheetMusicRenderWidth() {
     var renderWidth = 600;
     var svgTarget = document.getElementById('svgTarget');
     if (svgTarget) {
       renderWidth = svgTarget.offsetWidth - 100;
       renderWidth = Math.floor(renderWidth * 0.8); // reduce width by 20% (This actually makes the notes bigger, because we scale up everything to max width)
     }
+    return renderWidth;
+  }
+
+  // The width of the last drawing. A resize that leaves it unchanged has nothing to redraw.
+  var lastRenderWidth = null;
+
+  function showAbcSource(abc) {
+    document.getElementById('ABCsource').value = abc;
+    root.updateGrooveDBSource();
+  }
+
+  function updateSheetMusic() {
+    var renderWidth = sheetMusicRenderWidth();
+    lastRenderWidth = renderWidth;
 
     showGrooveTitle();
 
     var fullABC = generate_ABC(renderWidth);
 
-    document.getElementById('ABCsource').value = fullABC;
-    root.updateGrooveDBSource();
+    showAbcSource(fullABC);
 
     root.myGrooveUtils.midiNoteHasChanged(); // pretty likely the case
 
@@ -2465,6 +2479,26 @@ function GrooveWriter() {
     root.updateCurrentURL();
 
     root.displayNewSVG();
+  }
+
+  // A resize changes only the width of the drawing. The groove is the same, so the MIDI, the
+  // URL and the title stay as they are: playback goes on, and the next loop does not reload.
+  function redrawForNewWidth() {
+    var renderWidth = sheetMusicRenderWidth();
+    if (renderWidth === lastRenderWidth) return;
+    lastRenderWidth = renderWidth;
+    showAbcSource(generate_ABC(renderWidth));
+    root.displayNewSVG();
+  }
+
+  // A drag or a rotation sends many resize events. Draw at most once per frame.
+  var resizeFrame = 0;
+  function onWindowResize() {
+    if (resizeFrame) return;
+    resizeFrame = window.requestAnimationFrame(function () {
+      resizeFrame = 0;
+      redrawForNewWidth();
+    });
   }
 
   // called by generate_ABC to remake the sheet music on the page
@@ -2934,7 +2968,7 @@ function GrooveWriter() {
       root.myGrooveUtils.doesDivisionSupportSwing(class_time_division)
     );
 
-    window.onresize = root.refresh_ABC;
+    window.addEventListener('resize', onWindowResize);
 
     root.browserInfo = root.myGrooveUtils.getBrowserInfo();
     if (root.browserInfo.browser == 'MSIE' && root.browserInfo.version < 10) {

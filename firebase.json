@@ -27,6 +27,10 @@
       {
         "source": "**/!(GrooveEmbed).html",
         "headers": [{ "key": "Content-Security-Policy", "value": "frame-ancestors 'self'" }]
+      },
+      {
+        "source": "{soundfont,font-awesome,images,fonts}/**",
+        "headers": [{ "key": "Cache-Control", "value": "public, max-age=2592000" }]
       }
     ]
   },

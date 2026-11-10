@@ -25,6 +25,8 @@ test('the built editor loads every file it asks for and plays', async ({ page, b
 
   await loadGroove(page, '/index.html');
   await soundfont;
+  // The sound file is preloaded, so its response can arrive before the app is ready to play.
+  await expect(page.locator('[id^="midiPlayImage"]')).toHaveClass(/Stopped/);
   expect(failed, failed.join('\n')).toEqual([]);
 
   await page.click('[id^="midiPlayImage"]');

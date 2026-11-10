@@ -109,6 +109,154 @@ var global_num_GrooveUtilsCreated = 0;
 var global_grooveUtilsScriptSrc = import.meta.url;
 var global_midiInitialized = false;
 
+// Sound file loading. The vendored MIDI.loadPlugin never reports a failed download: its XHR
+// request has no error handler, so a lost request leaves the callback uncalled forever.
+// We watch the request ourselves (see watchSoundfontRequests) and add a timeout for stalls.
+var SOUND_RETRY_DELAYS_MS = [1000, 3000, 9000];
+// The sound file is 200 to 270 KB. 45 s lets a 50 kbit/s link finish, so a slow but working
+// connection is not cut off. A request that fails outright does not wait for this.
+var SOUND_LOAD_TIMEOUT_MS = 45000;
+// After the download, MIDI.js decodes the audio. Its decoder has no error callback, so a failed
+// decode never reports. This limit starts when the download ends.
+var SOUND_DECODE_TIMEOUT_MS = 30000;
+var global_soundLoad = {
+  root: null, // the GrooveUtils whose location and callbacks drive the load
+  waiters: [], // every GrooveUtils that wants the sound
+  loading: false,
+  failures: 0,
+  attempt: null,
+  retryTimer: null,
+};
+
+// Test-only: window.__groovescribeSoundLoad = { delays: [ms, ...], timeoutMs } shortens the waits.
+function soundLoadSettings() {
+  var override = /** @type {any} */ (globalThis).__groovescribeSoundLoad || {};
+  return {
+    delays: override.delays || SOUND_RETRY_DELAYS_MS,
+    timeoutMs: override.timeoutMs || SOUND_LOAD_TIMEOUT_MS,
+    decodeTimeoutMs: override.decodeTimeoutMs || SOUND_DECODE_TIMEOUT_MS,
+  };
+}
+
+// MIDI.loadPlugin downloads the sound file through DOMLoader.sendRequest. Wrap it once so the
+// current attempt hears about a failed request and can abort a stalled one.
+function watchSoundfontRequests() {
+  var loader = /** @type {any} */ (globalThis).DOMLoader;
+  if (!loader || !loader.sendRequest || loader.sendRequest.watchesSoundfont) return;
+  var original = loader.sendRequest;
+  var watched = function (conf) {
+    var attempt = global_soundLoad.attempt;
+    if (!attempt || !conf || typeof conf.url !== 'string' || !/\.js(\?|$)/.test(conf.url)) {
+      return original.call(this, conf);
+    }
+    var previousOnLoad = conf.onload;
+    // The download is over: the stall timer ends and the decode timer takes over.
+    // A try that was already settled (set-up done) must not connect a second time.
+    conf.onload = function () {
+      if (attempt.done || global_midiInitialized) return;
+      clearTimeout(attempt.timer);
+      attempt.timer = setTimeout(attempt.fail, soundLoadSettings().decodeTimeoutMs);
+      if (previousOnLoad) return previousOnLoad.apply(this, arguments);
+    };
+    var previousOnError = conf.onerror;
+    conf.onerror = function () {
+      if (previousOnError) previousOnError.apply(this, arguments);
+      attempt.fail();
+    };
+    attempt.request = original.call(this, conf);
+    return attempt.request;
+  };
+  watched.watchesSoundfont = true;
+  loader.sendRequest = watched;
+}
+
+function notifySoundWaiters(eventName, argument) {
+  global_soundLoad.waiters.slice().forEach(function (waiter) {
+    var callbacks = waiter.midiEventCallbacks;
+    try {
+      callbacks[eventName](callbacks.classRoot, argument);
+    } catch (error) {
+      console.error(error); // one instance without a player must not stop the others
+    }
+  });
+}
+
+function startSoundLoad() {
+  var state = global_soundLoad;
+  var settings = soundLoadSettings();
+  var root = state.root;
+  var attempt = { done: false, request: null, timer: null, fail: null };
+  state.loading = true;
+  state.attempt = attempt;
+  watchSoundfontRequests();
+
+  attempt.fail = function () {
+    if (attempt.done || global_midiInitialized) return;
+    attempt.done = true;
+    clearTimeout(attempt.timer);
+    if (attempt.request && attempt.request.abort) attempt.request.abort();
+    if (state.attempt === attempt) state.attempt = null;
+    if (state.failures < settings.delays.length) {
+      var delay = settings.delays[state.failures];
+      state.failures++;
+      notifySoundWaiters('midiInitRetrying');
+      state.retryTimer = setTimeout(function () {
+        state.retryTimer = null;
+        if (global_midiInitialized) return;
+        startSoundLoad();
+      }, delay);
+    } else {
+      state.loading = false;
+      notifySoundWaiters('midiInitFailed', true);
+    }
+  };
+  attempt.timer = setTimeout(attempt.fail, settings.timeoutMs);
+
+  MIDI.loadPlugin({
+    soundfontUrl: root.getMidiSoundFontLocation(),
+    instruments: ['gunshot'],
+    callback: function () {
+      // A late success from an attempt that was already given up on still counts.
+      // A second success after the set-up is done does nothing.
+      if (global_midiInitialized) return;
+      global_midiInitialized = true;
+      state.loading = false;
+      clearTimeout(state.retryTimer);
+      state.retryTimer = null;
+      if (state.attempt) {
+        clearTimeout(state.attempt.timer);
+        state.attempt.done = true; // a running retry must not fail and start another load
+        var running = state.attempt.request;
+        if (running && running.abort) running.abort(); // and must not download or connect again
+      }
+      attempt.done = true;
+      state.attempt = null;
+      MIDI.programChange(9, 127); // use "Gunshot" instrument because I don't know how to create new ones
+      // iOS: keep a silent media track playing so Web Audio uses the media channel
+      // (audible with the silent switch on) and auto-resume the context on interaction.
+      // No-op if unmute.js isn't loaded or there's no Web Audio context (audiotag fallback).
+      if (
+        typeof unmute === 'function' &&
+        MIDI.Player &&
+        MIDI.Player.ctx &&
+        !MIDI.Player.unmuteController
+      ) {
+        MIDI.Player.unmuteController = unmute(MIDI.Player.ctx);
+      }
+      notifySoundWaiters('midiInitialized');
+    },
+  });
+}
+
+// The user tapped "Sound failed. Tap to retry." (or Play while it showed).
+function retrySoundLoad() {
+  var state = global_soundLoad;
+  if (global_midiInitialized || state.loading) return;
+  state.failures = 0;
+  notifySoundWaiters('midiInitFailed', false);
+  startSoundLoad();
+}
+
 // global constants
 
 // make these global so that they are shared among all the GrooveUtils classes invoked
@@ -987,7 +1135,42 @@ function GrooveUtils() {
         root.startOrStopMIDI_playback();
       }; // enable play button
       setupHotKeys(); // spacebar to play
+      root.showSoundNote('');
     };
+
+    // The first try failed and the retries run. Play does nothing yet, so say so.
+    this.midiInitRetrying = function (root) {
+      root.showSoundNote('loading');
+    };
+
+    // The sound file did not load after the retries (failed is true), or the user started
+    // a new try (failed is false). Shows the message and lets Play start a new try.
+    this.midiInitFailed = function (root, failed) {
+      root.showSoundNote(failed ? 'failed' : '');
+      var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
+      if (icon) icon.onclick = failed ? retrySoundLoad : null;
+    };
+  };
+
+  // state: '' (no note), 'loading' (retries run) or 'failed' (tap to retry).
+  root.showSoundNote = function (state) {
+    var note = document.getElementById('soundRetryNote' + root.grooveUtilsUniqueIndex);
+    if (!note) return;
+    note.textContent = '';
+    if (state === 'loading') {
+      var loading = document.createElement('span');
+      loading.className = 'soundLoading';
+      loading.textContent = 'Loading sound\u2026';
+      note.appendChild(loading);
+      return;
+    }
+    if (state !== 'failed') return;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'soundRetry';
+    button.textContent = 'Sound failed. Tap to retry.';
+    button.addEventListener('click', retrySoundLoad);
+    note.appendChild(button);
   };
   root.midiEventCallbacks = new root.midiEventCallbackClass(root);
 
@@ -1155,26 +1338,21 @@ function GrooveUtils() {
       return;
     }
 
-    global_midiInitialized = true;
-    MIDI.loadPlugin({
-      soundfontUrl: root.getMidiSoundFontLocation(),
-      instruments: ['gunshot'],
-      callback: function () {
-        MIDI.programChange(9, 127); // use "Gunshot" instrument because I don't know how to create new ones
-        // iOS: keep a silent media track playing so Web Audio uses the media channel
-        // (audible with the silent switch on) and auto-resume the context on interaction.
-        // No-op if unmute.js isn't loaded or there's no Web Audio context (audiotag fallback).
-        if (
-          typeof unmute === 'function' &&
-          MIDI.Player &&
-          MIDI.Player.ctx &&
-          !MIDI.Player.unmuteController
-        ) {
-          MIDI.Player.unmuteController = unmute(MIDI.Player.ctx);
-        }
-        root.midiEventCallbacks.midiInitialized(root.midiEventCallbacks.classRoot);
-      },
-    });
+    var state = global_soundLoad;
+    if (state.waiters.indexOf(root) === -1) state.waiters.push(root);
+    if (state.loading) {
+      // the load that runs now tells this instance too
+      if (state.failures > 0)
+        root.midiEventCallbacks.midiInitRetrying(root.midiEventCallbacks.classRoot);
+      return;
+    }
+    if (state.root) {
+      // An earlier load gave up. Show this instance the same message.
+      root.midiEventCallbacks.midiInitFailed(root.midiEventCallbacks.classRoot, true);
+      return;
+    }
+    state.root = root;
+    startSoundLoad();
   };
 
   root.getMidiStartTime = function () {
@@ -1746,6 +1924,11 @@ function GrooveUtils() {
         '"></span>';
 
     newHTML += '</div>';
+    // Holds the "Loading sound…" note and the "Sound failed. Tap to retry." button. role=status announces it when it appears.
+    newHTML +=
+      '<div class="soundRetryNote" role="status" id="soundRetryNote' +
+      root.grooveUtilsUniqueIndex +
+      '"></div>';
 
     return newHTML;
   };

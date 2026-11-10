@@ -421,6 +421,75 @@ test.describe('docked on a wide screen', () => {
     await expect(page.locator('#libraryPanel')).toBeVisible();
   });
 
+  test.describe('a device that was signed in connects by itself', () => {
+    const rememberUser = (page) =>
+      page.addInitScript(() =>
+        localStorage.setItem('grooveScribe.user', JSON.stringify({ name: 'Ana' }))
+      );
+    const watchSdk = (page) => {
+      const requests = [];
+      page.on('request', (request) => {
+        if (request.url().includes('vendor/firebase.js')) requests.push(request.url());
+      });
+      return requests;
+    };
+
+    test('without a click, once Play is ready', async ({ page }) => {
+      const sdkRequests = watchSdk(page);
+      await rememberUser(page);
+      await openEditor(page);
+      await expect(page.locator('#libraryPanel')).toBeVisible();
+      await expect.poll(() => sdkRequests.length).toBeGreaterThan(0);
+      await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+    });
+
+    test('and still connects where requestIdleCallback is missing', async ({ page }) => {
+      const sdkRequests = watchSdk(page);
+      await rememberUser(page);
+      await page.addInitScript(() => {
+        delete window.requestIdleCallback;
+      });
+      await openEditor(page);
+      await expect.poll(() => sdkRequests.length).toBeGreaterThan(0);
+      await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+    });
+
+    test('but not before Play is ready', async ({ page }) => {
+      const sdkRequests = watchSdk(page);
+      let releaseSound;
+      const held = new Promise((resolve) => (releaseSound = resolve));
+      await page.route('**/soundfont/gunshot-*.js', async (route) => {
+        await held;
+        await route.continue();
+      });
+      await rememberUser(page);
+      await page.goto(EDITOR);
+      await page.waitForSelector('#svgTarget svg');
+      await expect(page.locator('#libraryPanel')).toBeVisible();
+      await page.waitForTimeout(1500); // longer than the idle wait the SDK would need
+      expect(sdkRequests).toEqual([]);
+
+      releaseSound();
+      await expect.poll(() => sdkRequests.length).toBeGreaterThan(0);
+    });
+
+    test('and does not wait for a sound request that never answers', async ({ page }) => {
+      const sdkRequests = watchSdk(page);
+      await page.route('**/soundfont/gunshot-*.js', () => {}); // never answers
+      await rememberUser(page);
+      await page.goto(EDITOR);
+      await page.waitForSelector('#svgTarget svg');
+      await expect(page.locator('#libraryPanel')).toBeVisible();
+      expect(sdkRequests).toEqual([]);
+
+      // The cap is 10 s. The sound would need up to 193 s to give up.
+      await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible({
+        timeout: 20_000,
+      });
+      expect(sdkRequests.length).toBeGreaterThan(0);
+    });
+  });
+
   test('turning a tablet hides it and turning back restores it', async ({ page }) => {
     await openEditor(page);
     await openPanel(page);

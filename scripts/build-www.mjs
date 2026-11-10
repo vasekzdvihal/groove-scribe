@@ -44,6 +44,7 @@ const ITEMS = [
   ...SOUNDFONTS,
   'images',
   'font-awesome',
+  'fonts',
 ];
 
 /**

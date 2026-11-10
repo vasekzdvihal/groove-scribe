@@ -439,6 +439,18 @@ function startLibrary({ library, isActive, editor, afterPick }) {
   return act();
 }
 
+const IDLE_TIMEOUT_MS = 3000;
+
+// Run a task when the browser is idle, and after 3 s at the latest. Safari has no
+// requestIdleCallback, so a plain timer stands in.
+function whenIdle(task) {
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(task, { timeout: IDLE_TIMEOUT_MS });
+  } else {
+    setTimeout(task, 1);
+  }
+}
+
 // Connect to Firebase, and return the sign-out action.
 async function startCloud(search, editor, afterPick) {
   const resolved = resolveCloudConfig({ hostname: location.hostname, search });
@@ -498,10 +510,12 @@ async function startCloud(search, editor, afterPick) {
  *
  * @param {object} options
  * @param {string} options.search  The URL query at page start, before the editor rewrites it.
+ * @param {Promise<void>} [options.whenReady]  Settles when Play is ready. A panel that opens
+ *        by itself waits for it before it starts Firebase.
  * @param {{openGroove: function(string): void, currentQuery: function(): string,
  *          currentTitle: function(): string}} options.editor
  */
-export function initLibraryPanel({ search, editor }) {
+export function initLibraryPanel({ search, editor, whenReady = Promise.resolve() }) {
   const toggle = element('button', {
     id: 'libraryToggle',
     type: 'button',
@@ -608,5 +622,16 @@ export function initLibraryPanel({ search, editor }) {
 
   docked.addEventListener('change', followScreenWidth);
   if (location.hash === '#library') openPanel();
-  else if (docked.matches && keepOpen) followScreenWidth();
+  else if (docked.matches && keepOpen) {
+    // The panel opens at once, but it has nothing to show until Firebase is there. Play comes
+    // first: connect when the sound is ready and the browser has nothing better to do.
+    setOpen(true);
+    byId('lpLoading').hidden = false;
+    whenReady.then(() =>
+      whenIdle(() => {
+        if (panel.classList.contains('open')) connect();
+        else byId('lpLoading').hidden = true; // hidden while it waited: it connects on the next open
+      })
+    );
+  }
 }

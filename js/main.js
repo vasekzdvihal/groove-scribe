@@ -12,6 +12,7 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
+import { createWakeLock } from './wakeLock.js';
 
 // Inline HTML handlers (onclick="myGrooveWriter.…") and other consumers still
 // reference these as globals, so expose them on window.
@@ -22,6 +23,51 @@ window.grooves = grooves;
 const myGrooveWriter = new GrooveWriter();
 window.myGrooveWriter = myGrooveWriter;
 const utils = myGrooveWriter.myGrooveUtils;
+
+// Keep the screen on while a groove plays and between exercises. The editor only: the
+// embed pages never load this.
+const wakeLock = createWakeLock({
+  navigator,
+  document,
+  setTimeout: (...args) => window.setTimeout(...args),
+  clearTimeout: (...args) => window.clearTimeout(...args),
+});
+const callbacks = utils.midiEventCallbacks;
+for (const [name, hook] of [
+  ['playEvent', wakeLock.onPlay],
+  ['pauseEvent', wakeLock.onStop],
+  ['stopEvent', wakeLock.onStop],
+]) {
+  const original = callbacks[name];
+  callbacks[name] = function (...args) {
+    const result = original.apply(this, args);
+    hook();
+    return result;
+  };
+}
+
+// Resolves when Play is ready, or when the sound failed for good. A docked library panel
+// waits for this before it starts Firebase, so the SDK does not compete with the sound file.
+const soundSettled = new Promise((resolve) => {
+  for (const [name, settles] of [
+    ['midiInitialized', () => true],
+    ['midiInitFailed', (failed) => failed === true],
+  ]) {
+    const original = callbacks[name];
+    callbacks[name] = function (root, ...args) {
+      const result = original.call(this, root, ...args);
+      if (settles(...args)) resolve();
+      return result;
+    };
+  }
+});
+
+// The sound can take minutes to give up on a stalled request. The library waits at most this long.
+const LIBRARY_WAIT_FOR_SOUND_MS = 10_000;
+const soundOrTimeout = Promise.race([
+  soundSettled,
+  new Promise((resolve) => setTimeout(resolve, LIBRARY_WAIT_FOR_SOUND_MS)),
+]);
 
 // Conditional stylesheets (previously injected via document.write in <head>).
 function addStylesheet(href) {
@@ -83,6 +129,7 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
   initLibraryPanel({
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
+    whenReady: soundOrTimeout,
     editor: {
       openGroove(query, name) {
         utils.stopMIDI_playback();
