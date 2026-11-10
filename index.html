@@ -18,6 +18,53 @@
 				document.head.appendChild(viewportMeta);
 			}
 		</script>
+		<!-- The modules that js/main.js imports. Preloading lets the browser fetch them side by
+		     side, not one import level after another. tests/preload.test.js keeps the list true.
+		     The Firebase SDK is not here: it loads only when the library panel connects. -->
+		<link rel="modulepreload" href="js/main.js">
+		<link rel="modulepreload" href="js/groove_writer.js">
+		<link rel="modulepreload" href="js/groove_utils.js">
+		<link rel="modulepreload" href="js/grooveData.js">
+		<link rel="modulepreload" href="js/constants.js">
+		<link rel="modulepreload" href="js/browserInfo.js">
+		<link rel="modulepreload" href="js/musicMath.js">
+		<link rel="modulepreload" href="js/noteArrays.js">
+		<link rel="modulepreload" href="js/urlSerialization.js">
+		<link rel="modulepreload" href="js/midiFile.js">
+		<link rel="modulepreload" href="js/abcNotation.js">
+		<link rel="modulepreload" href="js/permutations.js">
+		<link rel="modulepreload" href="js/viewHtml.js">
+		<link rel="modulepreload" href="js/gridState.js">
+		<link rel="modulepreload" href="js/grooves.js">
+		<link rel="modulepreload" href="js/editorChrome.js">
+		<link rel="modulepreload" href="js/wakeLock.js">
+		<link rel="modulepreload" href="js/cloud/libraryPanel.js">
+		<link rel="modulepreload" href="js/cloud/firebaseClient.js">
+		<link rel="modulepreload" href="js/cloud/firebaseConfig.js">
+		<link rel="modulepreload" href="js/cloud/grooveLink.js">
+		<link rel="modulepreload" href="js/cloud/library.js">
+		<script>
+			// Start the sound download now. Play needs it, and nothing else holds up Play.
+			// MIDI.js picks Ogg when the browser can play it and MP3 otherwise, and fetches the
+			// file with XHR. A preload with the same URL, as=fetch and crossorigin is reused by
+			// that request, so the file is downloaded once. Only the format that will be used is
+			// preloaded. A failed preload costs nothing: the app's own retry still runs.
+			(function () {
+				try {
+					var audio = new Audio();
+					var ogg = audio.canPlayType('audio/ogg; codecs="vorbis"');
+					var format = ogg === 'probably' || ogg === 'maybe' ? 'ogg' : 'mp3';
+					var link = document.createElement('link');
+					link.rel = 'preload';
+					link.as = 'fetch';
+					link.crossOrigin = 'anonymous';
+					link.href = 'soundfont/gunshot-' + format + '.js';
+					document.head.appendChild(link);
+				} catch (error) {
+					// No Audio element: the app has no sound either.
+				}
+			})();
+		</script>
 		<link rel="icon" sizes="192x192" href="images/gscribe-icon-192.png">
 		<link rel="icon" sizes="96x96" href="images/gscribe-icon-96.png">
 		<link rel="apple-touch-icon" href="images/apple-touch-icon.png">

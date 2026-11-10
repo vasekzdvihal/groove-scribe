@@ -1,5 +1,6 @@
-// Lazy Firebase startup. The SDK loads only when the user opens the library panel, so
-// the editor does not download it on page load, and the embed pages never do.
+// Lazy Firebase startup. The SDK loads when the library panel connects: when the user opens
+// it, or when a docked panel opens by itself, after Play is ready and the browser is idle.
+// The editor does not download it on page load, and the embed pages never do.
 import { firebaseConfig } from './firebaseConfig.js';
 
 const EMULATOR_PROJECT_ID = 'demo-groovescribe';

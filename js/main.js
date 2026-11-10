@@ -46,6 +46,22 @@ for (const [name, hook] of [
   };
 }
 
+// Resolves when Play is ready, or when the sound failed for good. A docked library panel
+// waits for this before it starts Firebase, so the SDK does not compete with the sound file.
+const soundSettled = new Promise((resolve) => {
+  for (const [name, settles] of [
+    ['midiInitialized', () => true],
+    ['midiInitFailed', (failed) => failed === true],
+  ]) {
+    const original = callbacks[name];
+    callbacks[name] = function (root, ...args) {
+      const result = original.call(this, root, ...args);
+      if (settles(...args)) resolve();
+      return result;
+    };
+  }
+});
+
 // Conditional stylesheets (previously injected via document.write in <head>).
 function addStylesheet(href) {
   const link = document.createElement('link');
@@ -106,6 +122,7 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
   initLibraryPanel({
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
+    whenReady: soundSettled,
     editor: {
       openGroove(query, name) {
         utils.stopMIDI_playback();
