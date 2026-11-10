@@ -472,6 +472,22 @@ test.describe('docked on a wide screen', () => {
       releaseSound();
       await expect.poll(() => sdkRequests.length).toBeGreaterThan(0);
     });
+
+    test('and does not wait for a sound request that never answers', async ({ page }) => {
+      const sdkRequests = watchSdk(page);
+      await page.route('**/soundfont/gunshot-*.js', () => {}); // never answers
+      await rememberUser(page);
+      await page.goto(EDITOR);
+      await page.waitForSelector('#svgTarget svg');
+      await expect(page.locator('#libraryPanel')).toBeVisible();
+      expect(sdkRequests).toEqual([]);
+
+      // The cap is 10 s. The sound would need up to 193 s to give up.
+      await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible({
+        timeout: 20_000,
+      });
+      expect(sdkRequests.length).toBeGreaterThan(0);
+    });
   });
 
   test('turning a tablet hides it and turning back restores it', async ({ page }) => {

@@ -62,6 +62,13 @@ const soundSettled = new Promise((resolve) => {
   }
 });
 
+// The sound can take minutes to give up on a stalled request. The library waits at most this long.
+const LIBRARY_WAIT_FOR_SOUND_MS = 10_000;
+const soundOrTimeout = Promise.race([
+  soundSettled,
+  new Promise((resolve) => setTimeout(resolve, LIBRARY_WAIT_FOR_SOUND_MS)),
+]);
+
 // Conditional stylesheets (previously injected via document.write in <head>).
 function addStylesheet(href) {
   const link = document.createElement('link');
@@ -122,7 +129,7 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
   initLibraryPanel({
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
-    whenReady: soundSettled,
+    whenReady: soundOrTimeout,
     editor: {
       openGroove(query, name) {
         utils.stopMIDI_playback();
