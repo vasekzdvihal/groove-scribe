@@ -17,16 +17,16 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **884 pass**                                                                                                                                                                                                                        |
-| `npm run test:e2e`     | Playwright golden-master and UI — **193 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
-| `npm run lint`         | ESLint — **0 errors** (~81 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
+| `npm test`             | Vitest unit suite — **962 pass**                                                                                                                                                                                                                        |
+| `npm run test:e2e`     | Playwright golden-master and UI — **198 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
+| `npm run lint`         | ESLint — **0 errors** (~85 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
 | `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                                                                                                |
 | `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                  |
 | `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                          |
 | `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                                                                                              |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators (needs Java)                                                                                                                                                                           |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **70 pass** (needs Java)                                                                                                                                                             |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -77,6 +77,9 @@ Pure / low-coupling core (extracted from the two big files, imported back):
 Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` etc.),
 `editorChrome.js` (popovers, BPM buttons and swing in the editor's bars),
 `wakeLock.js` (keeps the screen on while a groove plays; see the wake lock note below),
+`registerServiceWorker.js` (decides whether this page uses the service worker, and registers it),
+`cloud/pendingSync.js` (the library's queued-write tracking: the flag, the sync wait, the slow timer
+and the leave warning),
 `grooves.js` (built-in groove library).
 
 ### Tests
@@ -100,8 +103,8 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - The library is a slide-in panel in the editor (`libraryPanel.js`, `css/library-panel.css`).
   `main.js` passes it a small `editor` object, so the panel never touches editor internals.
   `profile.html` only redirects to `index.html#library`.
-- The Firebase SDK loads when the user first opens the panel. The editor page load and the embed
-  pages never download it.
+- The page runs the Firebase SDK when the panel connects. The editor page load does not import
+  it, the embed pages never download it, and the service worker precaches the file for offline use.
 - A saved groove is its URL query string. `grooveLink.js` keeps only known groove parameters.
 - `allowedUsers/{uid}` documents are the access list. They are added by hand in the Firebase
   console. A new person needs one document with their Auth UID.
@@ -119,17 +122,46 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 - Test servers use fixed ports: `npm run test:e2e` uses 8010 and `npm run test:cloud` uses 8001.
   `reuseExistingServer` is false, so a busy port fails the run. Stop the other process first.
 
+### Service worker and offline library
+
+- `scripts/sw-template.js` becomes `www/sw.js` when `build-www.mjs` runs. The worker precaches from
+  `www/`, so a new runtime file must match `PRECACHED` in `build-www.mjs` or it is not available
+  offline.
+- `registerServiceWorker.js` registers the worker on production HTTPS. On localhost, `?sw=1` opts
+  in, so cached files never hide an edit during development. The native app does not use it.
+- Precached files never change within a version: a new version arrives complete. Pages use the
+  network first, and the other files come from the cache. The worker fetches with
+  `cache: 'no-cache'`, so an unchanged file costs a 304 on each deploy. A `retry` query (a retried
+  SDK import) finds the same cached file.
+- Keep `cleanUrls` out of `firebase.json`. A redirect on one precached file fails the install on
+  every device.
+- The page runs the SDK only when the panel connects, but the worker precaches the SDK file for
+  every visitor, once per version. `page.on('request')` does not see the worker's own downloads.
+- Firestore uses the persistent cache and many tabs when a small IndexedDB probe opens within 3 s.
+  Otherwise it uses the memory cache. The persistent cache also asks for durable storage once.
+- Offline write rules (`pendingSync.js`, `libraryPanel.js`): a change draws from the cache at
+  once and shows "Will sync". `grooveScribe.pendingWrites` in localStorage loads the SDK on the
+  next visit, so queued writes go out with the panel closed. A change sets the flag before the
+  cache read. Only the end of the sync wait or a clean server answer after it clears the flag, so
+  an unrelated server load cannot. A queued delete has no row, so writes are counted in session
+  state. In memory mode a queued write of any kind warns before the page leaves. `deleteLesson`
+  needs the server and is refused offline.
+
 ### Recovery from a bad service worker
 
 - Never roll back Hosting to a release from before the first service worker release, and never
   deploy without `/sw.js`. The browser keeps a worker when its update check gets a 404, so a
   bad worker then stays on every device.
-- To recover, ship the emergency worker: `SW_EMERGENCY=1 npx firebase deploy --only hosting
---project groove-scribe-zdvihal`. The predeploy build reads `SW_EMERGENCY`. It writes a
-  `www/sw.js` that has no fetch handler and deletes the precache, so every request goes to the
-  network. It must not unregister or navigate: the app registers the worker on every load, and
-  that would loop. A later normal deploy brings the normal worker back, so hold merges to `master`
-  until the bad worker is fixed.
+- To recover, ship the emergency worker. The predeploy build reads `SW_EMERGENCY`:
+
+  ```
+  SW_EMERGENCY=1 npx firebase deploy --only hosting --project groove-scribe-zdvihal
+  ```
+
+  It writes a `www/sw.js` that has no fetch handler and deletes the precache, so every request
+  goes to the network. It must not unregister or navigate: the app registers the worker on every
+  load, and that would loop. A later normal deploy brings the normal worker back, so hold merges
+  to `master` until the bad worker is fixed.
 
 ## Conventions & gotchas
 
@@ -154,7 +186,7 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
   markup is shared with the embeds, so `initPlaybackControls` changes it in the editor only.
 - **Library panel:** from 1100 px wide it docks next to the music and moves `#RightHandContent`. It
   opens by itself only for people who were signed in on the device or left it open, so a shared
-  link never loads the Firebase SDK. Below 1100 px it slides over the editor.
+  link does not load the Firebase SDK into the page. Below 1100 px it slides over the editor.
 - **Toms 2 and 3 and auto speed-up:** the grid has rows only for toms 1 and 4. A loaded groove keeps toms 2 and 3 in `class_kept_toms`, valid for one bar layout, with the same visibility rule as toms 1 and 4. The metronome auto speed-up rewrites the newest undo step instead of adding one.
 - **Golden master width:** the SVG scales to `#svgTarget` width. The spec pins a 1208 px wide
   window, so the baselines stay valid when bars change. Change that value only to re-baseline.
