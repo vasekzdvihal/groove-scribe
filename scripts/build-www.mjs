@@ -37,6 +37,7 @@ const SOUNDFONTS = ['soundfont/gunshot-ogg.js', 'soundfont/gunshot-mp3.js'];
 // The app entry + app-wired pages, plus every asset they load.
 const ITEMS = [
   'index.html',
+  'manifest.webmanifest',
   'profile.html',
   'GrooveEmbed.html',
   'gscribe_help.html',
@@ -53,10 +54,12 @@ const ITEMS = [
 // What the service worker stores for offline use, matched against the files in www/, so a new
 // module or stylesheet joins by itself. It is the editor page and everything that page loads.
 // Both sound formats are included (about 470 KB together): the browser picks one at run time.
+// The manifest and its icons (under images/) are here so the app installs offline.
 // Left out on purpose: the embed page, the old Font Awesome and its other font formats, and
 // SoundManager2, which nothing loads.
 const PRECACHED = [
   /^(index|profile|gscribe_help|gscribe_about)\.html$/,
+  /^manifest\.webmanifest$/,
   /^js\/.+\.js$/,
   /^css\/.+\.css$/,
   /^soundfont\/.+\.js$/,

@@ -83,6 +83,8 @@ describe('the service worker build', () => {
       'fonts/lato-latin-400-normal.woff2',
       'images/metronome.svg',
       'images/apple-touch-icon.png',
+      'images/gscribe-icon-512.png',
+      'manifest.webmanifest',
     ]) {
       put(path);
     }
@@ -98,10 +100,12 @@ describe('the service worker build', () => {
       'font-awesome/4.7.0/fonts/fontawesome-webfont.woff2',
       'fonts/lato-latin-400-normal.woff2',
       'images/apple-touch-icon.png',
+      'images/gscribe-icon-512.png',
       'images/metronome.svg',
       'index.html',
       'js/main.js',
       'js/vendor/firebase.js',
+      'manifest.webmanifest',
       'soundfont/gunshot-mp3.js',
       'soundfont/gunshot-ogg.js',
     ]);
