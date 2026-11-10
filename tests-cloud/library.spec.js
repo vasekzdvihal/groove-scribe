@@ -401,9 +401,13 @@ test.describe('without a network', () => {
     await signIn(page, email);
   }
 
-  async function reloadOffline(page) {
+  async function workerReady(page) {
     await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  }
+
+  async function reloadOffline(page) {
+    await workerReady(page);
     await page.context().setOffline(true);
     await openEditor(page, OFFLINE_EDITOR);
   }
@@ -618,6 +622,8 @@ test.describe('without a network', () => {
     await expect(page.locator('#lpLoading')).toHaveText('Waiting for the network…', {
       timeout: 7000,
     });
+    // Until Auth answers there is no user, and no form to write with.
+    await expect(page.locator('#lpLibrary')).toBeHidden();
 
     release();
     await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
@@ -688,6 +694,244 @@ test.describe('without a network', () => {
     await expect(page.getByRole('alert')).toHaveText('This account does not have access.');
     await expect(page.locator('#lpLibrary')).toBeHidden();
     await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
+  });
+
+  test.describe('offline writes', () => {
+    const WILL_SYNC = 'Will sync';
+    const REFUSED = 'A change could not be saved. The library shows what is saved.';
+
+    const syncLabel = (page, title) =>
+      page.locator('.lp-groove', { has: grooveButton(page, title) }).locator('.lp-sync');
+    const alert = (page) => page.getByRole('alert');
+    const goOffline = (page) => page.context().setOffline(true);
+    const goOnline = (page) => page.context().setOffline(false);
+
+    async function savedDocs(page, collection) {
+      const response = await page.request.get(`${DOCUMENTS}/${collection}`, { headers: OWNER });
+      const { documents = [] } = await response.json();
+      return documents.map((item) => ({ id: item.name.split('/').pop(), ...item.fields }));
+    }
+
+    // The input has a maxlength, so set the value directly. The rules refuse a title over 200
+    // characters, and they still let the account read its library.
+    async function addRefusedLink(page) {
+      const tool = page.locator('.lp-tool', { hasText: 'Add a groove link' });
+      if (!(await tool.getByLabel('Groove link').isVisible()))
+        await tool.locator('summary').click();
+      await tool.getByLabel('Groove link').fill('https://montulli.github.io/GrooveScribe/' + QUERY);
+      await tool.getByLabel('Title').evaluate((input) => {
+        input.value = 'x'.repeat(201);
+      });
+      await tool.getByRole('button', { name: 'Add groove' }).click();
+      await expect(page.locator('.lp-sync')).toHaveCount(1);
+    }
+
+    test('a save shows at once with the label, and syncs when back online', async ({ page }) => {
+      await signedInPanel(page);
+      await goOffline(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      await expect(syncLabel(page, 'Paradiddle')).toHaveText(WILL_SYNC);
+      await expect(page.getByLabel('Groove link')).toHaveValue('');
+      await expect(alert(page)).toBeHidden();
+
+      await goOnline(page);
+      await expect(syncLabel(page, 'Paradiddle')).toHaveCount(0);
+      const [saved] = await savedDocs(page, 'grooves');
+      expect(saved.title.stringValue).toBe('Paradiddle');
+      expect(saved.createdAt.timestampValue).toBeTruthy();
+    });
+
+    test('rename, move and delete of a groove draw at once', async ({ page }) => {
+      await signedInPanel(page);
+      await createLesson(page, 'Week 1');
+      await addLink(page, QUERY, 'Paradiddle');
+      await addLink(page, QUERY, 'Keeper');
+      await goOffline(page);
+
+      page.once('dialog', (dialog) => dialog.accept('Renamed'));
+      await page.getByRole('button', { name: 'Options for Paradiddle' }).click();
+      await page.getByRole('button', { name: 'Rename', exact: true }).click();
+      await expect(grooveButton(page, 'Renamed')).toBeVisible();
+      await expect(syncLabel(page, 'Renamed')).toHaveText(WILL_SYNC);
+
+      await page.getByRole('button', { name: 'Options for Renamed' }).click();
+      await page.getByLabel('Lesson for Renamed').selectOption({ label: 'No lesson' });
+      await expect(page.locator('.lp-lesson summary', { hasText: 'No lesson' })).toBeVisible();
+
+      page.once('dialog', (dialog) => dialog.accept());
+      await page.getByRole('button', { name: 'Options for Keeper' }).click();
+      await page.getByRole('button', { name: 'Delete', exact: true }).click();
+      await expect(grooveButton(page, 'Keeper')).toHaveCount(0);
+
+      await goOnline(page);
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      await expect.poll(async () => (await savedDocs(page, 'grooves')).length).toBe(1);
+      const [renamed] = await savedDocs(page, 'grooves');
+      expect(renamed.title.stringValue).toBe('Renamed');
+      expect(renamed.lessonId.nullValue).toBe(null);
+    });
+
+    test('a new lesson and a groove in it stay linked after the sync', async ({ page }) => {
+      await signedInPanel(page);
+      await goOffline(page);
+      await createLesson(page, 'Offline lesson');
+      await expect(page.getByLabel('Lesson name')).toHaveValue('');
+      await addLink(page, QUERY, 'Paradiddle');
+      const lesson = page.locator('.lp-lesson').filter({ hasText: 'Offline lesson' });
+      await expect(lesson.getByRole('button', { name: 'Paradiddle', exact: true })).toBeVisible();
+      await expect(lesson.locator('summary .lp-sync')).toHaveText(WILL_SYNC);
+
+      await goOnline(page);
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      const [savedLesson] = await savedDocs(page, 'lessons');
+      const [savedGroove] = await savedDocs(page, 'grooves');
+      expect(savedLesson.name.stringValue).toBe('Offline lesson');
+      expect(savedGroove.lessonId.stringValue).toBe(savedLesson.id);
+    });
+
+    test('a reload keeps the queued groove, its label and its sync', async ({ page }) => {
+      await signedInWithWorker(page);
+      await addLink(page, QUERY, 'Saved online');
+      await workerReady(page);
+      await goOffline(page);
+      await addLink(page, QUERY, 'Queued');
+
+      await reloadOffline(page);
+      await openPanel(page);
+      await expect(grooveButton(page, 'Queued')).toBeVisible();
+      await expect(syncLabel(page, 'Queued')).toHaveText(WILL_SYNC);
+      await expect(syncLabel(page, 'Saved online')).toHaveCount(0);
+
+      await goOnline(page);
+      await expect(syncLabel(page, 'Queued')).toHaveCount(0);
+      expect((await savedDocs(page, 'grooves')).map((item) => item.title.stringValue)).toContain(
+        'Queued'
+      );
+    });
+
+    test('a refused write says so and takes the label away', async ({ page }) => {
+      await signedInPanel(page);
+      await goOffline(page);
+      await addRefusedLink(page);
+
+      await goOnline(page);
+      await expect(alert(page)).toHaveText(REFUSED);
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      await expect(page.locator('.lp-open')).toHaveCount(0);
+      expect(await savedDocs(page, 'grooves')).toEqual([]);
+    });
+
+    test('a refused delete says so', async ({ page }) => {
+      await signedInPanel(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      await goOffline(page);
+      page.once('dialog', (dialog) => dialog.accept());
+      await page.getByRole('button', { name: 'Options for Paradiddle' }).click();
+      await page.getByRole('button', { name: 'Delete', exact: true }).click();
+      await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
+
+      // A delete leaves no row to compare, so only the write promise can report it.
+      const [saved] = await savedDocs(page, 'grooves');
+      await page.request.patch(`${DOCUMENTS}/grooves/${saved.id}?updateMask.fieldPaths=ownerId`, {
+        headers: OWNER,
+        data: { fields: { ownerId: { stringValue: 'someone-else' } } },
+      });
+      await goOnline(page);
+      await expect(alert(page)).toHaveText(REFUSED);
+    });
+
+    test('a write refused after a reload says so too', async ({ page }) => {
+      await signedInWithWorker(page);
+      await addLink(page, QUERY, 'Saved online');
+      await workerReady(page);
+      await goOffline(page);
+      await addRefusedLink(page);
+
+      await reloadOffline(page);
+      await openPanel(page);
+      await expect(page.locator('.lp-sync')).toHaveCount(1);
+
+      await goOnline(page);
+      await expect(alert(page)).toHaveText(REFUSED);
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      await expect(page.locator('.lp-open')).toHaveText(['Saved online']);
+    });
+
+    test('losing access while offline is reported and clears the label', async ({ page }) => {
+      await openEditor(page);
+      await openPanel(page);
+      const uid = await signIn(page, 'ana@example.com');
+      await goOffline(page);
+      await addLink(page, QUERY, 'Paradiddle');
+
+      await page.request.delete(`${DOCUMENTS}/allowedUsers/${uid}`, { headers: OWNER });
+      await goOnline(page);
+      await expect(alert(page)).toHaveText('This account does not have access.');
+      await expect(page.locator('.lp-sync')).toHaveCount(0);
+      await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
+    });
+
+    test('many saves share one waiter, and sign-out drops it', async ({ page }) => {
+      await patchLibrary(page, (source) =>
+        source.replace(
+          'export function createLibrary(sdk, db, uid) {',
+          'export function createLibrary(realSdk, db, uid) {\n' +
+            'const sdk = { ...realSdk, waitForPendingWrites: async (...args) => {\n' +
+            '  window.waitsStarted = (window.waitsStarted ?? 0) + 1;\n' +
+            '  window.waitsOpen = (window.waitsOpen ?? 0) + 1;\n' +
+            '  try { return await realSdk.waitForPendingWrites(...args); }\n' +
+            '  finally { window.waitsOpen -= 1; }\n' +
+            '} };'
+        )
+      );
+      const waits = () => page.evaluate(() => [window.waitsStarted ?? 0, window.waitsOpen ?? 0]);
+
+      await signedInPanel(page);
+      await goOffline(page);
+      for (const title of ['One', 'Two', 'Three']) await addLink(page, QUERY, title);
+      expect(await waits()).toEqual([1, 1]);
+
+      await signOut(page);
+      await expect.poll(waits).toEqual([1, 0]);
+
+      await goOnline(page);
+      await expect(alert(page)).toBeHidden();
+      await expect(grooveButton(page, 'One')).toHaveCount(0);
+      expect(await waits()).toEqual([1, 0]);
+    });
+
+    test('without IndexedDB an offline save keeps the other grooves', async ({ page }) => {
+      await page.addInitScript(() => {
+        IDBFactory.prototype.open = () => {
+          throw new DOMException('Storage refused', 'UnknownError');
+        };
+      });
+      await openEditor(page);
+      await openPanel(page);
+      const uid = await signIn(page, 'ana@example.com');
+      // This groove only ever comes from a server answer, like an older part of a library.
+      await page.request.post(`${DOCUMENTS}/grooves`, {
+        headers: OWNER,
+        data: {
+          fields: {
+            ownerId: { stringValue: uid },
+            lessonId: { nullValue: null },
+            title: { stringValue: 'From the server' },
+            query: { stringValue: QUERY },
+            createdAt: { timestampValue: '2020-01-01T00:00:00Z' },
+          },
+        },
+      });
+      await addLink(page, QUERY, 'Saved online');
+      await expect(grooveButton(page, 'From the server')).toBeVisible();
+      await page.waitForTimeout(500); // the last list has let go of its documents
+
+      await goOffline(page);
+      await addLink(page, QUERY, 'Queued');
+      await expect(grooveButton(page, 'From the server')).toBeVisible();
+      await expect(syncLabel(page, 'Queued')).toHaveText(WILL_SYNC);
+    });
   });
 
   test('two tabs both show the library and share the persistent cache', async ({ page }) => {

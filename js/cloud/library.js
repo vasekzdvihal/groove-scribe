@@ -13,13 +13,22 @@ export function createLibrary(sdk, db, uid) {
   const grooves = sdk.collection(db, 'grooves');
   const now = () => sdk.serverTimestamp();
 
+  // A write promise settles only when the server answers, and offline it does not settle. The
+  // local cache has the change as soon as the SDK has the call, so the panel does not wait:
+  // it draws from the cache and watches `committed` only to report a refusal.
+  const queued = (committed, id) => ({ committed, id });
+
   // The cached list has the same owner filter as the server list, so another account on this
   // device never shows.
   const ownedQuery = (ref, sortField, direction) =>
     sdk.query(ref, sdk.where('ownerId', '==', uid), sdk.orderBy(sortField, direction));
 
   const toList = (snapshot) => ({
-    items: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+    items: snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+      hasPendingWrites: item.metadata.hasPendingWrites,
+    })),
     fromCache: snapshot.metadata.fromCache,
   });
 
@@ -51,18 +60,21 @@ export function createLibrary(sdk, db, uid) {
     listCachedLessons: () => listCached(lessons, 'name', 'asc'),
     listCachedGrooves: () => listCached(grooves, 'createdAt', 'asc'),
 
-    async createLesson(name) {
-      const ref = await sdk.addDoc(lessons, {
-        ownerId: uid,
-        name,
-        createdAt: now(),
-        updatedAt: now(),
-      });
-      return ref.id;
+    // Settles when the server has answered every write queued so far, also the writes of an
+    // earlier visit. Offline it waits. The SDK rejects it when the user changes.
+    waitForPendingWrites: () => sdk.waitForPendingWrites(db),
+
+    // The id comes from the SDK at once, so a groove can go into a lesson that is still queued.
+    createLesson(name) {
+      const ref = sdk.doc(lessons);
+      return queued(
+        sdk.setDoc(ref, { ownerId: uid, name, createdAt: now(), updatedAt: now() }),
+        ref.id
+      );
     },
 
     renameLesson: (id, name) =>
-      sdk.updateDoc(sdk.doc(db, 'lessons', id), { name, updatedAt: now() }),
+      queued(sdk.updateDoc(sdk.doc(db, 'lessons', id), { name, updatedAt: now() })),
 
     // The grooves stay in the library, unfiled. Lesson delete is the last write,
     // so a failure part-way never leaves a groove that points to a missing lesson.
@@ -82,24 +94,32 @@ export function createLibrary(sdk, db, uid) {
       await sdk.deleteDoc(sdk.doc(db, 'lessons', id));
     },
 
-    async saveGroove({ query, title, lessonId }) {
-      const ref = await sdk.addDoc(grooves, {
-        ownerId: uid,
-        lessonId: lessonId ?? null,
-        title: title ?? '',
-        query,
-        createdAt: now(),
-        updatedAt: now(),
-      });
-      return ref.id;
+    saveGroove({ query, title, lessonId }) {
+      const ref = sdk.doc(grooves);
+      return queued(
+        sdk.setDoc(ref, {
+          ownerId: uid,
+          lessonId: lessonId ?? null,
+          title: title ?? '',
+          query,
+          createdAt: now(),
+          updatedAt: now(),
+        }),
+        ref.id
+      );
     },
 
     moveGroove: (id, lessonId) =>
-      sdk.updateDoc(sdk.doc(db, 'grooves', id), { lessonId: lessonId ?? null, updatedAt: now() }),
+      queued(
+        sdk.updateDoc(sdk.doc(db, 'grooves', id), {
+          lessonId: lessonId ?? null,
+          updatedAt: now(),
+        })
+      ),
 
     renameGroove: (id, title) =>
-      sdk.updateDoc(sdk.doc(db, 'grooves', id), { title, updatedAt: now() }),
+      queued(sdk.updateDoc(sdk.doc(db, 'grooves', id), { title, updatedAt: now() })),
 
-    deleteGroove: (id) => sdk.deleteDoc(sdk.doc(db, 'grooves', id)),
+    deleteGroove: (id) => queued(sdk.deleteDoc(sdk.doc(db, 'grooves', id))),
   };
 }

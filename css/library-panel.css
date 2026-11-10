@@ -231,6 +231,15 @@
   border-color: transparent;
 }
 
+#libraryPanel .lp-sync {
+  flex: none;
+  align-self: center;
+  color: var(--lp-muted);
+  font-size: 13px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
 .lp-actions {
   display: flex;
   flex-wrap: wrap;

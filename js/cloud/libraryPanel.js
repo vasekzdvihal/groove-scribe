@@ -26,6 +26,8 @@ const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
 const LOADING_TEXT = 'Loading…';
 const WAITING_TEXT = 'Waiting for the network…';
 const WAITING_AFTER_MS = 5000;
+const WILL_SYNC_TEXT = 'Will sync';
+const WRITE_REFUSED = 'A change could not be saved. The library shows what is saved.';
 
 const PANEL_HTML = `
   <header class="lp-head">
@@ -78,12 +80,17 @@ const PANEL_HTML = `
 
 const byId = (id) => document.getElementById(id);
 const grooveName = (groove) => groove.title || 'Untitled groove';
+const isPending = (item) => item.hasPendingWrites;
+// A write can only change these fields, so they tell whether the server kept it.
+const editedFields = (item) => JSON.stringify([item.name, item.title, item.lessonId]);
 
 function element(tag, properties = {}, children = []) {
   const node = Object.assign(document.createElement(tag), properties);
   node.append(...children);
   return node;
 }
+
+const syncLabel = () => element('small', { className: 'lp-sync', textContent: WILL_SYNC_TEXT });
 
 function button(textContent, onClick, properties = {}) {
   const node = element('button', { type: 'button', textContent, ...properties });
@@ -248,6 +255,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
   let currentGrooveId = null;
   let menuGrooveId = null;
   let openLesson = readLastLesson();
+  let waitingForSync = false;
 
   let drawn = null;
 
@@ -259,16 +267,75 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     grooves = nextGrooves;
     if (redraw || next !== drawn) render();
     drawn = next;
+    if ([...lessons, ...grooves].some(isPending)) followPendingWrites();
+  }
+
+  const readCached = () => Promise.all([library.listCachedLessons(), library.listCachedGrooves()]);
+  const readServer = () => Promise.all([library.listLessons(), library.listGrooves()]);
+
+  // One waiter per session. The wait covers every write queued so far. A write queued later
+  // shows as a pending row in the redraw after it, and that starts the next wait.
+  async function followPendingWrites() {
+    if (waitingForSync) return;
+    waitingForSync = true;
+    try {
+      await library.waitForPendingWrites();
+    } catch (error) {
+      // The SDK rejects the wait when the user changes. The new session has its own waiter.
+      console.warn('Stopped waiting for the sync:', error);
+      return;
+    } finally {
+      waitingForSync = false;
+    }
+    if (isActive()) await redrawAfterSync();
+  }
+
+  // The server has answered every write, so the labels can go. A write from an earlier visit
+  // has no promise to report a refusal: a row that was pending and did not stay is the sign.
+  async function redrawAfterSync() {
+    const wasPending = [...lessons, ...grooves].filter(isPending);
+    let lists;
+    try {
+      lists = await readServer();
+    } catch (error) {
+      if (!isActive()) return;
+      reportFailure(error);
+      lists = await readCached().catch(() => null);
+    }
+    if (!lists || !isActive()) return;
+    const [nextLessons, nextGrooves] = lists;
+    const answer = new Map([...nextLessons.items, ...nextGrooves.items].map((i) => [i.id, i]));
+    const refused = wasPending.some((item) => {
+      const now = answer.get(item.id);
+      return !now || (!now.hasPendingWrites && editedFields(now) !== editedFields(item));
+    });
+    draw(nextLessons.items, nextGrooves.items);
+    if (refused && byId('lpMessage').hidden) showMessage(WRITE_REFUSED);
+  }
+
+  // Report a refused write, and draw the library without it. The local cache has already
+  // dropped the change when the promise rejects.
+  async function reportIfRefused(committed) {
+    try {
+      await committed;
+    } catch (error) {
+      console.error(error);
+      if (!isActive()) return;
+      showMessage(WRITE_REFUSED);
+      try {
+        const [nextLessons, nextGrooves] = await readCached();
+        if (isActive()) draw(nextLessons.items, nextGrooves.items);
+      } catch (readError) {
+        console.warn('The library cache could not be read:', readError);
+      }
+    }
   }
 
   // Draw what this device has, before the server answers. A failure here costs nothing: the
   // server answer comes next.
   async function drawCached() {
     try {
-      const [cachedLessons, cachedGrooves] = await Promise.all([
-        library.listCachedLessons(),
-        library.listCachedGrooves(),
-      ]);
+      const [cachedLessons, cachedGrooves] = await readCached();
       if (!isActive() || (!cachedLessons.items.length && !cachedGrooves.items.length)) return false;
       draw(cachedLessons.items, cachedGrooves.items);
       return true;
@@ -278,15 +345,14 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     }
   }
 
-  // Run one change, then redraw from the server. Failures stay on screen.
+  // Run one change and draw it from the cache, so it shows at once, also offline. Without a
+  // change, load from the server. Failures stay on screen.
   async function act(change) {
     showMessage('');
     try {
-      const result = await change?.();
-      const [nextLessons, nextGrooves] = await Promise.all([
-        library.listLessons(),
-        library.listGrooves(),
-      ]);
+      const written = await change?.();
+      if (written) reportIfRefused(written.committed);
+      const [nextLessons, nextGrooves] = await (change ? readCached() : readServer());
       // A slow response must not draw into another user's session.
       if (!isActive()) return { ok: false };
       // Only a change closes a menu. A load that finishes must not close one the user opened.
@@ -294,7 +360,6 @@ function startLibrary({ library, isActive, editor, afterPick }) {
       draw(nextLessons.items, nextGrooves.items, Boolean(change));
       return {
         ok: true,
-        result,
         fromCache: nextLessons.fromCache || nextGrooves.fromCache,
         isEmpty: lessons.length === 0 && grooves.length === 0,
       };
@@ -359,6 +424,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     more.setAttribute('aria-expanded', String(isMenuOpen));
     return element('li', { className: 'lp-groove' }, [
       open,
+      ...(isPending(groove) ? [syncLabel()] : []),
       more,
       ...(isMenuOpen ? [grooveActions(groove)] : []),
     ]);
@@ -387,6 +453,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     const section = element('details', { className: 'lp-lesson', open: isOpen }, [
       element('summary', {}, [
         element('span', { textContent: lesson?.name ?? 'No lesson' }),
+        ...(lesson && isPending(lesson) ? [syncLabel()] : []),
         element('small', { textContent: String(lessonGrooves.length) }),
       ]),
       lessonGrooves.length
@@ -448,10 +515,10 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     event.preventDefault();
     const name = byId('lpLessonName').value.trim();
     if (!name) return;
-    const created = await act(async () => {
-      const id = await library.createLesson(name);
-      selectLesson(id);
-      return id;
+    const created = await act(() => {
+      const written = library.createLesson(name);
+      selectLesson(written.id);
+      return written;
     });
     if (created.ok) byId('lpLessonName').value = '';
   };
@@ -489,15 +556,15 @@ function startLibrary({ library, isActive, editor, afterPick }) {
       return;
     }
     const lessonId = byId('lpSaveLesson').value || null;
-    const saved = await act(async () => {
-      const id = await library.saveGroove({
+    const saved = await act(() => {
+      const written = library.saveGroove({
         query: parsed.query,
         title: byId('lpSaveTitle').value.trim(),
         lessonId,
       });
-      currentGrooveId = id;
+      currentGrooveId = written.id;
       selectLesson(lessonId ?? UNFILED);
-      return id;
+      return written;
     });
     if (saved.ok) byId('lpSaveTool').open = false;
   };
