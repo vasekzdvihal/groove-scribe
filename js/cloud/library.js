@@ -13,11 +13,22 @@ export function createLibrary(sdk, db, uid) {
   const grooves = sdk.collection(db, 'grooves');
   const now = () => sdk.serverTimestamp();
 
+  // Offline, the SDK can wait about 10 s for the server before it answers from the cache.
+  // The browser already knows there is no network, so skip that wait. The cached list is
+  // filtered by owner like the server list, so another account on this device never shows.
   async function listOwned(ref, sortField, direction) {
-    const snapshot = await sdk.getDocs(
-      sdk.query(ref, sdk.where('ownerId', '==', uid), sdk.orderBy(sortField, direction))
+    const owned = sdk.query(
+      ref,
+      sdk.where('ownerId', '==', uid),
+      sdk.orderBy(sortField, direction)
     );
-    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    const snapshot = await (navigator.onLine === false
+      ? sdk.getDocsFromCache(owned)
+      : sdk.getDocs(owned));
+    return {
+      items: snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+      fromCache: snapshot.metadata.fromCache,
+    };
   }
 
   return {
@@ -51,8 +62,10 @@ export function createLibrary(sdk, db, uid) {
 
     // The grooves stay in the library, unfiled. Lesson delete is the last write,
     // so a failure part-way never leaves a groove that points to a missing lesson.
+    // This read asks the server only: a cached list can miss grooves in the lesson, and it
+    // fails offline, so the delete is refused and the error shows in the panel.
     async deleteLesson(id) {
-      const snapshot = await sdk.getDocs(
+      const snapshot = await sdk.getDocsFromServer(
         sdk.query(grooves, sdk.where('ownerId', '==', uid), sdk.where('lessonId', '==', id))
       );
       for (let start = 0; start < snapshot.docs.length; start += BATCH_LIMIT) {

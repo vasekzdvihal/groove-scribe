@@ -346,6 +346,173 @@ test('the top bar shows the library name of a groove without a title', async ({ 
   await expect(page.locator('#tuneTitle')).toHaveValue('');
 });
 
+test.describe('without a network', () => {
+  // ?sw=1 turns the service worker on for localhost. A real reload then comes up with no
+  // network, the way it does for a user in a rehearsal room. A page that stays open would
+  // not prove that the cache and the sign-in survive a restart.
+  const OFFLINE_EDITOR = EDITOR + '&sw=1';
+  const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
+  // The SDK waits about 10 s for the server before it answers from the cache.
+  const OFFLINE_ANSWER_MS = 5000;
+
+  const retryButton = (page) => page.getByRole('button', { name: 'Retry' });
+  const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
+
+  async function signedInWithWorker(page, email = 'ana@example.com') {
+    await openEditor(page, OFFLINE_EDITOR);
+    await openPanel(page);
+    await signIn(page, email);
+  }
+
+  async function reloadOffline(page) {
+    await page.evaluate(() => navigator.serviceWorker.ready.then(() => undefined));
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+    await page.context().setOffline(true);
+    await openEditor(page, OFFLINE_EDITOR);
+  }
+
+  test('an offline reload shows the saved grooves', async ({ page }) => {
+    await signedInWithWorker(page);
+    await createLesson(page, 'Week 1');
+    await addLink(page, QUERY, 'Paradiddle');
+
+    await reloadOffline(page);
+    const opened = Date.now();
+    await openPanel(page);
+    const week = page.locator('.lp-lesson').filter({ hasText: 'Week 1' });
+    await expect(week.getByRole('button', { name: 'Paradiddle', exact: true })).toBeVisible();
+    expect(Date.now() - opened).toBeLessThan(OFFLINE_ANSWER_MS);
+
+    // The account must still be known, and nothing may report a failure.
+    await expect(page.locator('#helpAnchor')).toHaveClass(/signedIn/);
+    await expect(page.locator('#lpLibrary')).toBeVisible();
+    await page.waitForTimeout(500); // the profile save runs after the list is on screen
+    await expect(page.locator('#lpMessage')).toBeHidden();
+    await expect(retryButton(page)).toBeHidden();
+  });
+
+  test('a library that is not on this device says so and Retry loads it', async ({ page }) => {
+    await signedInWithWorker(page);
+
+    await reloadOffline(page);
+    await openPanel(page);
+    await expect(page.getByRole('alert')).toHaveText(NOT_ON_DEVICE);
+    await expect(page.getByText('Your library is empty.')).toBeHidden();
+    await expect(page.locator('#lpLoading')).toBeHidden();
+
+    await page.context().setOffline(false);
+    await retryButton(page).click();
+    await expect(page.getByText('Your library is empty.')).toBeVisible();
+    await expect(page.getByRole('alert')).toBeHidden();
+    await expect(retryButton(page)).toBeHidden();
+  });
+
+  test('a failed first load shows Retry, and Retry recovers without a reload', async ({ page }) => {
+    await page.route('**/js/vendor/firebase.js', (route) => route.abort());
+    await openEditor(page);
+    await openPanel(page);
+    await expect(retryButton(page)).toBeVisible();
+    await expect(page.locator('#lpLoading')).toBeHidden();
+
+    await page.unroute('**/js/vendor/firebase.js');
+    await retryButton(page).click();
+    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+    await expect(page.getByRole('alert')).toBeHidden();
+    await expect(retryButton(page)).toBeHidden();
+  });
+
+  test('a list that fails shows Retry, and Retry recovers without a reload', async ({ page }) => {
+    await page.route('**/js/cloud/library.js', async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      // A list call rejects for as long as the page sets window.failLists.
+      await route.fulfill({
+        response,
+        body: body.replace(
+          'async function listOwned(ref, sortField, direction) {',
+          'async function listOwned(ref, sortField, direction) {\n' +
+            "if (window.failLists) throw new Error('Simulated list failure');"
+        ),
+      });
+    });
+    await page.addInitScript(() => {
+      window.failLists = true;
+    });
+    await openEditor(page);
+    await openPanel(page);
+    await allowAccount(page.request, 'ana@example.com');
+    await signInWithCredential(page, 'ana@example.com');
+    await expect(retryButton(page)).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('did not work');
+    await expect(page.locator('#lpLibrary')).toBeHidden();
+
+    await page.evaluate(() => {
+      window.failLists = false;
+    });
+    await retryButton(page).click();
+    await expect(page.getByText('Your library is empty.')).toBeVisible();
+    await expect(retryButton(page)).toBeHidden();
+  });
+
+  test('deleting a lesson offline is refused and changes nothing', async ({ page }) => {
+    await signedInWithWorker(page);
+    await createLesson(page, 'Week 1');
+    await addLink(page, QUERY, 'Paradiddle');
+
+    await reloadOffline(page);
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Delete lesson' }).click();
+    await expect(page.getByRole('alert')).toContainText('Check your connection');
+
+    await page.context().setOffline(false);
+    await openEditor(page, OFFLINE_EDITOR);
+    await openPanel(page);
+    const week = page.locator('.lp-lesson').filter({ hasText: 'Week 1' });
+    await expect(week.getByRole('button', { name: 'Paradiddle', exact: true })).toBeVisible();
+  });
+
+  test('two accounts on one device do not see each other offline', async ({ page }) => {
+    await signedInWithWorker(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await signOut(page);
+    await openPanel(page);
+    await signIn(page, 'bob@example.com');
+    await expect(page.getByText('Your library is empty.')).toBeVisible();
+
+    await reloadOffline(page);
+    await openPanel(page);
+    await expect(page.getByRole('alert')).toHaveText(NOT_ON_DEVICE);
+    await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
+  });
+
+  for (const [name, breakStorage] of [
+    [
+      'is missing',
+      () => Object.defineProperty(window, 'indexedDB', { value: undefined, configurable: true }),
+    ],
+    [
+      'refuses to open',
+      () => {
+        IDBFactory.prototype.open = () => {
+          throw new DOMException('Storage refused', 'UnknownError');
+        };
+      },
+    ],
+  ]) {
+    test(`sign-in and the library still work when IndexedDB ${name}`, async ({ page }) => {
+      await page.addInitScript(breakStorage);
+      await openEditor(page);
+      await openPanel(page);
+      await signIn(page, 'ana@example.com');
+      await addLink(page, QUERY, 'Paradiddle');
+      await expect(page.locator('#lpMessage')).toBeHidden();
+      await expect(retryButton(page)).toBeHidden();
+    });
+  }
+});
+
 test.describe('docked on a wide screen', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

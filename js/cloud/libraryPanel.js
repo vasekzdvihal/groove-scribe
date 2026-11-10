@@ -22,6 +22,7 @@ const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
 // Keep the same width in css/library-panel.css.
 const DOCKED_QUERY = '(min-width: 1100px)';
 const UNFILED = 'unfiled';
+const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
 
 const PANEL_HTML = `
   <header class="lp-head">
@@ -30,6 +31,7 @@ const PANEL_HTML = `
   </header>
   <div class="lp-body">
     <p id="lpMessage" role="alert" hidden></p>
+    <button id="lpRetry" class="lp-primary" type="button" hidden>Retry</button>
     <p id="lpLoading" hidden>Loading…</p>
     <section id="lpSignedOut" hidden>
       <p>Sign in to keep your grooves in lessons and open them on any device.</p>
@@ -122,6 +124,17 @@ function reportFailure(error) {
   );
 }
 
+// Show the Retry button. A click runs the action again and leaves the page as it is.
+function showRetry(action) {
+  const retry = byId('lpRetry');
+  retry.onclick = () => {
+    retry.hidden = true;
+    showMessage('');
+    action();
+  };
+  retry.hidden = false;
+}
+
 function lessonOptions(lessons, selectedId) {
   return [
     element('option', { value: '', textContent: 'No lesson', selected: !selectedId }),
@@ -206,6 +219,7 @@ function clearLibrary() {
   byId('lpSaveLesson').replaceChildren();
   byId('lpLinkLesson').replaceChildren();
   for (const id of ['lpSaveForm', 'lpLinkForm', 'lpLessonForm']) byId(id).reset();
+  byId('lpRetry').hidden = true;
   showMessage('');
 }
 
@@ -227,11 +241,16 @@ function startLibrary({ library, isActive, editor, afterPick }) {
       ]);
       // A slow response must not draw into another user's session.
       if (!isActive()) return { ok: false };
-      lessons = nextLessons;
-      grooves = nextGrooves;
+      lessons = nextLessons.items;
+      grooves = nextGrooves.items;
       menuGrooveId = null;
       render();
-      return { ok: true, result };
+      return {
+        ok: true,
+        result,
+        fromCache: nextLessons.fromCache || nextGrooves.fromCache,
+        isEmpty: lessons.length === 0 && grooves.length === 0,
+      };
     } catch (error) {
       if (isActive()) reportFailure(error);
       return { ok: false, denied: isDenied(error) };
@@ -436,7 +455,7 @@ function startLibrary({ library, isActive, editor, afterPick }) {
     if (saved.ok) byId('lpSaveTool').open = false;
   };
 
-  return act();
+  return { load: () => act() };
 }
 
 const IDLE_TIMEOUT_MS = 3000;
@@ -486,20 +505,34 @@ async function startCloud(search, editor, afterPick) {
     if (!user) return;
 
     const library = createLibrary(sdk, db, user.uid);
-    byId('lpLoading').hidden = false;
     // Attach the form handlers before the library becomes visible.
-    const started = await startLibrary({
+    const session = startLibrary({
       library,
       isActive: () => activeUid === user.uid,
       editor,
       afterPick,
     });
-    if (activeUid !== user.uid) return;
-    byId('lpLoading').hidden = true;
-    // A refused account sees the message only, and the forms stay hidden.
-    if (started.denied) return;
-    byId('lpLibrary').hidden = false;
-    library.saveProfile(user).catch(reportFailure);
+
+    async function showWhenLoaded() {
+      byId('lpLoading').hidden = false;
+      const loaded = await session.load();
+      if (activeUid !== user.uid) return;
+      byId('lpLoading').hidden = true;
+      // A refused account sees the message only, and the forms stay hidden.
+      if (loaded.denied) return;
+      // An empty answer from the cache says nothing about the library on the server.
+      const notOnDevice = loaded.ok && loaded.fromCache && loaded.isEmpty;
+      if (notOnDevice) showMessage(NOT_ON_DEVICE);
+      if (!loaded.ok || notOnDevice) {
+        showRetry(showWhenLoaded);
+        return;
+      }
+      byId('lpLibrary').hidden = false;
+      // Offline, the profile would only queue another write for later. The next online load
+      // saves it.
+      if (!loaded.fromCache) library.saveProfile(user).catch(reportFailure);
+    }
+    await showWhenLoaded();
   });
 
   return { signOut: () => sdk.signOut(auth) };
@@ -570,6 +603,7 @@ export function initLibraryPanel({ search, editor, whenReady = Promise.resolve()
       started = null;
       byId('lpLoading').hidden = true;
       reportFailure(error);
+      showRetry(connect);
       return null;
     });
     return started;
