@@ -221,11 +221,51 @@ describe('GrooveUtils MIDI playback controls', () => {
           gu.oneTimeInitializeMidi();
           vi.advanceTimersByTime(900);
           requests[0].conf.onload(); // the download is over, MIDI.js decodes now
-          vi.advanceTimersByTime(60000); // decoding takes longer than the stall timeout
+          vi.advanceTimersByTime(25000); // decoding takes longer than the stall timeout
           expect(callbacks).toHaveLength(1); // no second download
           expect(requests[0].abort).not.toHaveBeenCalled();
           callbacks[0]();
           expect(globalThis.MIDI.programChange).toHaveBeenCalledTimes(1);
+        });
+
+        it('a decode that never reports fails the try after 30 s, then retries', () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(900);
+          requests[0].conf.onload(); // downloaded, but the callback never runs
+          vi.advanceTimersByTime(29999);
+          expect(callbacks).toHaveLength(1);
+          vi.advanceTimersByTime(1 + 10); // decode limit, then the first delay
+          expect(callbacks).toHaveLength(2);
+          expect(note.textContent).toBe('Loading sound\u2026');
+        });
+
+        it('shows the failure message when every decode hangs', () => {
+          gu.oneTimeInitializeMidi();
+          for (let i = 0; i < 4; i++) {
+            requests[i].conf.onload();
+            vi.advanceTimersByTime(30000 + 100);
+          }
+          expect(callbacks).toHaveLength(4);
+          expect(note.querySelector('button').textContent).toBe('Sound failed. Tap to retry.');
+        });
+
+        it('a success during the decode wait cancels the decode timer', () => {
+          gu.oneTimeInitializeMidi();
+          requests[0].conf.onload();
+          callbacks[0]();
+          vi.advanceTimersByTime(60000);
+          expect(callbacks).toHaveLength(1);
+          expect(note.querySelector('button')).toBeNull();
+        });
+
+        it('an instance that joins during a retry sees the loading note at once', async () => {
+          gu.oneTimeInitializeMidi();
+          vi.advanceTimersByTime(1000); // the first try timed out
+          const late = await newGrooveUtils();
+          addElement('midiPlayImage' + late.grooveUtilsUniqueIndex);
+          const lateNote = addElement('soundRetryNote' + late.grooveUtilsUniqueIndex);
+          late.oneTimeInitializeMidi();
+          expect(lateNote.textContent).toBe('Loading sound\u2026');
         });
 
         it('a success stops a running retry, so it never connects again', () => {

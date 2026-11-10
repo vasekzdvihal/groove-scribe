@@ -116,6 +116,9 @@ var SOUND_RETRY_DELAYS_MS = [1000, 3000, 9000];
 // The sound file is 200 to 270 KB. 45 s lets a 50 kbit/s link finish, so a slow but working
 // connection is not cut off. A request that fails outright does not wait for this.
 var SOUND_LOAD_TIMEOUT_MS = 45000;
+// After the download, MIDI.js decodes the audio. Its decoder has no error callback, so a failed
+// decode never reports. This limit starts when the download ends.
+var SOUND_DECODE_TIMEOUT_MS = 30000;
 var global_soundLoad = {
   root: null, // the GrooveUtils whose location and callbacks drive the load
   waiters: [], // every GrooveUtils that wants the sound
@@ -131,6 +134,7 @@ function soundLoadSettings() {
   return {
     delays: override.delays || SOUND_RETRY_DELAYS_MS,
     timeoutMs: override.timeoutMs || SOUND_LOAD_TIMEOUT_MS,
+    decodeTimeoutMs: override.decodeTimeoutMs || SOUND_DECODE_TIMEOUT_MS,
   };
 }
 
@@ -146,11 +150,12 @@ function watchSoundfontRequests() {
       return original.call(this, conf);
     }
     var previousOnLoad = conf.onload;
-    // The download is over: the stall timer must not run while MIDI.js decodes the audio.
+    // The download is over: the stall timer ends and the decode timer takes over.
     // A try that was already settled (set-up done) must not connect a second time.
     conf.onload = function () {
       if (attempt.done || global_midiInitialized) return;
       clearTimeout(attempt.timer);
+      attempt.timer = setTimeout(attempt.fail, soundLoadSettings().decodeTimeoutMs);
       if (previousOnLoad) return previousOnLoad.apply(this, arguments);
     };
     var previousOnError = conf.onerror;
@@ -1133,13 +1138,13 @@ function GrooveUtils() {
       root.showSoundNote('');
     };
 
-    // The sound file did not load after the retries (failed is true), or the user started
-    // a new try (failed is false). Shows the message and lets Play start a new try.
     // The first try failed and the retries run. Play does nothing yet, so say so.
     this.midiInitRetrying = function (root) {
       root.showSoundNote('loading');
     };
 
+    // The sound file did not load after the retries (failed is true), or the user started
+    // a new try (failed is false). Shows the message and lets Play start a new try.
     this.midiInitFailed = function (root, failed) {
       root.showSoundNote(failed ? 'failed' : '');
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
@@ -1335,7 +1340,12 @@ function GrooveUtils() {
 
     var state = global_soundLoad;
     if (state.waiters.indexOf(root) === -1) state.waiters.push(root);
-    if (state.loading) return; // the load that runs now tells this instance too
+    if (state.loading) {
+      // the load that runs now tells this instance too
+      if (state.failures > 0)
+        root.midiEventCallbacks.midiInitRetrying(root.midiEventCallbacks.classRoot);
+      return;
+    }
     if (state.root) {
       // An earlier load gave up. Show this instance the same message.
       root.midiEventCallbacks.midiInitFailed(root.midiEventCallbacks.classRoot, true);

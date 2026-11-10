@@ -17,7 +17,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **880 pass**                                                                                                                                                                                                                        |
+| `npm test`             | Vitest unit suite — **884 pass**                                                                                                                                                                                                                        |
 | `npm run test:e2e`     | Playwright golden-master and UI — **193 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~81 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
@@ -129,7 +129,7 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
   wake lock. Stop or pause starts a 10 minute timer, and the lock is released when it ends.
   Playing again before then keeps the lock.
 - **Sound loading:** `index.html` preloads the sound file, and `groove_utils.js` retries a failed
-  or stalled download (1, 3 and 9 s waits, 45 s stall timer that stops when the download ends).
+  or stalled download (1, 3 and 9 s waits, 45 s stall timer that ends with the download, then a 30 s decode timer).
   The docked library waits for the sound, but never more than 10 s (`main.js`).
 
 - **Adding a new `js/*.js` ES module:** add it to the module-files list in
