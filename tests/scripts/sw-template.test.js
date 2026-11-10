@@ -239,7 +239,7 @@ describe('fetch: other files use the cache and refresh in the background', () =>
     const event = fetchAsset();
     expect((await event.result).body).toBe('cached');
     await settled(event);
-    expect(world.requests[0].cache).toBe('reload');
+    expect(world.requests[0].cache).toBe('no-cache');
     expect(stored()).toBe('refreshed');
   });
 
@@ -277,6 +277,7 @@ describe('fetch: other files use the cache and refresh in the background', () =>
     const event = fetchAsset();
     expect((await event.result).body).toBe('from network');
     await settled(event);
+    expect(world.requests[0].cache).toBe('no-cache');
     expect(stored()).toBe('from network');
   });
 

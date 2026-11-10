@@ -30,10 +30,11 @@ function isCacheable(response) {
   return response.ok && response.type === 'basic' && !response.redirected;
 }
 
-// cache: 'reload' skips the browser's HTTP cache. Sound, fonts and images have a max-age of
-// 30 days, so a normal fetch could store an old file under a new version.
-function fetchAndStore(event, cache, key) {
-  const network = fetch(new Request(event.request, { cache: 'reload' }));
+// Sound, fonts and images have a max-age of 30 days, so a normal fetch could store an old file.
+// cache: 'reload' always downloads the file: precache and pages use it. cache: 'no-cache' asks
+// the server first, so an unchanged file costs only headers: background refresh uses it.
+function fetchAndStore(event, cache, key, cacheMode) {
+  const network = fetch(new Request(event.request, { cache: cacheMode }));
   // Clone here, first in line, so the body is unread even if the page takes the response next.
   const store = (response) => (isCacheable(response) ? cache.put(key, response.clone()) : null);
   event.waitUntil(network.then(store).catch(noop));
@@ -54,7 +55,7 @@ async function networkFirst(event) {
   // The Cache object stays valid. Opening it again later could recreate a deleted old cache.
   const cache = await caches.open(CACHE_NAME);
   const key = pageKey(event.request.url);
-  const network = fetchAndStore(event, cache, key);
+  const network = fetchAndStore(event, cache, key, 'reload');
   const timedOut = new Promise((resolve) => setTimeout(resolve, NAVIGATION_TIMEOUT_MS));
   const fresh = await Promise.race([network, timedOut]).catch(noop);
   if (fresh?.ok) return fresh;
@@ -66,7 +67,7 @@ async function networkFirst(event) {
 async function cacheFirst(event) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(event.request, MATCH_OPTIONS);
-  const network = fetchAndStore(event, cache, event.request.url);
+  const network = fetchAndStore(event, cache, event.request.url, 'no-cache');
   return cached ?? network;
 }
 
