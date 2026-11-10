@@ -77,3 +77,31 @@ describe('Firebase Hosting security headers', () => {
     }
   });
 });
+
+describe('Firebase Hosting cache headers', () => {
+  const CACHE = 'public, max-age=2592000';
+
+  it.each([
+    'soundfont/gunshot-ogg.js',
+    '/soundfont/gunshot-mp3.js',
+    'font-awesome/css/font-awesome.min.css',
+    'font-awesome/fonts/fontawesome-webfont.woff2',
+    'images/logo.png',
+    'fonts/some-font.woff2',
+  ])('%s is cached for thirty days', (p) => {
+    expect(headersFor(p)['Cache-Control']).toBe(CACHE);
+  });
+
+  it.each(['index.html', '/', 'GrooveEmbed.html', 'js/main.js', 'css/editor-toolbars.css'])(
+    '%s is not cached (file names have no hash)',
+    (p) => {
+      expect(headersFor(p)).not.toHaveProperty('Cache-Control');
+    }
+  );
+
+  it('keeps the security headers on cached files', () => {
+    expect(headersFor('soundfont/gunshot-ogg.js')).toMatchObject({
+      'X-Content-Type-Options': 'nosniff',
+    });
+  });
+});
