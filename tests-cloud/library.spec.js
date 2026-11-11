@@ -982,6 +982,32 @@ test.describe('without a network', () => {
       expect(await savedDocs(page, 'grooves')).toEqual([]);
     });
 
+    test('a refused save of the current groove leaves the page dirty', async ({ page }) => {
+      await signedInPanel(page);
+      await createLesson(page, 'Week 1');
+      await synced(page);
+      await page.getByRole('button', { name: 'Close library' }).click();
+      await page.click('#snare4');
+      await openPanel(page);
+      await goOffline(page);
+      await page.locator('summary', { hasText: 'Save current groove' }).click();
+      await page.locator('#lpSaveTitle').fill('Refused');
+      await page.getByRole('button', { name: 'Save groove' }).click();
+      await expect(syncLabel(page, 'Refused')).toHaveText(WILL_SYNC);
+      const [lesson] = await savedDocs(page, 'lessons');
+      await changeOwner(page, `lessons/${lesson.id}`);
+
+      await goOnline(page);
+      await expect(alert(page)).toHaveText(refusedSave('Refused'));
+      const dialogs = [];
+      page.on('dialog', (dialog) => {
+        dialogs.push(dialog.type());
+        dialog.accept();
+      });
+      await openEditor(page);
+      expect(dialogs).toEqual(['beforeunload']);
+    });
+
     test('a refused delete says so', async ({ page }) => {
       await signedInPanel(page);
       await addLink(page, QUERY, 'Paradiddle');

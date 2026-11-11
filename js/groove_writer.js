@@ -2147,14 +2147,23 @@ function GrooveWriter() {
     updateCurrentURLWithHistory(root.AddFullURLToUndoStack);
   };
 
+  // The page calls this with the URL before and after a change that is not an edit, such as
+  // the tempo that the metronome raises. The editor page uses it to keep unsaved-edit
+  // tracking right.
+  root.onChangeWithoutEdit = null;
+  var class_last_page_url = null;
+
   // the same, for a change that is not an edit: the newest history step shows it
   root.updateCurrentURLWithoutNewUndoStep = function () {
+    var before = class_last_page_url;
     updateCurrentURLWithHistory(root.ReplaceNewestUndoStep);
+    if (root.onChangeWithoutEdit) root.onChangeWithoutEdit(before, class_last_page_url);
   };
 
   function updateCurrentURLWithHistory(recordInHistory) {
     var newURL = get_FullURLForPage();
     var newTitle = false;
+    class_last_page_url = newURL;
 
     recordInHistory(newURL);
 

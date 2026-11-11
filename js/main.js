@@ -13,6 +13,7 @@ import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
 import { createDirtyState } from './cloud/dirtyState.js';
+import { askToDiscard } from './discardDialog.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
 
@@ -134,11 +135,27 @@ const editor = {
   currentTitle: () => document.getElementById('tuneTitle').value.trim(),
 };
 
+// The groove that was last loaded or saved. The Grooves menu and the library panel ask before
+// they replace edits.
+const dirtyState = createDirtyState();
+// A change that is not an edit, such as the tempo that the metronome raises, keeps a clean
+// editor clean.
+myGrooveWriter.onChangeWithoutEdit = (before, after) => dirtyState.rebase(before, after);
+
+// A groove from the Grooves menu replaces the one in the editor, so it asks first too.
+document.getElementById('grooveListWrapper')?.addEventListener('click', async (event) => {
+  const item = event.target instanceof Element && event.target.closest('.grooveListLI');
+  if (!item) return;
+  // Close the menu now, so it does not stay open behind the question.
+  if (utils.visible_context_menu) utils.hideContextMenu(utils.visible_context_menu);
+  if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
+  myGrooveWriter.loadNewGroove(item.getAttribute('data-groove'));
+  dirtyState.markClean(editor.currentQuery());
+});
+
 // The library panel needs a Google sign-in popup, which the native app shell does not
 // support yet, and GrooveDB authoring has its own save flow.
-const hasLibrary = !utils.grooveDBAuthoring && !window.Capacitor;
-const dirtyState = createDirtyState();
-if (hasLibrary) {
+if (!utils.grooveDBAuthoring && !window.Capacitor) {
   initLibraryPanel({
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
@@ -160,6 +177,6 @@ initPopovers();
 window.addEventListener('load', function () {
   myGrooveWriter.runsOnPageLoad();
   // The groove the page starts with, from a link or the default, is clean until it is edited.
-  if (hasLibrary) dirtyState.markClean(editor.currentQuery());
+  dirtyState.markClean(editor.currentQuery());
   initPlaybackControls(utils);
 });

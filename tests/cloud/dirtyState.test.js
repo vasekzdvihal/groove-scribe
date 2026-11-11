@@ -31,6 +31,47 @@ describe('createDirtyState', () => {
     expect(state.isDirty(QUERY.slice(1))).toBe(false);
   });
 
+  it('moves the clean groove along with a change that is not an edit', () => {
+    const state = createDirtyState();
+    state.markClean(QUERY);
+    const faster = QUERY.replace('Tempo=95', 'Tempo=96');
+    state.rebase('https://example.com/' + QUERY, faster);
+    expect(state.isDirty(faster)).toBe(false);
+    expect(state.isDirty(QUERY)).toBe(true);
+  });
+
+  it('keeps edits dirty through a change that is not an edit', () => {
+    const state = createDirtyState();
+    state.markClean(QUERY);
+    const faster = EDITED.replace('Tempo=95', 'Tempo=96');
+    state.rebase(EDITED, faster);
+    expect(state.isDirty(faster)).toBe(true);
+    expect(state.isDirty(QUERY)).toBe(false);
+  });
+
+  it('does nothing on a rebase before anything is marked', () => {
+    const state = createDirtyState();
+    state.rebase(QUERY, EDITED);
+    expect(state.isDirty(QUERY)).toBe(false);
+    expect(state.isDirty(EDITED)).toBe(false);
+  });
+
+  it('forgets a clean groove whose save was refused', () => {
+    const state = createDirtyState();
+    state.markClean(QUERY);
+    state.forget(QUERY);
+    expect(state.isDirty(QUERY)).toBe(true);
+    expect(state.isDirty(EDITED)).toBe(true);
+  });
+
+  it('keeps a newer clean groove when an older save is refused', () => {
+    const state = createDirtyState();
+    state.markClean(QUERY);
+    state.markClean(EDITED);
+    state.forget(QUERY);
+    expect(state.isDirty(EDITED)).toBe(false);
+  });
+
   it('compares the raw text of a query that is not a groove link', () => {
     const state = createDirtyState();
     state.markClean('?Debug=1');

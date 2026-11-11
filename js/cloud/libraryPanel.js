@@ -8,6 +8,7 @@
 // it open, so a shared link does not load the SDK into the page. The service worker still
 // precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
+import { askToDiscard, isAskingToDiscard } from '../discardDialog.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
 import {
@@ -84,16 +85,6 @@ const PANEL_HTML = `
       </details>
     </section>
   </div>
-  <dialog id="lpDiscard" aria-labelledby="lpDiscardTitle" aria-describedby="lpDiscardText">
-    <form method="dialog">
-      <h3 id="lpDiscardTitle">Discard your changes?</h3>
-      <p id="lpDiscardText">The groove in the editor has changes that are not saved.</p>
-      <div class="lp-dialog-actions">
-        <button class="lp-danger" value="discard">Discard changes</button>
-        <button class="lp-primary" value="keep" autofocus>Keep editing</button>
-      </div>
-    </form>
-  </dialog>
 `;
 
 const byId = (id) => document.getElementById(id);
@@ -128,18 +119,6 @@ function writeLastLesson(id) {
   } catch {
     /* the lesson is simply not remembered */
   }
-}
-
-// Ask before the editor loses changes that are not saved. Escape means Keep editing.
-function askToDiscard() {
-  const dialog = byId('lpDiscard');
-  return new Promise((resolve) => {
-    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'discard'), {
-      once: true,
-    });
-    dialog.returnValue = '';
-    dialog.showModal();
-  });
 }
 
 function showMessage(text) {
@@ -609,8 +588,9 @@ function startLibrary({
       return;
     }
     const lessonId = byId('lpSaveLesson').value || null;
+    let written = null;
     const saved = await act(() => {
-      const written = library.saveGroove({
+      written = library.saveGroove({
         query: parsed.query,
         title: byId('lpSaveTitle').value.trim(),
         lessonId,
@@ -621,6 +601,8 @@ function startLibrary({
     });
     if (saved.ok) {
       dirtyState.markClean(parsed.query);
+      // A save that the server refuses later did not save the edits.
+      written?.committed?.catch(() => dirtyState.forget(parsed.query));
       byId('lpSaveTool').open = false;
     }
   };
@@ -843,7 +825,7 @@ export function initLibraryPanel({ search, editor, dirtyState, whenReady = Promi
     'keydown',
     (event) => {
       // Escape in the dialog means Keep editing. It must not also close the panel.
-      if (byId('lpDiscard').open) return;
+      if (isAskingToDiscard()) return;
       if (event.key === 'Escape' && panel.classList.contains('open') && !docked.matches) {
         closePanel();
       }

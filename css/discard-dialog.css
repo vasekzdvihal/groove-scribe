@@ -1,0 +1,94 @@
+/* The question before unsaved edits are lost (js/discardDialog.js). It sits in the top layer,
+   in the middle of the screen, and has the colours of the library panel. */
+#discardDialog {
+  --dd-bg: #22262a;
+  --dd-surface: #2d3237;
+  --dd-text: #eceef0;
+  --dd-muted: #a7b0b6;
+  --dd-border: #4a5157;
+  --dd-accent: #63b1e6;
+  --dd-accent-text: #0d1a23;
+  --dd-danger: #f08a8a;
+
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  padding: 20px;
+  color: var(--dd-text);
+  background: var(--dd-bg);
+  border: 1px solid var(--dd-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 50%);
+  font-family: Lato, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+#discardDialog::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+
+#discardDialog h2 {
+  margin: 0 0 8px;
+  color: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+#discardDialog p {
+  margin: 0 0 20px;
+  color: var(--dd-muted);
+}
+
+.discard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#discardDialog button {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--dd-text);
+  background: var(--dd-surface);
+  border: 1px solid var(--dd-border);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+#discardDialog .discard-danger {
+  color: var(--dd-danger);
+}
+
+#discardDialog .discard-primary {
+  color: var(--dd-accent-text);
+  background: var(--dd-accent);
+  border-color: var(--dd-accent);
+}
+
+#discardDialog button:focus-visible {
+  outline: 2px solid var(--dd-accent);
+  outline-offset: 1px;
+}
+
+/* The editor page has no viewport tag, so a phone lays it out about 980 px wide. The library
+   panel is zoomed the same way. */
+@media (pointer: coarse) and (max-device-width: 600px) {
+  #discardDialog {
+    width: min(360px, calc(100vw / 2.4 - 32px));
+    zoom: 2.4;
+  }
+}
+
+@media print {
+  #discardDialog {
+    display: none !important;
+  }
+}

@@ -87,8 +87,10 @@ describe('groove library HTML helpers', () => {
       // Category headers and leaf groove items.
       expect(html).toContain('class="grooveListHeaderLI">Rock grooves</li>');
       expect(html).toContain('class="grooveListLI"');
-      // Each leaf wires a loadNewGroove click carrying its URL.
-      expect(html).toContain("myGrooveWriter.loadNewGroove('?TimeSig=");
+      // Each leaf carries its URL. The editor handles the click, so it can ask first when
+      // the groove has unsaved edits.
+      expect(html).toContain('data-groove="?TimeSig=4/4&amp;Div=');
+      expect(html).not.toContain('onClick');
     });
 
     it('emits one clickable item per shipped groove plus one header per category', () => {
