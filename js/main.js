@@ -12,6 +12,7 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
+import { createDirtyState } from './cloud/dirtyState.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
 
@@ -124,22 +125,26 @@ fillContainer('measureContainer', gridHTML);
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
 
+const editor = {
+  openGroove(query, name) {
+    utils.stopMIDI_playback();
+    myGrooveWriter.loadNewGroove(query, name);
+  },
+  currentQuery: () => utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
+  currentTitle: () => document.getElementById('tuneTitle').value.trim(),
+};
+
 // The library panel needs a Google sign-in popup, which the native app shell does not
 // support yet, and GrooveDB authoring has its own save flow.
-if (!utils.grooveDBAuthoring && !window.Capacitor) {
+const hasLibrary = !utils.grooveDBAuthoring && !window.Capacitor;
+const dirtyState = createDirtyState();
+if (hasLibrary) {
   initLibraryPanel({
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
     whenReady: soundOrTimeout,
-    editor: {
-      openGroove(query, name) {
-        utils.stopMIDI_playback();
-        myGrooveWriter.loadNewGroove(query, name);
-      },
-      currentQuery: () =>
-        utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
-      currentTitle: () => document.getElementById('tuneTitle').value.trim(),
-    },
+    editor,
+    dirtyState,
   });
 }
 
@@ -154,5 +159,7 @@ initPopovers();
 // original window.onload handler).
 window.addEventListener('load', function () {
   myGrooveWriter.runsOnPageLoad();
+  // The groove the page starts with, from a link or the default, is clean until it is edited.
+  if (hasLibrary) dirtyState.markClean(editor.currentQuery());
   initPlaybackControls(utils);
 });

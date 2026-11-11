@@ -84,6 +84,16 @@ const PANEL_HTML = `
       </details>
     </section>
   </div>
+  <dialog id="lpDiscard" aria-labelledby="lpDiscardTitle" aria-describedby="lpDiscardText">
+    <form method="dialog">
+      <h3 id="lpDiscardTitle">Discard your changes?</h3>
+      <p id="lpDiscardText">The groove in the editor has changes that are not saved.</p>
+      <div class="lp-dialog-actions">
+        <button class="lp-danger" value="discard">Discard changes</button>
+        <button class="lp-primary" value="keep" autofocus>Keep editing</button>
+      </div>
+    </form>
+  </dialog>
 `;
 
 const byId = (id) => document.getElementById(id);
@@ -118,6 +128,18 @@ function writeLastLesson(id) {
   } catch {
     /* the lesson is simply not remembered */
   }
+}
+
+// Ask before the editor loses changes that are not saved. Escape means Keep editing.
+function askToDiscard() {
+  const dialog = byId('lpDiscard');
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'discard'), {
+      once: true,
+    });
+    dialog.returnValue = '';
+    dialog.showModal();
+  });
 }
 
 function showMessage(text) {
@@ -254,7 +276,14 @@ function clearLibrary() {
   showMessage('');
 }
 
-function startLibrary({ library, isActive: isSignedIn, persistent, editor, afterPick }) {
+function startLibrary({
+  library,
+  isActive: isSignedIn,
+  persistent,
+  editor,
+  dirtyState,
+  afterPick,
+}) {
   let lessons = [];
   let grooves = [];
   let currentGrooveId = null;
@@ -423,11 +452,15 @@ function startLibrary({ library, isActive: isSignedIn, persistent, editor, after
     const isMenuOpen = menuGrooveId === groove.id;
     const open = button(
       name,
-      () => {
+      async () => {
+        if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
+        if (!isActive()) return;
         currentGrooveId = groove.id;
         selectLesson(lessonKey);
         render();
         editor.openGroove(groove.query, name);
+        // The editor writes the groove its own way, so its query is the clean one.
+        dirtyState.markClean(editor.currentQuery());
         afterPick();
       },
       { className: 'lp-open' }
@@ -586,7 +619,10 @@ function startLibrary({ library, isActive: isSignedIn, persistent, editor, after
       selectLesson(lessonId ?? UNFILED);
       return written;
     });
-    if (saved.ok) byId('lpSaveTool').open = false;
+    if (saved.ok) {
+      dirtyState.markClean(parsed.query);
+      byId('lpSaveTool').open = false;
+    }
   };
 
   return { drawCached, load: () => act(), stop };
@@ -605,7 +641,7 @@ function whenIdle(task) {
 }
 
 // Connect to Firebase, and return the sign-out action.
-async function startCloud(search, editor, afterPick) {
+async function startCloud(search, editor, dirtyState, afterPick) {
   const resolved = resolveCloudConfig({ hostname: location.hostname, search });
   if (!resolved) {
     showMessage('Accounts are not set up on this site yet.');
@@ -652,6 +688,7 @@ async function startCloud(search, editor, afterPick) {
       isActive: () => activeUid === user.uid,
       persistent,
       editor,
+      dirtyState,
       afterPick,
     });
 
@@ -702,8 +739,11 @@ async function startCloud(search, editor, afterPick) {
  *        by itself waits for it before it starts Firebase.
  * @param {{openGroove: function(string): void, currentQuery: function(): string,
  *          currentTitle: function(): string}} options.editor
+ * @param {{markClean: function(string): void, isDirty: function(string): boolean}}
+ *        options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
+ *        the groove that the page starts with.
  */
-export function initLibraryPanel({ search, editor, whenReady = Promise.resolve() }) {
+export function initLibraryPanel({ search, editor, dirtyState, whenReady = Promise.resolve() }) {
   const toggle = element('button', {
     id: 'libraryToggle',
     type: 'button',
@@ -752,7 +792,7 @@ export function initLibraryPanel({ search, editor, whenReady = Promise.resolve()
   }
 
   function connect() {
-    started ??= startCloud(search, editor, () => {
+    started ??= startCloud(search, editor, dirtyState, () => {
       if (!docked.matches) closePanel();
     }).catch((error) => {
       started = null;
@@ -802,12 +842,22 @@ export function initLibraryPanel({ search, editor, whenReady = Promise.resolve()
   document.addEventListener(
     'keydown',
     (event) => {
+      // Escape in the dialog means Keep editing. It must not also close the panel.
+      if (byId('lpDiscard').open) return;
       if (event.key === 'Escape' && panel.classList.contains('open') && !docked.matches) {
         closePanel();
       }
     },
     true
   );
+
+  // Edits that are not saved are a reason to ask, apart from the writes that pendingSync guards.
+  // Each reason has its own listener, so neither one removes the other.
+  window.addEventListener('beforeunload', (event) => {
+    if (!dirtyState.isDirty(editor.currentQuery())) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
 
   docked.addEventListener('change', followScreenWidth);
   // A write queued on an earlier visit goes out when the SDK loads, also with the panel closed.

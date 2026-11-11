@@ -348,6 +348,105 @@ test('the top bar shows the library name of a groove without a title', async ({ 
   await expect(page.locator('#tuneTitle')).toHaveValue('');
 });
 
+test.describe('unsaved edits', () => {
+  const OTHER =
+    '?TimeSig=4/4&Div=8&Title=Rock&Tempo=100&Measures=1&H=|xxxxxxxx|&S=|--O---O-|&K=|o---o---|';
+  const discardDialog = (page) => page.getByRole('dialog', { name: 'Discard your changes?' });
+  const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
+
+  // The slide-over panel covers the grid, so close it for the edit.
+  async function editNote(page) {
+    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.click('#snare4');
+    await openPanel(page);
+  }
+
+  test('picking a groove with edits asks first, and Keep editing keeps them', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await editNote(page);
+    const edited = page.url();
+
+    await grooveButton(page, 'Paradiddle').click();
+    const dialog = discardDialog(page);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Discard changes' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    expect(page.url()).toBe(edited);
+
+    // Escape means Keep editing, and it leaves the panel open.
+    await grooveButton(page, 'Paradiddle').click();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    expect(page.url()).toBe(edited);
+
+    await grooveButton(page, 'Paradiddle').click();
+    await dialog.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    await expect(page.locator('#libraryPanel')).toBeHidden();
+  });
+
+  test('picking a groove without edits does not ask', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await addLink(page, OTHER, 'Rock');
+    await grooveButton(page, 'Paradiddle').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    // A picked groove is clean until it is edited.
+    await openPanel(page);
+    await grooveButton(page, 'Rock').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    await expect(discardDialog(page)).toBeHidden();
+  });
+
+  test('a groove from a shared link is clean until it is edited', async ({ page }) => {
+    await openEditor(page, EDITOR + '&' + QUERY.slice(1));
+    await openPanel(page);
+    await signIn(page, 'ana@example.com');
+    await addLink(page, OTHER, 'Rock');
+    await grooveButton(page, 'Rock').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    await expect(discardDialog(page)).toBeHidden();
+  });
+
+  test('a saved groove is clean', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, OTHER, 'Rock');
+    await editNote(page);
+    await page.locator('summary', { hasText: 'Save current groove' }).click();
+    await page.locator('#lpSaveTitle').fill('Edited');
+    await page.getByRole('button', { name: 'Save groove' }).click();
+    await expect(grooveButton(page, 'Edited')).toHaveAttribute('aria-current', 'true');
+    await grooveButton(page, 'Rock').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    await expect(discardDialog(page)).toBeHidden();
+  });
+
+  test('a page with edits asks before it leaves, and a clean page does not', async ({ page }) => {
+    const dialogs = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push(dialog.type());
+      dialog.accept();
+    });
+    await openEditor(page);
+    await page.click('#snare4');
+    await openEditor(page);
+    expect(dialogs).toEqual(['beforeunload']);
+
+    // An edit that is undone leaves the page clean.
+    await page.click('#snare4');
+    await page.click('#undoButton');
+    await openEditor(page);
+    expect(dialogs).toEqual(['beforeunload']);
+  });
+});
+
 test.describe('without a network', () => {
   // ?sw=1 turns the service worker on for localhost. A real reload then comes up with no
   // network, the way it does for a user in a rehearsal room. A page that stays open would
@@ -1345,6 +1444,23 @@ test.describe('docked on a wide screen', () => {
     await expect(page.locator('#libraryPanel')).toBeVisible();
     await page.keyboard.press(' ');
     await page.waitForFunction(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('picking a groove with edits asks first in the docked panel', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await page.click('#snare4');
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Discard your changes?' });
+    await expect(dialog.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#tuneTitle')).not.toHaveValue('Paradiddle');
+
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
     await expect(page.locator('#libraryPanel')).toBeVisible();
   });
 

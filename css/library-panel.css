@@ -284,6 +284,51 @@
   font-weight: 600;
 }
 
+/* The question before unsaved edits are lost. It sits in the top layer, in the middle of the
+   screen, and keeps the colours of the panel. */
+#libraryPanel #lpDiscard {
+  width: min(360px, calc(100vw - 32px));
+  max-width: none;
+  margin: auto;
+  padding: 20px;
+  color: var(--lp-text);
+  background: var(--lp-bg);
+  border: 1px solid var(--lp-border);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 50%);
+}
+
+#lpDiscard::backdrop {
+  background: rgb(0 0 0 / 40%);
+}
+
+#libraryPanel #lpDiscard form {
+  display: block;
+  padding: 0;
+}
+
+#lpDiscard h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+#lpDiscard p {
+  margin: 0 0 20px;
+  color: var(--lp-muted);
+}
+
+.lp-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#libraryPanel .lp-dialog-actions button {
+  flex: 1 1 auto;
+}
+
 #libraryToggle[aria-expanded='true'] {
   background: var(--bar-selected);
 }
