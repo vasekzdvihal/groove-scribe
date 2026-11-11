@@ -9,7 +9,14 @@
 // precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { askToDiscard, isAskingToDiscard } from '../discardDialog.js';
-import { sameGroove } from './dirtyState.js';
+import {
+  PAGE_START,
+  findOpenGroove,
+  readRecord,
+  rebaseRecord,
+  restoreDecision,
+  writeRecord,
+} from './currentGroove.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
 import {
@@ -28,8 +35,6 @@ const LINK_ERRORS = {
 const LAST_LESSON_KEY = 'grooveScribe.lastLesson';
 const USER_KEY = 'grooveScribe.user';
 const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
-// One per account, so another account on this device never offers to update its groove.
-const currentGrooveKey = (uid) => `grooveScribe.currentGroove.${uid}`;
 // Keep the same width in css/library-panel.css.
 const DOCKED_QUERY = '(min-width: 1100px)';
 const UNFILED = 'unfiled';
@@ -40,6 +45,8 @@ const WAITING_AFTER_MS = 5000;
 const WILL_SYNC_TEXT = 'Will sync';
 const KEEP_TAB_TEXT = 'Keep this tab open until online';
 const WRITE_REFUSED = 'A change could not be saved. The library shows what is saved.';
+const NOTHING_TO_UPDATE = 'Nothing to update. The groove has no changes.';
+const NOT_OPEN_TO_UPDATE = 'The saved groove is no longer open. Save it as a new groove.';
 
 const PANEL_HTML = `
   <header class="lp-head">
@@ -124,26 +131,6 @@ function writeLastLesson(id) {
     localStorage.setItem(LAST_LESSON_KEY, id);
   } catch {
     /* the lesson is simply not remembered */
-  }
-}
-
-// The saved groove that is open in the editor, kept for a reload: its id, the query it has
-// in the library, and the query the editor showed. A reload trusts it only when both still match.
-function readCurrentGroove(uid) {
-  try {
-    const saved = JSON.parse(localStorage.getItem(currentGrooveKey(uid)));
-    return typeof saved?.id === 'string' ? saved : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCurrentGroove(uid, current) {
-  try {
-    if (current) localStorage.setItem(currentGrooveKey(uid), JSON.stringify(current));
-    else localStorage.removeItem(currentGrooveKey(uid));
-  } catch {
-    /* after a reload, the groove is simply not the current one */
   }
 }
 
@@ -284,6 +271,7 @@ function clearLibrary() {
 function startLibrary({
   library,
   uid,
+  pageQuery,
   isActive: isSignedIn,
   persistent,
   editor,
@@ -292,12 +280,13 @@ function startLibrary({
 }) {
   let lessons = [];
   let grooves = [];
-  let currentGrooveId = null;
-  // The cleanVersion of the editor when the current groove was loaded or saved. Another groove
-  // loaded since, such as one from the Grooves menu, is not the current groove.
-  let currentVersion = null;
+  // The saved groove that the editor shows. See findOpenGroove.
+  /** @type {import('./currentGroove.js').CurrentGroove | null} */
+  let current = null;
+  // The id that render highlights.
+  let openGrooveId = null;
   // The current groove of the last visit, until a list shows whether it is still current.
-  let restoring = readCurrentGroove(uid);
+  let restoring = readRecord(uid);
   let menuGrooveId = null;
   let openLesson = readLastLesson();
   let stopped = false;
@@ -307,13 +296,13 @@ function startLibrary({
   const isActive = () => !stopped && isSignedIn();
 
   // Replace the lists and draw them. An answer that repeats what is on screen leaves the
-  // page alone, unless a change needs a fresh draw.
-  function draw(nextLessons, nextGrooves, redraw) {
+  // page alone, unless a change needs a fresh draw. fromServer: the lists are the whole library.
+  function draw(nextLessons, nextGrooves, redraw, fromServer = false) {
     const next = JSON.stringify([nextLessons, nextGrooves]);
     lessons = nextLessons;
     grooves = nextGrooves;
-    restoreCurrentGroove();
-    if (redraw || next !== drawn) render();
+    const restored = restoreCurrentGroove(fromServer);
+    if (redraw || restored || next !== drawn) render();
     drawn = next;
     sync.update([...lessons, ...grooves]);
   }
@@ -333,10 +322,18 @@ function startLibrary({
     onSlow: render,
   });
 
+  // A tempo raise is not an edit. The record follows it, so a reload still finds the groove.
+  const stopRebase = dirtyState.onRebase((before, after) => {
+    const stored = readRecord(uid);
+    const next = rebaseRecord(stored, before, after);
+    if (next !== stored) writeRecord(uid, next);
+  });
+
   // The session is over: nothing may keep running for it.
   function stop() {
     stopped = true;
     sync.stop();
+    stopRebase();
   }
 
   // The server has answered every write, so the labels can go. A write from an earlier visit
@@ -355,7 +352,7 @@ function startLibrary({
     const [nextLessons, nextGrooves] = lists;
     const answer = new Set([...nextLessons.items, ...nextGrooves.items].map((item) => item.id));
     const refused = wasPending.find((item) => !answer.has(item.id));
-    draw(nextLessons.items, nextGrooves.items);
+    draw(nextLessons.items, nextGrooves.items, false, !nextGrooves.fromCache);
     sync.forgetIfSynced(nextLessons, nextGrooves);
     if (refused && byId('lpMessage').hidden) {
       showMessage(refusedMessage(refused.title || refused.name));
@@ -396,32 +393,33 @@ function startLibrary({
 
   // Call after markClean: the groove in the editor is now this saved groove.
   function setCurrentGroove(id, savedQuery) {
-    currentGrooveId = id;
-    currentVersion = dirtyState.cleanVersion();
-    writeCurrentGroove(uid, { id, savedQuery, editorQuery: editor.currentQuery() });
+    restoring = null;
+    current = { id, savedQuery, version: dirtyState.cleanVersion() };
+    writeRecord(uid, { id, savedQuery, editorQuery: editor.currentQuery() });
+    render();
   }
 
   // The saved groove that the editor shows, or null.
-  function openSavedGroove() {
-    if (currentGrooveId === null || currentVersion !== dirtyState.cleanVersion()) return null;
-    return grooves.find((groove) => groove.id === currentGrooveId) ?? null;
-  }
+  const openSavedGroove = () =>
+    findOpenGroove(current, grooves, {
+      cleanVersion: dirtyState.cleanVersion(),
+      startVersion: dirtyState.startVersion(),
+    });
 
-  // After a reload, the groove of the last visit is current only if the library still has it
-  // as it was, and the editor still shows it.
-  function restoreCurrentGroove() {
-    const groove = restoring && grooves.find((item) => item.id === restoring.id);
-    if (!groove) return;
-    if (
-      sameGroove(groove.query, restoring.savedQuery) &&
-      sameGroove(editor.currentQuery(), restoring.editorQuery)
-    ) {
-      currentGrooveId = groove.id;
-      currentVersion = dirtyState.cleanVersion();
+  // After a reload, the groove of the last visit is current if the library still has it as it
+  // was, and the page started with it. It stays current until another groove is loaded, also
+  // when the panel opens before the page has marked its start. Returns true when it is kept.
+  function restoreCurrentGroove(fromServer) {
+    if (!restoring) return false;
+    const decision = restoreDecision(restoring, grooves, { pageQuery, fromServer });
+    if (decision === 'wait') return false;
+    if (decision === 'keep') {
+      current = { id: restoring.id, savedQuery: restoring.savedQuery, version: PAGE_START };
     } else {
-      writeCurrentGroove(uid, null);
+      writeRecord(uid, null);
     }
     restoring = null;
+    return decision === 'keep';
   }
 
   // Run one change and draw it from the cache, so it shows at once, also offline. Without a
@@ -438,12 +436,7 @@ function startLibrary({
       if (!isActive()) return { ok: false };
       // Only a change closes a menu. A load that finishes must not close one the user opened.
       if (change) menuGrooveId = null;
-      draw(nextLessons.items, nextGrooves.items, Boolean(change));
-      // The server has the whole library, so a groove of the last visit that is not in it is gone.
-      if (!change && restoring && !nextGrooves.fromCache) {
-        restoring = null;
-        writeCurrentGroove(uid, null);
-      }
+      draw(nextLessons.items, nextGrooves.items, Boolean(change), !nextGrooves.fromCache);
       return {
         ok: true,
         fromCache: nextLessons.fromCache || nextGrooves.fromCache,
@@ -502,19 +495,16 @@ function startLibrary({
       async () => {
         if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
         if (!isActive()) return;
-        currentGrooveId = groove.id;
         selectLesson(lessonKey);
-        render();
         editor.openGroove(groove.query, name);
         // The editor writes the groove its own way, so its query is the clean one.
         dirtyState.markClean(editor.currentQuery());
         setCurrentGroove(groove.id, groove.query);
-        refreshSaveForm();
         afterPick();
       },
       { className: 'lp-open' }
     );
-    if (currentGrooveId === groove.id) open.setAttribute('aria-current', 'true');
+    if (openGrooveId === groove.id) open.setAttribute('aria-current', 'true');
     const more = button(
       '⋯',
       () => {
@@ -606,8 +596,12 @@ function startLibrary({
     for (const id of ['lpSaveLesson', 'lpLinkLesson']) {
       const select = byId(id);
       const known = lessons.some((lesson) => lesson.id === openLesson);
-      select.replaceChildren(...lessonOptions(lessons, select.value || (known && openLesson)));
+      // An open save form keeps its lesson, also "No lesson": Update moves the groove there.
+      const keep = id === 'lpSaveLesson' && byId('lpSaveTool').open && select.options.length > 0;
+      const selected = keep ? select.value : select.value || (known && openLesson);
+      select.replaceChildren(...lessonOptions(lessons, selected));
     }
+    openGrooveId = openSavedGroove()?.id ?? null;
     const known = new Set(lessons.map((lesson) => lesson.id));
     const unfiled = grooves.filter((groove) => !known.has(groove.lessonId));
     const entries = [
@@ -634,17 +628,28 @@ function startLibrary({
     );
   }
 
-  byId('lpSaveTool').ontoggle = () => {
-    if (!byId('lpSaveTool').open) return;
+  function prefillSaveForm() {
     byId('lpSaveTitle').value = editor.currentTitle();
     const groove = refreshSaveForm();
+    if (!groove) return;
     // Update keeps the library name of the groove, unless the user types another one.
-    if (groove?.title) byId('lpSaveTitle').value = groove.title;
-    // A copy goes next to the groove it was made from.
-    const lessonId = groove?.lessonId;
-    if (lessonId && lessons.some((lesson) => lesson.id === lessonId)) {
-      byId('lpSaveLesson').value = lessonId;
-    }
+    if (groove.title) byId('lpSaveTitle').value = groove.title;
+    // The form starts on the groove's own lesson. Another lesson moves it on Update.
+    const known = lessons.some((lesson) => lesson.id === groove.lessonId);
+    byId('lpSaveLesson').value = known ? groove.lessonId : '';
+  }
+
+  // Fill the form in the click, before it opens. The toggle event comes later, so filling there
+  // could overwrite what the user has typed by then. A form opened from code fills on toggle.
+  let prefilled = false;
+  byId('lpSaveTool').querySelector('summary').onclick = () => {
+    if (byId('lpSaveTool').open) return;
+    prefillSaveForm();
+    prefilled = true;
+  };
+  byId('lpSaveTool').ontoggle = () => {
+    if (byId('lpSaveTool').open && !prefilled) prefillSaveForm();
+    prefilled = false;
   };
 
   byId('lpLessonForm').onsubmit = async (event) => {
@@ -694,12 +699,15 @@ function startLibrary({
   }
 
   async function updateCurrent(groove, query) {
+    const lessonId = byId('lpSaveLesson').value || null;
     let written = null;
     const saved = await act(() => {
       written = library.updateGroove(groove.id, {
         query,
         title: byId('lpSaveTitle').value.trim() || groove.title,
+        lessonId,
       });
+      selectLesson(lessonId ?? UNFILED);
       return written;
     });
     if (saved.ok) afterSave(written, query);
@@ -710,7 +718,6 @@ function startLibrary({
     let written = null;
     const saved = await act(() => {
       written = library.saveGroove({ query, title: byId('lpSaveTitle').value.trim(), lessonId });
-      currentGrooveId = written.id;
       selectLesson(lessonId ?? UNFILED);
       return written;
     });
@@ -728,9 +735,18 @@ function startLibrary({
       saveAsNew(parsed.query);
       return;
     }
-    // The groove can be gone, or another groove loaded, since the form was drawn.
-    const groove = refreshSaveForm();
-    if (groove) updateCurrent(groove, parsed.query);
+    // The form can be out of date: the groove can be gone, another groove loaded, or the edits
+    // undone. The form follows edits from T6.3 on.
+    const groove = openSavedGroove();
+    const reason = !groove
+      ? NOT_OPEN_TO_UPDATE
+      : !dirtyState.isDirty(editor.currentQuery()) && NOTHING_TO_UPDATE;
+    if (reason) {
+      refreshSaveForm();
+      showMessage(reason);
+      return;
+    }
+    updateCurrent(groove, parsed.query);
   };
 
   return { drawCached, load: () => act(), stop };
@@ -794,6 +810,7 @@ async function startCloud(search, editor, dirtyState, afterPick) {
     const session = startLibrary({
       library,
       uid: user.uid,
+      pageQuery: search,
       isActive: () => activeUid === user.uid,
       persistent,
       editor,
@@ -849,9 +866,11 @@ async function startCloud(search, editor, dirtyState, afterPick) {
  * @param {{openGroove: function(string): void, currentQuery: function(): string,
  *          currentTitle: function(): string}} options.editor
  * @param {{markClean: function(string): void, isDirty: function(string): boolean,
- *          forget: function(string): void, cleanVersion: function(): number}}
+ *          forget: function(string): void, cleanVersion: function(): number,
+ *          startVersion: function(): (number | null),
+ *          onRebase: function(function(string, string): void): function(): void}}
  *        options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
- *        the groove that the page starts with.
+ *        the groove that the page starts with, with markStart.
  */
 export function initLibraryPanel({ search, editor, dirtyState, whenReady = Promise.resolve() }) {
   const toggle = element('button', {

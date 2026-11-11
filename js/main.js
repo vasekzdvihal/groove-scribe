@@ -177,6 +177,6 @@ initPopovers();
 window.addEventListener('load', function () {
   myGrooveWriter.runsOnPageLoad();
   // The groove the page starts with, from a link or the default, is clean until it is edited.
-  dirtyState.markClean(editor.currentQuery());
+  dirtyState.markStart(editor.currentQuery());
   initPlaybackControls(utils);
 });

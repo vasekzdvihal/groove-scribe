@@ -99,3 +99,25 @@ describe('sameGroove', () => {
     expect(sameGroove(QUERY, EDITED)).toBe(false);
   });
 });
+
+describe('the page start', () => {
+  it('has no start version until markStart, then the version of that mark', () => {
+    const state = createDirtyState();
+    expect(state.startVersion()).toBeNull();
+    state.markStart(QUERY);
+    expect(state.isDirty(QUERY)).toBe(false);
+    expect(state.startVersion()).toBe(state.cleanVersion());
+    state.markClean(EDITED);
+    expect(state.startVersion()).not.toBe(state.cleanVersion());
+  });
+
+  it('tells listeners about each rebase until they stop listening', () => {
+    const state = createDirtyState();
+    const calls = [];
+    const stop = state.onRebase((before, after) => calls.push([before, after]));
+    state.rebase(QUERY, EDITED);
+    stop();
+    state.rebase(EDITED, QUERY);
+    expect(calls).toEqual([[QUERY, EDITED]]);
+  });
+});

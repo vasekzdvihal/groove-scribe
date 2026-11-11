@@ -21,28 +21,47 @@ export function sameGroove(a, b) {
  *
  * @returns {{markClean: function(string): void, isDirty: function(string): boolean,
  *            rebase: function(string, string): void, forget: function(string): void,
- *            cleanVersion: function(): number}}
+ *            cleanVersion: function(): number, markStart: function(string): void,
+ *            startVersion: function(): (number | null),
+ *            onRebase: function(function(string, string): void): function(): void}}
  *   markClean takes the query that was loaded or saved. isDirty takes the query of the groove
  *   in the editor now. rebase takes the query before and after a change that is not an edit,
  *   such as the tempo that the metronome raises: a clean editor stays clean. forget takes the
  *   query of a save that the server refused. cleanVersion changes on each markClean, so a
  *   caller can tell that another groove was loaded or saved since its own markClean.
+ *   markStart is the markClean for the groove the page starts with, and startVersion is its
+ *   cleanVersion, or null before it. onRebase listens to each rebase and returns the call that
+ *   stops listening.
  */
 export function createDirtyState() {
   /** @type {string | symbol | null} */
   let clean = null;
   let version = 0;
+  /** @type {number | null} */
+  let start = null;
+  const rebaseListeners = new Set();
+  function markClean(query) {
+    clean = normalise(query);
+    version += 1;
+  }
   return {
-    markClean(query) {
-      clean = normalise(query);
-      version += 1;
+    markClean,
+    markStart(query) {
+      markClean(query);
+      start = version;
     },
     cleanVersion: () => version,
+    startVersion: () => start,
+    onRebase(listener) {
+      rebaseListeners.add(listener);
+      return () => rebaseListeners.delete(listener);
+    },
     isDirty(query) {
       return clean !== null && normalise(query) !== clean;
     },
     rebase(before, after) {
       if (clean !== null && normalise(before) === clean) clean = normalise(after);
+      for (const listener of rebaseListeners) listener(before, after);
     },
     forget(query) {
       if (clean !== null && normalise(query) === clean) clean = NOTHING_SAVED;

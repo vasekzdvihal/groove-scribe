@@ -122,11 +122,16 @@ export function createLibrary(sdk, db, uid) {
       );
     },
 
-    // Replace the groove of a saved document. Its lesson and createdAt stay.
-    updateGroove(id, { query, title }) {
+    // Replace the groove of a saved document, and file it in a lesson. createdAt stays.
+    updateGroove(id, { query, title, lessonId }) {
       const cleanTitle = cleanName(title);
       return queued(
-        sdk.updateDoc(sdk.doc(db, 'grooves', id), { query, title: cleanTitle, updatedAt: now() }),
+        sdk.updateDoc(sdk.doc(db, 'grooves', id), {
+          query,
+          title: cleanTitle,
+          lessonId: lessonId ?? null,
+          updatedAt: now(),
+        }),
         id,
         cleanTitle
       );

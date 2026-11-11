@@ -211,6 +211,11 @@ describe('grooves', () => {
       await assertFails(update('ana', { title: 'x'.repeat(201) }));
       await assertFails(update('ana', { updatedAt: OLD }));
     });
+
+    it('rejects an extra key and a title that is not a string', async () => {
+      await assertFails(update('ana', { extra: 1 }));
+      await assertFails(update('ana', { title: 5 }));
+    });
   });
 
   it('blocks moving a groove into a missing or foreign lesson', async () => {
