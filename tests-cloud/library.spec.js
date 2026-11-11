@@ -694,15 +694,16 @@ test.describe('updating a saved groove', () => {
     await saveTool(page).click();
     await expect(updateButton(page)).toBeVisible();
 
-    // The address now holds the edits, so after a reload it is not the saved groove.
+    // The address now holds the edits. The tab kept its clean groove, so after a reload the
+    // saved groove is still open with the edits, and Update saves them.
     await reload(page);
+    await expect(page.locator('#saveButton')).toHaveText('Save');
     await openPanel(page);
-    await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
-    await expect(grooveButton(page, 'Paradiddle')).not.toHaveAttribute('aria-current', 'true');
-    await editNote(page);
+    await expect(grooveButton(page, 'Paradiddle')).toHaveAttribute('aria-current', 'true');
     await saveTool(page).click();
-    await expect(plainSaveButton(page)).toBeVisible();
-    await expect(updateButton(page)).toHaveCount(0);
+    await expect(updateButton(page)).toBeVisible();
+    await updateButton(page).click();
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
   });
 
   // Rename is in the ⋯ menu of the row. The browser asks for the name.

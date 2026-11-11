@@ -1,23 +1,40 @@
 import { describe, it, expect } from 'vitest';
-import { createDirtyState, sameGroove, watchDirty } from '../../js/cloud/dirtyState.js';
+import {
+  NOTHING_SAVED,
+  createDirtyState,
+  rememberAddress,
+  restoredBaseline,
+  sameGroove,
+  watchDirty,
+} from '../../js/cloud/dirtyState.js';
 
 const QUERY = '?TimeSig=4/4&Div=16&Title=Beat&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
 const EDITED = QUERY.replace('S=|--O-|', 'S=|O-O-|');
 
+// A tab's sessionStorage. Each test gets its own, so nothing leaks between them.
+function createStorage() {
+  const items = new Map();
+  return {
+    getItem: (key) => (items.has(key) ? items.get(key) : null),
+    setItem: (key, value) => items.set(key, String(value)),
+    removeItem: (key) => items.delete(key),
+  };
+}
+
 describe('createDirtyState', () => {
   it('is clean before anything is marked', () => {
-    expect(createDirtyState().isDirty(QUERY)).toBe(false);
+    expect(createDirtyState(createStorage()).isDirty(QUERY)).toBe(false);
   });
 
   it('is clean for the marked query and dirty for another', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean(QUERY);
     expect(state.isDirty(QUERY)).toBe(false);
     expect(state.isDirty(EDITED)).toBe(true);
   });
 
   it('follows the last marked query', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean(QUERY);
     state.markClean(EDITED);
     expect(state.isDirty(EDITED)).toBe(false);
@@ -25,14 +42,14 @@ describe('createDirtyState', () => {
   });
 
   it('compares the groove only, not the flags or the address around it', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean('https://example.com/index.html' + QUERY + '&Debug=1');
     expect(state.isDirty(QUERY)).toBe(false);
     expect(state.isDirty(QUERY.slice(1))).toBe(false);
   });
 
   it('moves the clean groove along with a change that is not an edit', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean(QUERY);
     const faster = QUERY.replace('Tempo=95', 'Tempo=96');
     state.rebase('https://example.com/' + QUERY, faster);
@@ -41,7 +58,7 @@ describe('createDirtyState', () => {
   });
 
   it('keeps edits dirty through a change that is not an edit', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean(QUERY);
     const faster = EDITED.replace('Tempo=95', 'Tempo=96');
     state.rebase(EDITED, faster);
@@ -50,14 +67,14 @@ describe('createDirtyState', () => {
   });
 
   it('does nothing on a rebase before anything is marked', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.rebase(QUERY, EDITED);
     expect(state.isDirty(QUERY)).toBe(false);
     expect(state.isDirty(EDITED)).toBe(false);
   });
 
   it('forgets a clean groove whose save was refused', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean(QUERY);
     state.forget(QUERY);
     expect(state.isDirty(QUERY)).toBe(true);
@@ -65,7 +82,7 @@ describe('createDirtyState', () => {
   });
 
   it('keeps a newer clean groove when an older save is refused', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean(QUERY);
     state.markClean(EDITED);
     state.forget(QUERY);
@@ -73,14 +90,14 @@ describe('createDirtyState', () => {
   });
 
   it('compares the raw text of a query that is not a groove link', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     state.markClean('?Debug=1');
     expect(state.isDirty('?Debug=1')).toBe(false);
     expect(state.isDirty('?Debug=2')).toBe(true);
   });
 
   it('changes cleanVersion on each markClean, and not on rebase or forget', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     const start = state.cleanVersion();
     state.markClean(QUERY);
     const marked = state.cleanVersion();
@@ -102,7 +119,7 @@ describe('sameGroove', () => {
 
 describe('the page start', () => {
   it('has no start version until markStart, then the version of that mark', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     expect(state.startVersion()).toBeNull();
     state.markStart(QUERY);
     expect(state.isDirty(QUERY)).toBe(false);
@@ -112,7 +129,7 @@ describe('the page start', () => {
   });
 
   it('tells listeners about each rebase until they stop listening', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     const calls = [];
     const stop = state.onRebase((before, after) => calls.push([before, after]));
     state.rebase(QUERY, EDITED);
@@ -122,7 +139,7 @@ describe('the page start', () => {
   });
 
   it('tells listeners when the page start is marked', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     const calls = [];
     const stop = state.onStart(() => calls.push(state.startVersion()));
     state.markClean(QUERY);
@@ -135,7 +152,7 @@ describe('the page start', () => {
 
 describe('onChange', () => {
   it('tells listeners after each markClean, markStart, rebase and forget', () => {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     const calls = [];
     const stop = state.onChange(() => calls.push(state.startVersion()));
     state.markClean(QUERY);
@@ -152,7 +169,7 @@ describe('onChange', () => {
 describe('watchDirty', () => {
   // Run the checks by hand, so a test sees each one.
   function setUp() {
-    const state = createDirtyState();
+    const state = createDirtyState(createStorage());
     const editor = { query: QUERY };
     const queued = [];
     const watch = watchDirty(
@@ -238,5 +255,79 @@ describe('watchDirty', () => {
     watch.changed();
     flush();
     expect(calls).toEqual([]);
+  });
+});
+
+describe('the clean groove of the tab', () => {
+  // After a reload, the page shows the address the tab showed last.
+  function reload(storage, address) {
+    rememberAddress(address, storage);
+    return restoredBaseline(address, storage);
+  }
+
+  it('survives a reload, so a page with edits stays dirty', () => {
+    const storage = createStorage();
+    const state = createDirtyState(storage);
+    state.markStart(QUERY);
+    const baseline = reload(storage, EDITED);
+    expect(sameGroove(baseline, QUERY)).toBe(true);
+    const after = createDirtyState(storage);
+    after.markStart(baseline);
+    expect(after.isDirty(EDITED)).toBe(true);
+    expect(after.isDirty(QUERY)).toBe(false);
+  });
+
+  it('follows markClean, rebase and forget', () => {
+    const storage = createStorage();
+    const state = createDirtyState(storage);
+    state.markClean(QUERY);
+    const faster = QUERY.replace('Tempo=95', 'Tempo=96');
+    state.rebase(QUERY, faster);
+    expect(sameGroove(reload(storage, faster), faster)).toBe(true);
+    state.forget(faster);
+    expect(reload(storage, faster)).toBe(NOTHING_SAVED);
+    const after = createDirtyState(storage);
+    after.markStart(NOTHING_SAVED);
+    expect(after.isDirty(faster)).toBe(true);
+  });
+
+  it('is not used for another address, such as a new link opened in the same tab', () => {
+    const storage = createStorage();
+    createDirtyState(storage).markStart(QUERY);
+    rememberAddress(EDITED, storage);
+    expect(restoredBaseline(QUERY.replace('Tempo=95', 'Tempo=60'), storage)).toBeNull();
+    // Flags around the groove do not count.
+    expect(sameGroove(restoredBaseline(EDITED + '&Debug=1', storage), QUERY)).toBe(true);
+  });
+
+  it('is null in a tab that has none', () => {
+    expect(restoredBaseline(QUERY, createStorage())).toBeNull();
+  });
+
+  it('works without storage, and with storage that throws', () => {
+    const throwing = {
+      getItem: () => {
+        throw new DOMException('denied', 'SecurityError');
+      },
+      setItem: () => {
+        throw new DOMException('denied', 'SecurityError');
+      },
+      removeItem: () => {},
+    };
+    for (const storage of [null, throwing]) {
+      const state = createDirtyState(storage);
+      expect(() => state.markStart(QUERY)).not.toThrow();
+      expect(() => rememberAddress(QUERY, storage)).not.toThrow();
+      expect(restoredBaseline(QUERY, storage)).toBeNull();
+    }
+  });
+
+  it('tells the clean query', () => {
+    const state = createDirtyState(createStorage());
+    expect(state.cleanQuery()).toBeNull();
+    state.markClean('https://example.com/' + QUERY);
+    expect(sameGroove(state.cleanQuery(), QUERY)).toBe(true);
+    state.forget(QUERY);
+    expect(state.cleanQuery()).toBe(NOTHING_SAVED);
   });
 });

@@ -291,7 +291,6 @@ function clearLibrary() {
 function startLibrary({
   library,
   uid,
-  pageQuery,
   isActive: isSignedIn,
   persistent,
   editor,
@@ -359,7 +358,6 @@ function startLibrary({
 
   const currentGroove = createCurrentGroove({
     uid,
-    pageQuery,
     dirtyState,
     editor,
     grooves: () => grooves,
@@ -936,7 +934,6 @@ async function startCloud(search, editor, dirtyState, hooks) {
     const session = startLibrary({
       library,
       uid: user.uid,
-      pageQuery: search,
       isActive: () => activeUid === user.uid,
       persistent,
       editor,

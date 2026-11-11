@@ -12,7 +12,12 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
-import { createDirtyState, watchDirty } from './cloud/dirtyState.js';
+import {
+  createDirtyState,
+  rememberAddress,
+  restoredBaseline,
+  watchDirty,
+} from './cloud/dirtyState.js';
 import { askToDiscard } from './discardDialog.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
@@ -152,12 +157,18 @@ const editor = {
 // The groove that was last loaded or saved. The Grooves menu and the library panel ask before
 // they replace edits.
 const dirtyState = createDirtyState();
+// After a reload the address holds the edits, so the tab's own clean groove is the start. Read
+// it now: the editor rewrites the URL on load.
+const baseline = restoredBaseline(window.location.search);
 // A change that is not an edit, such as the tempo that the metronome raises, keeps a clean
 // editor clean.
 myGrooveWriter.onChangeWithoutEdit = (before, after) => dirtyState.rebase(before, after);
 // Each change of the URL can make the editor dirty or clean again, for example an Undo.
 const dirtyWatch = watchDirty(dirtyState, editor.currentQuery);
-myGrooveWriter.onUrlChange = dirtyWatch.changed;
+myGrooveWriter.onUrlChange = () => {
+  rememberAddress(window.location.search);
+  dirtyWatch.changed();
+};
 
 // A groove from the Grooves menu replaces the one in the editor, so it asks first too.
 document.getElementById('grooveListWrapper')?.addEventListener('click', async (event) => {
@@ -196,6 +207,7 @@ initPopovers();
 window.addEventListener('load', function () {
   myGrooveWriter.runsOnPageLoad();
   // The groove the page starts with, from a link or the default, is clean until it is edited.
-  dirtyState.markStart(editor.currentQuery());
+  // A reloaded page keeps the clean groove it had, also signed out.
+  dirtyState.markStart(baseline ?? editor.currentQuery());
   initPlaybackControls(utils);
 });

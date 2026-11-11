@@ -62,6 +62,31 @@ test('a loaded built-in groove is clean', async ({ page }) => {
   expect(dialogs).toEqual([]);
 });
 
+// Every edit is in the address. The tab keeps its clean groove, so a reload, or iPad Safari
+// bringing back a tab it dropped, does not count the edits as clean.
+test('a reload keeps the edits unsaved, and the Grooves menu still asks', async ({ page }) => {
+  page.on('dialog', (dialog) => dialog.accept());
+  await loadGroove(page, '/index.html');
+  await page.click('#snare4');
+  await page.reload();
+  await page.waitForSelector('#svgTarget svg');
+  await pickBuiltIn(page, 'Train Beat');
+  await expect(discardDialog(page)).toBeVisible();
+});
+
+test('a new link opened in the same tab is clean', async ({ page }) => {
+  page.on('dialog', (dialog) => dialog.accept());
+  await loadGroove(page, '/index.html');
+  await page.click('#snare4');
+  await loadGroove(
+    page,
+    '/index.html?TimeSig=4/4&Div=8&Title=Rock&Tempo=100&Measures=1&H=|xxxxxxxx|&S=|--O---O-|&K=|o---o---|'
+  );
+  await pickBuiltIn(page, 'Train Beat');
+  await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+  await expect(discardDialog(page)).toBeHidden();
+});
+
 // The metronome can raise the tempo by itself. That is not an edit.
 test('a tempo that the metronome raised is not an edit', async ({ page }) => {
   const dialogs = [];

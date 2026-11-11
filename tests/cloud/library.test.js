@@ -332,7 +332,9 @@ describe('the library panel', () => {
   beforeEach(() => {
     // Node has its own localStorage global, which hides the one of jsdom.
     vi.stubGlobal('localStorage', globalThis.jsdom.window.localStorage);
+    vi.stubGlobal('sessionStorage', globalThis.jsdom.window.sessionStorage);
     localStorage.clear();
+    sessionStorage.clear();
     document.body.innerHTML = `
       <div id="upperLeft"></div>
       <a id="helpAnchor"></a>
@@ -346,7 +348,7 @@ describe('the library panel', () => {
       db: 'db',
       persistent: true,
     });
-    dirtyState = createDirtyState();
+    dirtyState = createDirtyState(null);
     editor = createEditor();
     initLibraryPanel({
       search: START,

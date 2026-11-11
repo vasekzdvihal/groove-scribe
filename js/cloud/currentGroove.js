@@ -1,18 +1,16 @@
 // The saved groove that is open in the editor. The library panel offers Update for it.
 //
-// A record on this device keeps it for a reload: the id, the query the groove has in the
-// library, and the query the editor showed. A reload trusts the record only when both still
-// match. One record per account, so another account on this device never sees it.
+// A record in the tab keeps it for a reload: the id, the query the groove has in the library,
+// and the clean query of the editor. A reload trusts the record only when both still match.
+// The record is per tab, as the clean groove of dirtyState.js is, so one tab never drops or
+// changes the record of another. One record per account, so another account never sees it.
 import { sameGroove } from './dirtyState.js';
 
 const recordKey = (uid) => `grooveScribe.currentGroove.${uid}`;
 
-/** The version of a restored groove: the cleanVersion of the groove the page started with. */
-export const PAGE_START = 'page start';
-
 /**
  * @typedef {{id: string, savedQuery: string, editorQuery: string}} CurrentRecord
- * @typedef {{id: string, savedQuery: string, version: number | typeof PAGE_START}} CurrentGroove
+ * @typedef {{id: string, savedQuery: string, version: number}} CurrentGroove
  */
 
 /**
@@ -22,7 +20,7 @@ export const PAGE_START = 'page start';
  */
 export function readRecord(uid) {
   try {
-    const saved = JSON.parse(localStorage.getItem(recordKey(uid)));
+    const saved = JSON.parse(sessionStorage.getItem(recordKey(uid)));
     return typeof saved?.id === 'string' ? saved : null;
   } catch {
     return null;
@@ -35,8 +33,8 @@ export function readRecord(uid) {
  */
 export function writeRecord(uid, record) {
   try {
-    if (record) localStorage.setItem(recordKey(uid), JSON.stringify(record));
-    else localStorage.removeItem(recordKey(uid));
+    if (record) sessionStorage.setItem(recordKey(uid), JSON.stringify(record));
+    else sessionStorage.removeItem(recordKey(uid));
   } catch {
     /* after a reload, the groove is simply not the current one */
   }
@@ -59,41 +57,43 @@ export function rebaseRecord(record, before, after) {
  * What to do with the record of the last visit, once a list of grooves is there.
  * @param {CurrentRecord} record
  * @param {{id: string, query: string}[]} grooves
- * @param {{pageQuery: string, fromServer: boolean}} options  pageQuery is the query the page
- *        started with. A list from the server has the whole library, a cached one may not.
+ * @param {{cleanQuery: string | symbol | null, fromServer: boolean}} options  cleanQuery is the
+ *        clean groove of the editor now (see dirtyState cleanQuery). After a reload of a page
+ *        with edits it is still the saved groove. A list from the server has the whole library,
+ *        a cached one may not.
  * @returns {'keep' | 'drop' | 'wait'}
  */
-export function restoreDecision(record, grooves, { pageQuery, fromServer }) {
+export function restoreDecision(record, grooves, { cleanQuery, fromServer }) {
   const groove = grooves.find((item) => item.id === record.id);
   if (!groove) return fromServer ? 'drop' : 'wait';
-  return sameGroove(groove.query, record.savedQuery) && sameGroove(pageQuery, record.editorQuery)
+  return typeof cleanQuery === 'string' &&
+    sameGroove(groove.query, record.savedQuery) &&
+    sameGroove(cleanQuery, record.editorQuery)
     ? 'keep'
     : 'drop';
 }
 
 /**
  * The saved groove that the editor shows, or null. It stops being open when another groove is
- * loaded or saved, when it leaves the library, and when its library query changes, for example
- * on another device.
+ * loaded or saved and when it leaves the library. A change of its library query, for example on
+ * another device, closes it after the next server read.
  * @param {CurrentGroove | null} current
  * @param {{id: string, query: string}[]} grooves
- * @param {{cleanVersion: number, startVersion: number | null}} versions  from the dirty state
+ * @param {number} cleanVersion  from the dirty state
  */
-export function findOpenGroove(current, grooves, { cleanVersion, startVersion }) {
-  if (!current) return null;
-  const version = current.version === PAGE_START ? startVersion : current.version;
-  if (version === null || version !== cleanVersion) return null;
+export function findOpenGroove(current, grooves, cleanVersion) {
+  if (!current || current.version !== cleanVersion) return null;
   const groove = grooves.find((item) => item.id === current.id);
   return groove && sameGroove(groove.query, current.savedQuery) ? groove : null;
 }
 
 /**
  * Track the saved groove that the editor shows, for one signed-in session. It keeps the record
- * of this device in step, and restores the groove of the last visit once a list is there.
+ * of the tab in step, and restores the groove of the last visit once a list is there and the
+ * page has marked its start.
  *
  * @param {object} options
  * @param {string} options.uid  The signed-in user.
- * @param {string} options.pageQuery  The query the page started with.
  * @param {ReturnType<typeof import('./dirtyState.js').createDirtyState>} options.dirtyState
  * @param {{currentQuery: function(): string, rename: function(string): void}} options.editor
  * @param {function(): {id: string, query: string}[]} options.grooves  The grooves on screen.
@@ -104,7 +104,6 @@ export function findOpenGroove(current, grooves, { cleanVersion, startVersion })
  */
 export function createCurrentGroove({
   uid,
-  pageQuery,
   dirtyState,
   editor,
   grooves,
@@ -117,17 +116,22 @@ export function createCurrentGroove({
   let current = null;
   // The current groove of the last visit, until a list shows whether it is still current.
   let restoring = readRecord(uid);
+  // The grooves on screen are the whole library.
+  let listFromServer = false;
 
   // A tempo raise is not an edit. The record follows it, so a reload still finds the groove.
   const stopRebase = dirtyState.onRebase((before, after) => {
+    restoring = rebaseRecord(restoring, before, after);
     const stored = readRecord(uid);
     const next = rebaseRecord(stored, before, after);
     if (next !== stored) writeRecord(uid, next);
   });
 
-  // A groove restored before the page marked its start becomes open only then.
+  // Before the start, the editor has the default groove, so the decision waits for it.
   const stopStart = dirtyState.onStart(() => {
-    if (isActive()) onStart();
+    if (!isActive()) return;
+    restore(listFromServer);
+    onStart();
   });
 
   // Check after the current task: a pick sets the new open groove right after it marks it clean.
@@ -138,11 +142,7 @@ export function createCurrentGroove({
   );
 
   /** The saved groove that the editor shows, or null. */
-  const open = () =>
-    findOpenGroove(current, grooves(), {
-      cleanVersion: dirtyState.cleanVersion(),
-      startVersion: dirtyState.startVersion(),
-    });
+  const open = () => findOpenGroove(current, grooves(), dirtyState.cleanVersion());
 
   /** Call after markClean: the groove in the editor is now this saved groove. */
   function set(id, savedQuery) {
@@ -153,17 +153,26 @@ export function createCurrentGroove({
 
   /**
    * After a reload, the groove of the last visit is current if the library still has it as it
-   * was, and the page started with it. It stays current until another groove is loaded, also
-   * when the panel opens before the page has marked its start.
+   * was, and the clean groove of the editor is still the one it had. The edits of a reloaded
+   * page do not count: the tab kept its clean groove. In a later session on the same page, the
+   * clean groove is the one the page has now. It stays current until another groove is loaded.
    * @param {boolean} fromServer  The grooves on screen are the whole library.
    * @returns {boolean} true when it is kept
    */
   function restore(fromServer) {
-    if (!restoring) return false;
-    const decision = restoreDecision(restoring, grooves(), { pageQuery, fromServer });
+    listFromServer = fromServer;
+    if (!restoring || dirtyState.startVersion() === null) return false;
+    const decision = restoreDecision(restoring, grooves(), {
+      cleanQuery: dirtyState.cleanQuery(),
+      fromServer,
+    });
     if (decision === 'wait') return false;
     if (decision === 'keep') {
-      current = { id: restoring.id, savedQuery: restoring.savedQuery, version: PAGE_START };
+      current = {
+        id: restoring.id,
+        savedQuery: restoring.savedQuery,
+        version: dirtyState.cleanVersion(),
+      };
     } else {
       writeRecord(uid, null);
     }
