@@ -581,15 +581,30 @@ test.describe('updating a saved groove', () => {
     await expect(row).not.toHaveAttribute('aria-current', 'true');
   });
 
+  test('Undo with the form open takes Update away', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await saveTool(page).click();
+    await expect(updateButton(page)).toBeVisible();
+    // The slide-over covers the button, so click it in the page.
+    await page.evaluate(() => document.getElementById('undoButton').click());
+    await expect(updateButton(page)).toHaveCount(0);
+    await expect(plainSaveButton(page)).toBeVisible();
+  });
+
   test('Update with no changes left says so', async ({ page }) => {
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
     await pickSaved(page, 'Paradiddle');
     await editNote(page);
     await saveTool(page).click();
-    // Undo while the form is open. The slide-over covers the button, so click it in the page.
-    await page.evaluate(() => document.getElementById('undoButton').click());
-    await updateButton(page).click();
+    // Undo and Update in one task, before the form follows the Undo.
+    await page.evaluate(() => {
+      document.getElementById('undoButton').click();
+      document.getElementById('lpUpdate').click();
+    });
     await expect(page.getByRole('alert')).toHaveText(
       'Nothing to update. The groove has no changes.'
     );
@@ -682,6 +697,66 @@ test.describe('updating a saved groove', () => {
     await saveTool(page).click();
     await expect(plainSaveButton(page)).toBeVisible();
     await expect(updateButton(page)).toHaveCount(0);
+  });
+});
+
+test.describe('the Save button', () => {
+  const saveButton = (page) => page.locator('#saveButton');
+  const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
+
+  test('signed out, it opens sign-in and loads Firebase only then', async ({ page }) => {
+    const sdkRequests = [];
+    page.on('request', (request) => {
+      if (request.url().includes('vendor/firebase.js')) sdkRequests.push(request.url());
+    });
+    await openEditor(page);
+    await expect(saveButton(page)).toBeVisible();
+    expect(sdkRequests).toEqual([]);
+
+    await saveButton(page).click();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeFocused();
+    expect(sdkRequests).toHaveLength(1);
+  });
+
+  test('signed in, it opens the panel at the save form, and the form saves', async ({ page }) => {
+    await signedInPanel(page);
+    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.click('#snare4');
+    await saveButton(page).click();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    await expect(page.locator('#lpSaveTool')).toHaveAttribute('open', '');
+    await expect(page.locator('#lpSaveTool summary')).toBeFocused();
+    await page.locator('#lpSaveTitle').fill('Mine');
+    await page.getByRole('button', { name: 'Save groove' }).click();
+    await expect(grooveButton(page, 'Mine')).toHaveAttribute('aria-current', 'true');
+    await expect(saveButton(page)).toHaveText('Saved');
+  });
+
+  test('it says Saved only while the editor shows an unchanged saved groove', async ({ page }) => {
+    await signedInPanel(page);
+    // The default groove is not saved anywhere.
+    await expect(saveButton(page)).toHaveText('Save');
+    await addLink(page, QUERY, 'Paradiddle');
+    await expect(saveButton(page)).toHaveText('Save');
+
+    await grooveButton(page, 'Paradiddle').click();
+    await expect(saveButton(page)).toHaveText('Saved');
+    await expect(saveButton(page)).toHaveAccessibleName('Saved');
+    await page.click('#snare4');
+    await expect(saveButton(page)).toHaveText('Save');
+    await expect(saveButton(page)).toHaveAccessibleName('Save');
+    await page.click('#undoButton');
+    await expect(saveButton(page)).toHaveText('Saved');
+
+    // A built-in groove is not the saved groove.
+    await page.click('#groovesAnchor');
+    await page
+      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
+      .first()
+      .click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+    await expect(saveButton(page)).toHaveText('Save');
   });
 });
 
@@ -1803,6 +1878,27 @@ test.describe('docked on a wide screen', () => {
     await dialog.getByRole('button', { name: 'Discard changes' }).click();
     await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
     await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('Save opens it at the save form, and the open form follows edits', async ({ page }) => {
+    const updateButton = page.getByRole('button', { name: 'Update groove' });
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    await page.getByRole('button', { name: 'Hide library' }).click();
+
+    await page.locator('#saveButton').click();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    await expect(page.locator('#lpSaveTool')).toHaveAttribute('open', '');
+    await expect(page.getByRole('button', { name: 'Save groove' })).toBeVisible();
+    await expect(updateButton).toHaveCount(0);
+
+    await page.click('#snare4');
+    await expect(updateButton).toBeVisible();
+    await expect(page.locator('#lpUpdateHint')).toContainText('"Paradiddle"');
+    await page.click('#undoButton');
+    await expect(updateButton).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save groove' })).toBeVisible();
   });
 
   test('Escape does not hide it', async ({ page }) => {

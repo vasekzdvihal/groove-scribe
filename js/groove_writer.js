@@ -2151,6 +2151,9 @@ function GrooveWriter() {
   // the tempo that the metronome raises. The editor page uses it to keep unsaved-edit
   // tracking right.
   root.onChangeWithoutEdit = null;
+  // Called after each change of the URL, an edit or not, such as an Undo. The editor page uses
+  // it to tell whether the groove has unsaved edits.
+  root.onUrlChange = null;
   var class_last_page_url = null;
 
   // the same, for a change that is not an edit: the newest history step shows it
@@ -2194,6 +2197,8 @@ function GrooveWriter() {
         searchDataEle.innerHTML = '<p style="margin-left: 10px;"><b>' + searchURL + '</b><p>';
       }
     }
+
+    if (root.onUrlChange) root.onUrlChange();
   }
 
   function generate_ABC(renderWidth) {

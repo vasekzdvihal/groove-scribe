@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createDirtyState, sameGroove } from '../../js/cloud/dirtyState.js';
+import { createDirtyState, sameGroove, watchDirty } from '../../js/cloud/dirtyState.js';
 
 const QUERY = '?TimeSig=4/4&Div=16&Title=Beat&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
 const EDITED = QUERY.replace('S=|--O-|', 'S=|O-O-|');
@@ -130,5 +130,113 @@ describe('the page start', () => {
     stop();
     state.markStart(QUERY);
     expect(calls).toEqual([2]);
+  });
+});
+
+describe('onChange', () => {
+  it('tells listeners after each markClean, markStart, rebase and forget', () => {
+    const state = createDirtyState();
+    const calls = [];
+    const stop = state.onChange(() => calls.push(state.startVersion()));
+    state.markClean(QUERY);
+    state.markStart(QUERY);
+    state.rebase(QUERY, EDITED);
+    state.forget(EDITED);
+    stop();
+    state.markClean(QUERY);
+    // markStart tells them after the start version is set.
+    expect(calls).toEqual([null, 2, 2, 2]);
+  });
+});
+
+describe('watchDirty', () => {
+  // Run the checks by hand, so a test sees each one.
+  function setUp() {
+    const state = createDirtyState();
+    const editor = { query: QUERY };
+    const queued = [];
+    const watch = watchDirty(
+      state,
+      () => editor.query,
+      (task) => queued.push(task)
+    );
+    const calls = [];
+    watch.onDirtyChange((dirty) => calls.push(dirty));
+    const flush = () => queued.splice(0).forEach((task) => task());
+    return { state, editor, watch, calls, flush, queued };
+  }
+
+  it('tells listeners when an edit makes the editor dirty, and when Undo makes it clean', () => {
+    const { state, editor, watch, calls, flush } = setUp();
+    state.markStart(QUERY);
+    flush();
+    expect(calls).toEqual([]);
+    editor.query = EDITED;
+    watch.changed();
+    flush();
+    expect(calls).toEqual([true]);
+    expect(watch.isDirty()).toBe(true);
+    editor.query = QUERY;
+    watch.changed();
+    flush();
+    expect(calls).toEqual([true, false]);
+    expect(watch.isDirty()).toBe(false);
+  });
+
+  it('does not tell listeners about a change that keeps the dirty value', () => {
+    const { state, editor, watch, calls, flush } = setUp();
+    state.markStart(QUERY);
+    editor.query = EDITED;
+    watch.changed();
+    flush();
+    editor.query = EDITED.replace('Tempo=95', 'Tempo=96');
+    watch.changed();
+    flush();
+    expect(calls).toEqual([true]);
+  });
+
+  it('checks after markClean, rebase and forget', () => {
+    const { state, editor, calls, flush } = setUp();
+    state.markStart(QUERY);
+    editor.query = EDITED;
+    state.markClean(EDITED);
+    flush();
+    expect(calls).toEqual([]);
+    state.forget(EDITED);
+    flush();
+    expect(calls).toEqual([true]);
+    state.markClean(EDITED);
+    flush();
+    expect(calls).toEqual([true, false]);
+    const faster = EDITED.replace('Tempo=95', 'Tempo=96');
+    editor.query = faster;
+    state.rebase(EDITED, faster);
+    flush();
+    expect(calls).toEqual([true, false]);
+  });
+
+  it('makes one check for several changes in one task, so a pick does not flicker', () => {
+    const { state, editor, watch, calls, flush, queued } = setUp();
+    state.markStart(QUERY);
+    flush();
+    // A pick: the editor loads another groove, then marks it clean.
+    editor.query = EDITED;
+    watch.changed();
+    state.markClean(EDITED);
+    expect(queued).toHaveLength(1);
+    flush();
+    expect(calls).toEqual([]);
+  });
+
+  it('stops telling a listener that stopped listening', () => {
+    const { state, editor, watch, flush } = setUp();
+    const calls = [];
+    const stop = watch.onDirtyChange((dirty) => calls.push(dirty));
+    state.markStart(QUERY);
+    stop();
+    editor.query = EDITED;
+    watch.changed();
+    flush();
+    expect(calls).toEqual([]);
   });
 });

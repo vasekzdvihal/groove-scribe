@@ -92,3 +92,22 @@ test('a tempo that the metronome raised is not an edit', async ({ page }) => {
   await loadGroove(page, '/index.html');
   expect(dialogs).toEqual([]);
 });
+
+// A page with a beforeunload listener cannot go into the back-forward cache of Firefox, so the
+// listener is there only while the page has edits.
+test('the leave warning is listening only while the groove has edits', async ({ page }) => {
+  await loadGroove(page, '/index.html');
+  const client = await page.context().newCDPSession(page);
+  const listeners = async () => {
+    const { result } = await client.send('Runtime.evaluate', { expression: 'window' });
+    const { listeners: all } = await client.send('DOMDebugger.getEventListeners', {
+      objectId: result.objectId,
+    });
+    return all.filter((listener) => listener.type === 'beforeunload').length;
+  };
+  expect(await listeners()).toBe(0);
+  await page.click('#snare4');
+  await expect.poll(listeners).toBe(1);
+  await page.click('#undoButton');
+  await expect.poll(listeners).toBe(0);
+});

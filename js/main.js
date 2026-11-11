@@ -10,9 +10,9 @@
 import { GrooveWriter } from './groove_writer.js';
 import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
-import { initPlaybackControls, initPopovers } from './editorChrome.js';
+import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
-import { createDirtyState } from './cloud/dirtyState.js';
+import { createDirtyState, watchDirty } from './cloud/dirtyState.js';
 import { askToDiscard } from './discardDialog.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
@@ -133,6 +133,9 @@ const editor = {
   },
   currentQuery: () => utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
   currentTitle: () => document.getElementById('tuneTitle').value.trim(),
+  // Calls the listener with true when the groove gets unsaved edits, and with false when it
+  // is clean again. Returns the call that stops listening.
+  onDirtyChange: (listener) => dirtyWatch.onDirtyChange(listener),
 };
 
 // The groove that was last loaded or saved. The Grooves menu and the library panel ask before
@@ -141,6 +144,9 @@ const dirtyState = createDirtyState();
 // A change that is not an edit, such as the tempo that the metronome raises, keeps a clean
 // editor clean.
 myGrooveWriter.onChangeWithoutEdit = (before, after) => dirtyState.rebase(before, after);
+// Each change of the URL can make the editor dirty or clean again, for example an Undo.
+const dirtyWatch = watchDirty(dirtyState, editor.currentQuery);
+myGrooveWriter.onUrlChange = dirtyWatch.changed;
 
 // A groove from the Grooves menu replaces the one in the editor, so it asks first too.
 document.getElementById('grooveListWrapper')?.addEventListener('click', async (event) => {
@@ -162,6 +168,8 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
     whenReady: soundOrTimeout,
     editor,
     dirtyState,
+    // The panel shows the button: without the library there is nothing to save to.
+    initSaveButton,
   });
 }
 

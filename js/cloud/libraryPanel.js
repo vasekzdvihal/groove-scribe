@@ -277,6 +277,7 @@ function startLibrary({
   editor,
   dirtyState,
   afterPick,
+  showGrooveOpen,
 }) {
   let lessons = [];
   let grooves = [];
@@ -334,12 +335,28 @@ function startLibrary({
     if (isActive()) render();
   });
 
+  // An edit or an Undo switches an open save form between Update and the plain save.
+  const stopDirty = editor.onDirtyChange(() => {
+    if (isActive()) render();
+  });
+
+  // Another groove, from the Grooves menu for example, closes the open saved groove. Check after
+  // the current task: a pick sets the new open groove right after it marks it clean.
+  const stopChange = dirtyState.onChange(() =>
+    queueMicrotask(() => {
+      if (isActive() && (openSavedGroove()?.id ?? null) !== openGrooveId) render();
+    })
+  );
+
   // The session is over: nothing may keep running for it.
   function stop() {
     stopped = true;
     sync.stop();
     stopRebase();
     stopStart();
+    stopDirty();
+    stopChange();
+    showGrooveOpen(false);
   }
 
   // The server has answered every write, so the labels can go. A write from an earlier visit
@@ -610,6 +627,7 @@ function startLibrary({
       select.replaceChildren(...lessonOptions(lessons, selected));
     }
     openGrooveId = openSavedGroove()?.id ?? null;
+    showGrooveOpen(openGrooveId !== null);
     const known = new Set(lessons.map((lesson) => lesson.id));
     const unfiled = grooves.filter((groove) => !known.has(groove.lessonId));
     const entries = [
@@ -749,7 +767,7 @@ function startLibrary({
       return;
     }
     // The form can be out of date: the groove can be gone, another groove loaded, or the edits
-    // undone. The form follows edits from T6.3 on.
+    // undone in the same task as the click, before the form follows them.
     const groove = openSavedGroove();
     const reason = !groove
       ? NOT_OPEN_TO_UPDATE
@@ -777,8 +795,9 @@ function whenIdle(task) {
   }
 }
 
-// Connect to Firebase, and return the sign-out action.
-async function startCloud(search, editor, dirtyState, afterPick) {
+// Connect to Firebase, and return the sign-out action. The hooks tell the page about the
+// library: afterPick, libraryShown, signedOut, and showGrooveOpen (see startLibrary).
+async function startCloud(search, editor, dirtyState, hooks) {
   const resolved = resolveCloudConfig({ hostname: location.hostname, search });
   if (!resolved) {
     showMessage('Accounts are not set up on this site yet.');
@@ -815,6 +834,7 @@ async function startCloud(search, editor, dirtyState, afterPick) {
       setLoading(false);
       // Queued writes wait for the next sign-in of their user, and that loads the SDK anyway.
       writePendingWritesFlag(false);
+      hooks.signedOut();
       return;
     }
 
@@ -828,7 +848,8 @@ async function startCloud(search, editor, dirtyState, afterPick) {
       persistent,
       editor,
       dirtyState,
-      afterPick,
+      afterPick: hooks.afterPick,
+      showGrooveOpen: hooks.showGrooveOpen,
     });
 
     currentSession = session;
@@ -840,6 +861,7 @@ async function startCloud(search, editor, dirtyState, afterPick) {
       if (drewCached) {
         setLoading(false);
         byId('lpLibrary').hidden = false;
+        hooks.libraryShown();
       }
       const loaded = await session.load();
       if (activeUid !== user.uid) return;
@@ -859,6 +881,7 @@ async function startCloud(search, editor, dirtyState, afterPick) {
         return;
       }
       byId('lpLibrary').hidden = false;
+      hooks.libraryShown();
       // Offline, the profile would only queue another write for later. The next online load
       // saves it. A failure here must not show an error over a library that works.
       if (!loaded.fromCache) library.saveProfile(user).catch(console.error);
@@ -877,16 +900,27 @@ async function startCloud(search, editor, dirtyState, afterPick) {
  * @param {Promise<void>} [options.whenReady]  Settles when Play is ready. A panel that opens
  *        by itself waits for it before it starts Firebase.
  * @param {{openGroove: function(string): void, currentQuery: function(): string,
- *          currentTitle: function(): string}} options.editor
+ *          currentTitle: function(): string,
+ *          onDirtyChange: function(function(boolean): void): function(): void}} options.editor
  * @param {{markClean: function(string): void, isDirty: function(string): boolean,
  *          forget: function(string): void, cleanVersion: function(): number,
  *          startVersion: function(): (number | null),
  *          onRebase: function(function(string, string): void): function(): void,
- *          onStart: function(function(): void): function(): void}}
+ *          onStart: function(function(): void): function(): void,
+ *          onChange: function(function(): void): function(): void}}
  *        options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
  *        the groove that the page starts with, with markStart.
+ * @param {function(function(): void): function(boolean): void} options.initSaveButton  Shows
+ *        the Save button of the editor with a click action, and returns the call that shows
+ *        whether the groove is saved.
  */
-export function initLibraryPanel({ search, editor, dirtyState, whenReady = Promise.resolve() }) {
+export function initLibraryPanel({
+  search,
+  editor,
+  dirtyState,
+  initSaveButton,
+  whenReady = Promise.resolve(),
+}) {
   const toggle = element('button', {
     id: 'libraryToggle',
     type: 'button',
@@ -929,14 +963,55 @@ export function initLibraryPanel({ search, editor, dirtyState, whenReady = Promi
   function closePanel() {
     // A docked panel is not a dialog. Focus stays on the page, so space still plays.
     const moveFocus = !docked.matches || panel.contains(document.activeElement);
+    wantsSaveForm = false;
     rememberDockedChoice(false);
     setOpen(false);
     if (moveFocus) toggle.focus();
   }
 
+  // The Save button asks for the save form. The library shows it when the user is signed in.
+  let wantsSaveForm = false;
+  let editorDirty = false;
+  let grooveOpen = false;
+
+  function showSaveForm() {
+    if (!wantsSaveForm || byId('lpLibrary').hidden) return;
+    wantsSaveForm = false;
+    const tool = byId('lpSaveTool');
+    // A form opened from code fills itself on toggle.
+    tool.open = true;
+    const summary = tool.querySelector('summary');
+    summary.focus();
+    summary.scrollIntoView({ block: 'nearest' });
+  }
+
+  // Signed out, the Save button leads to the sign-in. The form follows after the sign-in.
+  function showSignIn() {
+    if (wantsSaveForm && panel.classList.contains('open')) byId('lpSignIn').focus();
+  }
+
+  function openSaveForm() {
+    wantsSaveForm = true;
+    if (panel.classList.contains('open')) connect();
+    else openPanel();
+    showSaveForm();
+    if (!byId('lpSignedOut').hidden) showSignIn();
+  }
+
+  const showSaved = initSaveButton(openSaveForm);
+  const drawSaveButton = () => showSaved(grooveOpen && !editorDirty);
+
   function connect() {
-    started ??= startCloud(search, editor, dirtyState, () => {
-      if (!docked.matches) closePanel();
+    started ??= startCloud(search, editor, dirtyState, {
+      afterPick: () => {
+        if (!docked.matches) closePanel();
+      },
+      libraryShown: showSaveForm,
+      signedOut: showSignIn,
+      showGrooveOpen: (isOpen) => {
+        grooveOpen = isOpen;
+        drawSaveButton();
+      },
     }).catch((error) => {
       started = null;
       setLoading(false);
@@ -995,11 +1070,17 @@ export function initLibraryPanel({ search, editor, dirtyState, whenReady = Promi
   );
 
   // Edits that are not saved are a reason to ask, apart from the writes that pendingSync guards.
-  // Each reason has its own listener, so neither one removes the other.
-  window.addEventListener('beforeunload', (event) => {
-    if (!dirtyState.isDirty(editor.currentQuery())) return;
+  // Each reason has its own listener, so neither one removes the other. The listener is there
+  // only while the page has edits: Firefox keeps a page without one in its back-forward cache.
+  function warnAboutEdits(event) {
     event.preventDefault();
     event.returnValue = '';
+  }
+  editor.onDirtyChange((dirty) => {
+    editorDirty = dirty;
+    if (dirty) window.addEventListener('beforeunload', warnAboutEdits);
+    else window.removeEventListener('beforeunload', warnAboutEdits);
+    drawSaveButton();
   });
 
   docked.addEventListener('change', followScreenWidth);

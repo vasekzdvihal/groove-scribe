@@ -18,7 +18,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm test`             | Vitest unit suite — **962 pass**                                                                                                                                                                                                                        |
-| `npm run test:e2e`     | Playwright golden-master and UI — **198 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
+| `npm run test:e2e`     | Playwright golden-master and UI — **210 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~85 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
@@ -26,7 +26,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                  |
 | `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                          |
 | `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                                                                                              |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **70 pass** (needs Java)                                                                                                                                                             |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **96 pass** (needs Java)                                                                                                                                                             |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -103,6 +103,12 @@ and the leave warning),
 - The library is a slide-in panel in the editor (`libraryPanel.js`, `css/library-panel.css`).
   `main.js` passes it a small `editor` object, so the panel never touches editor internals.
   `profile.html` only redirects to `index.html#library`.
+- Unsaved edits: `dirtyState.js` keeps the groove that was last loaded or saved. `watchDirty`
+  checks once after each URL change (`GrooveWriter.onUrlChange`) and each dirty-state change, and
+  `editor.onDirtyChange` reports only real flips. The leave warning is attached only while dirty.
+- The Save button next to Share opens the panel at its save form, or at the sign-in. It says
+  Saved only while the editor shows an open saved groove unchanged. The panel shows the button,
+  so the native app and GrooveDB authoring, which have no panel, do not show it.
 - The page runs the Firebase SDK when the panel connects. The editor page load does not import
   it, the embed pages never download it, and the service worker precaches the file for offline use.
 - A saved groove is its URL query string. `grooveLink.js` keeps only known groove parameters.
