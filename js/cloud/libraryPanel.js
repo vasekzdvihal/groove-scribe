@@ -329,11 +329,17 @@ function startLibrary({
     if (next !== stored) writeRecord(uid, next);
   });
 
+  // A groove restored before the page marked its start becomes open only then. Draw it.
+  const stopStart = dirtyState.onStart(() => {
+    if (isActive()) render();
+  });
+
   // The session is over: nothing may keep running for it.
   function stop() {
     stopped = true;
     sync.stop();
     stopRebase();
+    stopStart();
   }
 
   // The server has answered every write, so the labels can go. A write from an earlier visit
@@ -397,6 +403,8 @@ function startLibrary({
     current = { id, savedQuery, version: dirtyState.cleanVersion() };
     writeRecord(uid, { id, savedQuery, editorQuery: editor.currentQuery() });
     render();
+    // A docked panel can have the save form open: it is now about this groove.
+    if (byId('lpSaveTool').open) prefillSaveForm();
   }
 
   // The saved groove that the editor shows, or null.
@@ -631,7 +639,12 @@ function startLibrary({
   function prefillSaveForm() {
     byId('lpSaveTitle').value = editor.currentTitle();
     const groove = refreshSaveForm();
-    if (!groove) return;
+    if (!groove) {
+      // A new groove goes to the open lesson, as the list shows it.
+      const known = lessons.some((lesson) => lesson.id === openLesson);
+      byId('lpSaveLesson').value = known ? openLesson : '';
+      return;
+    }
     // Update keeps the library name of the groove, unless the user types another one.
     if (groove.title) byId('lpSaveTitle').value = groove.title;
     // The form starts on the groove's own lesson. Another lesson moves it on Update.
@@ -868,7 +881,8 @@ async function startCloud(search, editor, dirtyState, afterPick) {
  * @param {{markClean: function(string): void, isDirty: function(string): boolean,
  *          forget: function(string): void, cleanVersion: function(): number,
  *          startVersion: function(): (number | null),
- *          onRebase: function(function(string, string): void): function(): void}}
+ *          onRebase: function(function(string, string): void): function(): void,
+ *          onStart: function(function(): void): function(): void}}
  *        options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
  *        the groove that the page starts with, with markStart.
  */

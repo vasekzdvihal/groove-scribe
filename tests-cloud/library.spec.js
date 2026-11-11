@@ -922,6 +922,15 @@ test.describe('without a network', () => {
       )
     );
     const profileCalls = () => page.evaluate(() => window.saveProfileCalls ?? 0);
+    // A failure must name its cause: a memory cache, which happens when the storage probe
+    // times out, keeps queued writes only in the page and makes leaving ask first.
+    const logs = [];
+    const dialogs = [];
+    page.on('console', (line) => logs.push(line.text()));
+    page.on('dialog', (dialog) => {
+      dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+      dialog.accept();
+    });
 
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
@@ -935,6 +944,8 @@ test.describe('without a network', () => {
     await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
     await listsAnswered(page);
     expect(await profileCalls()).toBe(0);
+    expect(logs.filter((line) => line.includes('Falling back to memory cache'))).toEqual([]);
+    expect(dialogs).toEqual([]);
   });
 
   test('a profile save that fails shows no error over the library', async ({ page }) => {
@@ -1744,6 +1755,37 @@ test.describe('docked on a wide screen', () => {
     await page.keyboard.press(' ');
     await page.waitForFunction(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
     await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('picking another groove fills an open save form for it', async ({ page }) => {
+    const ROCK =
+      '?TimeSig=4/4&Div=8&Title=Rock&Tempo=100&Measures=1&H=|xxxxxxxx|&S=|--O---O-|&K=|o---o---|';
+    const saveTool = page.locator('summary', { hasText: 'Save current groove' });
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await createLesson(page, 'Week 1');
+    await addLink(page, ROCK, 'Rock');
+    const [lesson] = await savedDocs(page, 'lessons');
+    await page.locator('.lp-lesson summary', { hasText: 'No lesson' }).click();
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    await page.click('#snare4');
+    await saveTool.click();
+    await expect(page.locator('#lpUpdateHint')).toContainText('"Paradiddle"');
+
+    await page.locator('.lp-lesson summary', { hasText: 'Week 1' }).click();
+    await page.getByRole('button', { name: 'Rock', exact: true }).click();
+    await page.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    // The form is still open, and it is now about Rock.
+    await expect(page.locator('#lpSaveTitle')).toHaveValue('Rock');
+    await expect(page.locator('#lpSaveLesson')).toHaveValue(lesson.id);
+    await expect(page.locator('#lpUpdateHint')).toBeHidden();
+
+    await page.click('#snare4');
+    await saveTool.click();
+    await saveTool.click();
+    await expect(page.locator('#lpUpdateHint')).toContainText('"Rock"');
+    await expect(page.locator('#lpSaveLesson')).toHaveValue(lesson.id);
   });
 
   test('picking a groove with edits asks first in the docked panel', async ({ page }) => {

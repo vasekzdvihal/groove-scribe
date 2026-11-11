@@ -120,4 +120,15 @@ describe('the page start', () => {
     state.rebase(EDITED, QUERY);
     expect(calls).toEqual([[QUERY, EDITED]]);
   });
+
+  it('tells listeners when the page start is marked', () => {
+    const state = createDirtyState();
+    const calls = [];
+    const stop = state.onStart(() => calls.push(state.startVersion()));
+    state.markClean(QUERY);
+    state.markStart(QUERY);
+    stop();
+    state.markStart(QUERY);
+    expect(calls).toEqual([2]);
+  });
 });
