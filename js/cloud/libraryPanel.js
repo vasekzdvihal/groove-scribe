@@ -9,14 +9,7 @@
 // precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { askToDiscard, isAskingToDiscard } from '../discardDialog.js';
-import {
-  PAGE_START,
-  findOpenGroove,
-  readRecord,
-  rebaseRecord,
-  restoreDecision,
-  writeRecord,
-} from './currentGroove.js';
+import { createCurrentGroove } from './currentGroove.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
 import {
@@ -308,13 +301,8 @@ function startLibrary({
 }) {
   let lessons = [];
   let grooves = [];
-  // The saved groove that the editor shows. See findOpenGroove.
-  /** @type {import('./currentGroove.js').CurrentGroove | null} */
-  let current = null;
   // The id that render highlights.
   let openGrooveId = null;
-  // The current groove of the last visit, until a list shows whether it is still current.
-  let restoring = readRecord(uid);
   let menuGrooveId = null;
   let openLesson = readLastLesson();
   // The user picked the lesson of the link form. It stays until the groove is added.
@@ -340,7 +328,7 @@ function startLibrary({
     const next = JSON.stringify([nextLessons, nextGrooves]);
     lessons = nextLessons;
     grooves = nextGrooves;
-    const restored = restoreCurrentGroove(fromServer);
+    const restored = currentGroove.restore(fromServer);
     if (redraw || restored || next !== drawn) render();
     drawn = next;
     sync.update([...lessons, ...grooves]);
@@ -369,19 +357,24 @@ function startLibrary({
     onSlow: render,
   });
 
-  // A tempo raise is not an edit. The record follows it, so a reload still finds the groove.
-  const stopRebase = dirtyState.onRebase((before, after) => {
-    const stored = readRecord(uid);
-    const next = rebaseRecord(stored, before, after);
-    if (next !== stored) writeRecord(uid, next);
-  });
-
-  // A groove restored before the page marked its start becomes open only then. Draw it. A save
-  // form opened before has the title of the default groove: fill it again, unless the user typed.
-  const stopStart = dirtyState.onStart(() => {
-    if (!isActive()) return;
-    render();
-    if (byId('lpSaveTool').open && !saveTitleTyped) prefillSaveForm();
+  const currentGroove = createCurrentGroove({
+    uid,
+    pageQuery,
+    dirtyState,
+    editor,
+    grooves: () => grooves,
+    isActive,
+    // A groove restored before the page marked its start becomes open only then. Draw it. A
+    // save form opened before has the title of the default groove: fill it again, unless the
+    // user typed.
+    onStart() {
+      render();
+      if (byId('lpSaveTool').open && !saveTitleTyped) prefillSaveForm();
+    },
+    // Another groove, from the Grooves menu for example, closes the open saved groove.
+    onCleanChange() {
+      if ((openSavedGroove()?.id ?? null) !== openGrooveId) render();
+    },
   });
 
   // An edit or an Undo switches an open save form between Update and the plain save.
@@ -389,22 +382,12 @@ function startLibrary({
     if (isActive()) render();
   });
 
-  // Another groove, from the Grooves menu for example, closes the open saved groove. Check after
-  // the current task: a pick sets the new open groove right after it marks it clean.
-  const stopChange = dirtyState.onChange(() =>
-    queueMicrotask(() => {
-      if (isActive() && (openSavedGroove()?.id ?? null) !== openGrooveId) render();
-    })
-  );
-
   // The session is over: nothing may keep running for it.
   function stop() {
     stopped = true;
     sync.stop();
-    stopRebase();
-    stopStart();
+    currentGroove.stop();
     stopDirty();
-    stopChange();
     showGrooveOpen(false);
   }
 
@@ -474,14 +457,16 @@ function startLibrary({
     }
   }
 
+  // Draw a new open groove. A docked panel can have the save form open: it is now about it.
+  function showCurrentGroove() {
+    render();
+    if (byId('lpSaveTool').open) prefillSaveForm();
+  }
+
   // Call after markClean: the groove in the editor is now this saved groove.
   function setCurrentGroove(id, savedQuery) {
-    restoring = null;
-    current = { id, savedQuery, version: dirtyState.cleanVersion() };
-    writeRecord(uid, { id, savedQuery, editorQuery: editor.currentQuery() });
-    render();
-    // A docked panel can have the save form open: it is now about this groove.
-    if (byId('lpSaveTool').open) prefillSaveForm();
+    currentGroove.set(id, savedQuery);
+    showCurrentGroove();
   }
 
   // The editor puts the groove of the address in place when the page has loaded. Before that, a
@@ -504,49 +489,15 @@ function startLibrary({
     });
   }
 
-  // The groove in the editor takes the new name of its saved groove. Its query changed in the
-  // library too, so the groove stays open. A clean editor stays clean, unless the server refuses.
+  // The groove in the editor takes the new name of its saved groove. See followRename.
   function showNewName(written, wasClean) {
-    if (current?.id !== written.id) return;
-    const savedQuery = grooves.find((item) => item.id === written.id)?.query;
-    if (!savedQuery) return;
-    editor.rename(written.title);
-    if (!wasClean) {
-      // The edits are not saved: Update still saves them over this groove.
-      current = { ...current, savedQuery };
-      const stored = readRecord(uid);
-      if (stored?.id === written.id) writeRecord(uid, { ...stored, savedQuery });
-      render();
-      return;
-    }
-    const query = editor.currentQuery();
-    dirtyState.markClean(query);
-    written.committed.catch(() => dirtyState.forget(query));
-    setCurrentGroove(written.id, savedQuery);
+    const followed = currentGroove.followRename(written, wasClean);
+    if (followed === 'clean') showCurrentGroove();
+    else if (followed) render();
   }
 
   // The saved groove that the editor shows, or null.
-  const openSavedGroove = () =>
-    findOpenGroove(current, grooves, {
-      cleanVersion: dirtyState.cleanVersion(),
-      startVersion: dirtyState.startVersion(),
-    });
-
-  // After a reload, the groove of the last visit is current if the library still has it as it
-  // was, and the page started with it. It stays current until another groove is loaded, also
-  // when the panel opens before the page has marked its start. Returns true when it is kept.
-  function restoreCurrentGroove(fromServer) {
-    if (!restoring) return false;
-    const decision = restoreDecision(restoring, grooves, { pageQuery, fromServer });
-    if (decision === 'wait') return false;
-    if (decision === 'keep') {
-      current = { id: restoring.id, savedQuery: restoring.savedQuery, version: PAGE_START };
-    } else {
-      writeRecord(uid, null);
-    }
-    restoring = null;
-    return decision === 'keep';
-  }
+  const openSavedGroove = () => currentGroove.open();
 
   // Run one change and draw it at once, also offline: the lists change as the write changed the
   // cache, so a change reads nothing. Without a change, load from the server. Failures stay on

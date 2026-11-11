@@ -86,3 +86,123 @@ export function findOpenGroove(current, grooves, { cleanVersion, startVersion })
   const groove = grooves.find((item) => item.id === current.id);
   return groove && sameGroove(groove.query, current.savedQuery) ? groove : null;
 }
+
+/**
+ * Track the saved groove that the editor shows, for one signed-in session. It keeps the record
+ * of this device in step, and restores the groove of the last visit once a list is there.
+ *
+ * @param {object} options
+ * @param {string} options.uid  The signed-in user.
+ * @param {string} options.pageQuery  The query the page started with.
+ * @param {ReturnType<typeof import('./dirtyState.js').createDirtyState>} options.dirtyState
+ * @param {{currentQuery: function(): string, rename: function(string): void}} options.editor
+ * @param {function(): {id: string, query: string}[]} options.grooves  The grooves on screen.
+ * @param {function(): boolean} options.isActive  False once the session is over.
+ * @param {function(): void} options.onStart  Runs when the page marks its start.
+ * @param {function(): void} options.onCleanChange  Runs after the current task when the clean
+ *        groove changed, for example when the Grooves menu loaded another groove.
+ */
+export function createCurrentGroove({
+  uid,
+  pageQuery,
+  dirtyState,
+  editor,
+  grooves,
+  isActive,
+  onStart,
+  onCleanChange,
+}) {
+  // The saved groove that the editor shows. See findOpenGroove.
+  /** @type {CurrentGroove | null} */
+  let current = null;
+  // The current groove of the last visit, until a list shows whether it is still current.
+  let restoring = readRecord(uid);
+
+  // A tempo raise is not an edit. The record follows it, so a reload still finds the groove.
+  const stopRebase = dirtyState.onRebase((before, after) => {
+    const stored = readRecord(uid);
+    const next = rebaseRecord(stored, before, after);
+    if (next !== stored) writeRecord(uid, next);
+  });
+
+  // A groove restored before the page marked its start becomes open only then.
+  const stopStart = dirtyState.onStart(() => {
+    if (isActive()) onStart();
+  });
+
+  // Check after the current task: a pick sets the new open groove right after it marks it clean.
+  const stopChange = dirtyState.onChange(() =>
+    queueMicrotask(() => {
+      if (isActive()) onCleanChange();
+    })
+  );
+
+  /** The saved groove that the editor shows, or null. */
+  const open = () =>
+    findOpenGroove(current, grooves(), {
+      cleanVersion: dirtyState.cleanVersion(),
+      startVersion: dirtyState.startVersion(),
+    });
+
+  /** Call after markClean: the groove in the editor is now this saved groove. */
+  function set(id, savedQuery) {
+    restoring = null;
+    current = { id, savedQuery, version: dirtyState.cleanVersion() };
+    writeRecord(uid, { id, savedQuery, editorQuery: editor.currentQuery() });
+  }
+
+  /**
+   * After a reload, the groove of the last visit is current if the library still has it as it
+   * was, and the page started with it. It stays current until another groove is loaded, also
+   * when the panel opens before the page has marked its start.
+   * @param {boolean} fromServer  The grooves on screen are the whole library.
+   * @returns {boolean} true when it is kept
+   */
+  function restore(fromServer) {
+    if (!restoring) return false;
+    const decision = restoreDecision(restoring, grooves(), { pageQuery, fromServer });
+    if (decision === 'wait') return false;
+    if (decision === 'keep') {
+      current = { id: restoring.id, savedQuery: restoring.savedQuery, version: PAGE_START };
+    } else {
+      writeRecord(uid, null);
+    }
+    restoring = null;
+    return decision === 'keep';
+  }
+
+  /**
+   * The groove in the editor takes the new name of its saved groove. Its query changed in the
+   * library too, so the groove stays open. A clean editor stays clean, unless the server refuses.
+   * @param {{id: string, title: string, committed: Promise<unknown>}} written  the rename
+   * @param {boolean} wasClean  the editor had no edits when the rename started
+   * @returns {'clean' | 'edits' | null}  null when the renamed groove is not the open one
+   */
+  function followRename(written, wasClean) {
+    if (current?.id !== written.id) return null;
+    const savedQuery = grooves().find((item) => item.id === written.id)?.query;
+    if (!savedQuery) return null;
+    editor.rename(written.title);
+    if (!wasClean) {
+      // The edits are not saved: Update still saves them over this groove.
+      current = { ...current, savedQuery };
+      const stored = readRecord(uid);
+      if (stored?.id === written.id) writeRecord(uid, { ...stored, savedQuery });
+      return 'edits';
+    }
+    const query = editor.currentQuery();
+    dirtyState.markClean(query);
+    written.committed.catch(() => dirtyState.forget(query));
+    set(written.id, savedQuery);
+    return 'clean';
+  }
+
+  // The session is over: nothing may keep running for it.
+  function stop() {
+    stopRebase();
+    stopStart();
+    stopChange();
+  }
+
+  return { open, set, restore, followRename, stop };
+}
