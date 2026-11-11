@@ -496,6 +496,58 @@ describe('the library panel', () => {
       expect(dirtyState.isDirty(editor.currentQuery())).toBe(true);
     });
 
+    const EDITED = BEAT.replace('S=|--O-|', 'S=|O-O-|');
+    const OTHER_DEVICE = BEAT.replace('Tempo=95', 'Tempo=90');
+
+    async function pressUpdate() {
+      byId('libraryToggle').click();
+      byId('lpSaveTool').querySelector('summary').click();
+      byId('lpSaveTool').open = true;
+      await settle();
+      expect(byId('lpUpdate')).not.toBeNull();
+      byId('lpUpdate').click();
+      await settle();
+      await settle();
+    }
+
+    it('does not write an Update over a change from another device', async () => {
+      await pickBeat();
+      editor.edit(EDITED);
+      fake.collections.get('grooves').get('g1').fields.query = OTHER_DEVICE;
+      await pressUpdate();
+      await vi.waitFor(() =>
+        expect(byId('lpMessage').textContent).toBe(
+          'This groove changed on another device. Save groove keeps your changes as a new groove.'
+        )
+      );
+      expect(savedGrooves()[0].fields.query).toBe(OTHER_DEVICE);
+      expect(byId('lpUpdate')).toBeNull();
+      expect(byId('lpSaveNew').textContent).toBe('Save groove');
+    });
+
+    it('writes an Update offline without asking the server', async () => {
+      await pickBeat();
+      editor.edit(EDITED);
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+      fake.online = false;
+      try {
+        const before = fake.calls.getDocs;
+        await pressUpdate();
+        await vi.waitFor(() => expect(savedGrooves()[0].fields.query).toBe(EDITED));
+        expect(fake.calls.getDocs).toBe(before);
+      } finally {
+        delete navigator.onLine;
+      }
+    });
+
+    it('writes an Update online when the groove is as this device saw it', async () => {
+      await pickBeat();
+      editor.edit(EDITED);
+      await pressUpdate();
+      await vi.waitFor(() => expect(savedGrooves()[0].fields.query).toBe(EDITED));
+      expect(byId('lpMessage').hidden).toBe(true);
+    });
+
     it('leaves the editor alone on a rename of a groove that is not open', async () => {
       await openPanel();
       await loaded();
@@ -503,6 +555,34 @@ describe('the library panel', () => {
       expect(editor.rename).not.toHaveBeenCalled();
       expect(editor.currentQuery()).toBe(START);
     });
+  });
+
+  it('reads the library again when the tab comes back and when the network returns', async () => {
+    await openPanel();
+    await loaded();
+    expect(document.visibilityState).toBe('visible');
+    // Another device adds a groove.
+    fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.waitFor(() => expect(grooveButton('Beat')).toBeDefined());
+    fake.add('grooves', 'g2', { lessonId: null, title: 'Shuffle', query: SHUFFLE, createdAt: 2 });
+    window.dispatchEvent(new Event('online'));
+    await vi.waitFor(() => expect(grooveButton('Shuffle')).toBeDefined());
+  });
+
+  it('stops listening to those events after sign-out', async () => {
+    await openPanel();
+    await loaded();
+    const removedFromDocument = vi.spyOn(document, 'removeEventListener');
+    const removedFromWindow = vi.spyOn(window, 'removeEventListener');
+    await fake.sdk.signOut();
+    expect(removedFromDocument).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+    expect(removedFromWindow).toHaveBeenCalledWith('online', expect.any(Function));
+    const before = fake.calls.getDocs;
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('online'));
+    await settle();
+    expect(fake.calls.getDocs).toBe(before);
   });
 
   it('reads no list for an edit, and one server list after the sync', async () => {

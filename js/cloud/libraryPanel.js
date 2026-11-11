@@ -40,6 +40,8 @@ const KEEP_TAB_TEXT = 'Keep this tab open until online';
 const WRITE_REFUSED = 'A change could not be saved. The library shows what is saved.';
 const NOTHING_TO_UPDATE = 'Nothing to update. The groove has no changes.';
 const NOT_OPEN_TO_UPDATE = 'The saved groove is no longer open. Save it as a new groove.';
+const CHANGED_ELSEWHERE =
+  'This groove changed on another device. Save groove keeps your changes as a new groove.';
 const STILL_LOADING = 'The editor is still loading…';
 const NOT_STARTED = 'The editor did not finish loading. Reload the page and try again.';
 const START_WAIT_MS = 15_000;
@@ -344,6 +346,15 @@ function startLibrary({
   const readCached = () => Promise.all([library.listCachedLessons(), library.listCachedGrooves()]);
   const readServer = () => Promise.all([library.listLessons(), library.listGrooves()]);
 
+  // Read the server and draw the answer, unless a newer one is on screen. It does not touch
+  // the message. On a network that hangs, the SDK answers from the cache.
+  async function readLatest() {
+    const number = nextNumber();
+    const [nextLessons, nextGrooves] = await readServer();
+    if (!isActive()) return;
+    drawIfNewest(number, nextLessons.items, nextGrooves.items, false, !nextGrooves.fromCache);
+  }
+
   const sync = createPendingSync({
     waitForServer: () => library.waitForPendingWrites(),
     readHasPending: async () => {
@@ -380,12 +391,32 @@ function startLibrary({
     if (isActive()) render();
   });
 
+  // Another tab or device can change the library. Read it again when the user comes back to
+  // the tab and when the network returns, so a stale "Saved" and stale lists do not stay, for
+  // example in a rehearsal room. One read at a time. A failure keeps what is on screen.
+  let refreshing = false;
+  async function refresh() {
+    if (document.visibilityState !== 'visible' || refreshing || !isActive()) return;
+    refreshing = true;
+    try {
+      await readLatest();
+    } catch (error) {
+      console.warn('The library could not be read again:', error);
+    } finally {
+      refreshing = false;
+    }
+  }
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('online', refresh);
+
   // The session is over: nothing may keep running for it.
   function stop() {
     stopped = true;
     sync.stop();
     currentGroove.stop();
     stopDirty();
+    document.removeEventListener('visibilitychange', refresh);
+    window.removeEventListener('online', refresh);
     showGrooveOpen(false);
   }
 
@@ -862,7 +893,24 @@ function startLibrary({
       showMessage(reason);
       return;
     }
-    await updateCurrent(groove, parsed.query);
+    // Another device can have changed the groove since this device read it. Online, read the
+    // server first: Update must not write over that change. The new list closes the groove, and
+    // the form offers the plain save. Offline, the write waits, and the last writer wins after
+    // the sync.
+    if (navigator.onLine) {
+      try {
+        await readLatest();
+      } catch (error) {
+        if (isActive()) reportFailure(error);
+        return;
+      }
+      if (!isActive()) return;
+      if (openSavedGroove()?.id !== groove.id) {
+        showMessage(CHANGED_ELSEWHERE);
+        return;
+      }
+    }
+    await updateCurrent(openSavedGroove(), parsed.query);
   });
 
   return { drawCached, load: () => act(), stop };

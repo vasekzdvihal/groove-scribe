@@ -648,6 +648,28 @@ test.describe('updating a saved groove', () => {
     await expect(updateButton(page)).toHaveCount(0);
   });
 
+  test('Update does not write over a change from another device', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    const [[id]] = await storedQueries(page);
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    const otherDevice = QUERY.replace('Tempo=95', 'Tempo=90');
+    await page.request.patch(`${DOCUMENTS}/grooves/${id}?updateMask.fieldPaths=query`, {
+      headers: OWNER,
+      data: { fields: { query: { stringValue: otherDevice } } },
+    });
+    await saveTool(page).click();
+    await updateButton(page).click();
+    await expect(page.getByRole('alert')).toHaveText(
+      'This groove changed on another device. Save groove keeps your changes as a new groove.'
+    );
+    await expect(updateButton(page)).toHaveCount(0);
+    expect(await storedQueries(page)).toEqual([[id, otherDevice]]);
+    await plainSaveButton(page).click();
+    await expect.poll(async () => (await storedQueries(page)).length).toBe(2);
+  });
+
   test('a panel that opens before the page has loaded keeps the restored groove', async ({
     page,
   }) => {
