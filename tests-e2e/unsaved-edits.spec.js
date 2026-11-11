@@ -6,16 +6,9 @@ import { loadGroove } from './helpers.js';
 
 const discardDialog = (page) => page.getByRole('dialog', { name: 'Discard your changes?' });
 
-// A menu arms its close-on-click handler 100 ms after it opens. A pick within that time
-// leaves the handler armed, and it closes the next menu at once. Open again until it stays.
 async function pickBuiltIn(page, name) {
-  const item = page.locator('#grooveListWrapper .grooveListLI', { hasText: name }).first();
-  await expect(async () => {
-    await page.click('#groovesAnchor');
-    await page.waitForTimeout(150);
-    await expect(item).toBeVisible({ timeout: 500 });
-  }).toPass();
-  await item.click();
+  await page.click('#groovesAnchor');
+  await page.locator('#grooveListWrapper .grooveListLI', { hasText: name }).first().click();
 }
 
 const tempo = (page) => page.evaluate(() => window.myGrooveWriter.myGrooveUtils.getTempo());

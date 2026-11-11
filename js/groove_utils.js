@@ -313,6 +313,8 @@ function GrooveUtils() {
   root.tempoChangeCallback = null; //triggered when the tempo changes.  ARG1 is the new Tempo integer (needs to be very fast, it can get called a lot of times from the slider)
 
   root.visible_context_menu = false; // a single context menu can be visible at a time.
+  // The timer that arms the close-on-click handler of the open menu.
+  var contextMenuArmTimer = null;
 
   // grooveDataNew builds a fresh GrooveData. The canonical shape and defaults
   // now live in grooveData.js (createGrooveData); this wrapper just threads
@@ -386,13 +388,18 @@ function GrooveUtils() {
     // use a timeout to setup the onClick handler.
     // otherwise the click that opened the menu will close it
     // right away.  :(
-    setTimeout(function () {
+    clearTimeout(contextMenuArmTimer);
+    contextMenuArmTimer = setTimeout(function () {
+      contextMenuArmTimer = null;
       document.onclick = root.documentOnClickHanderCloseContextMenu;
       document.body.style.cursor = 'pointer'; // make document.onclick work on iPad
     }, 100);
   };
 
   root.hideContextMenu = function (contextMenu) {
+    // A menu hidden before its handler was armed must not arm it later.
+    clearTimeout(contextMenuArmTimer);
+    contextMenuArmTimer = null;
     document.onclick = false;
     document.body.style.cursor = 'auto'; // make document.onclick work on iPad
 
