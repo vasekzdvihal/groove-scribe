@@ -42,7 +42,7 @@ const NOTHING_TO_UPDATE = 'Nothing to update. The groove has no changes.';
 const NOT_OPEN_TO_UPDATE = 'The saved groove is no longer open. Save it as a new groove.';
 const NO_CHANGES_HINT = 'No changes. Save groove makes a copy.';
 const CHANGED_ELSEWHERE =
-  'This groove changed on another device. Save groove keeps your changes as a new groove.';
+  'This groove changed or was deleted on another device. Save groove keeps your changes as a new groove.';
 const STILL_LOADING = 'The editor is still loading…';
 const NOT_STARTED = 'The editor did not finish loading. Reload the page and try again.';
 const START_WAIT_MS = 15_000;
@@ -843,10 +843,17 @@ function startLibrary({
 
   // The editor now shows the saved groove, unless the server refuses the write later. The
   // stored query has the library title in it, which can differ from the title in the editor.
+  // The editor takes the stored name, a typed one or the library name of an Updated groove, so
+  // "Saved" never shows over an old title. The renamed groove is the clean one.
   function afterSave(written, query) {
-    dirtyState.markClean(query);
+    let clean = query;
+    if (written.title !== editor.currentTitle()) {
+      editor.rename(written.title);
+      clean = editor.currentQuery();
+    }
+    dirtyState.markClean(clean);
     // A save that the server refuses later did not save the edits.
-    written.committed.catch(() => dirtyState.forget(query));
+    written.committed.catch(() => dirtyState.forget(clean));
     setCurrentGroove(written.id, written.query);
     byId('lpSaveTool').open = false;
   }
@@ -900,7 +907,10 @@ function startLibrary({
       showMessage(reason);
       return;
     }
-    if (await stillOnServer(groove)) await updateCurrent(openSavedGroove(), parsed.query);
+    if (!(await stillOnServer(groove))) return;
+    // An edit can come during the server read: Update saves the groove as it is now.
+    const latest = parseGrooveLink(editor.currentQuery());
+    await updateCurrent(openSavedGroove(), latest.ok ? latest.query : parsed.query);
   });
 
   // Another device can have changed the groove since this device read it. Online, read the

@@ -17,7 +17,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **1059 pass**                                                                                                                                                                                                                       |
+| `npm test`             | Vitest unit suite — **1065 pass**                                                                                                                                                                                                                       |
 | `npm run test:e2e`     | Playwright golden-master and UI — **213 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~85 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
@@ -114,15 +114,18 @@ signed-in session, and its per-tab record),
   `editor.onDirtyChange` reports only real flips. The leave warning is attached only while dirty.
 - Rule: any code that replaces the groove in the editor checks `dirtyState.isDirty`, asks with
   `askToDiscard`, and after the load calls `dirtyState.markClean` with the editor's new query.
-- Every edit is in the address, so the clean groove is kept per tab in `sessionStorage`, with the
-  last address. `main.js` starts from it after a reload (`restoredBaseline`), so a page with edits
-  stays dirty. A new link opened in the same tab is another address and starts clean. The record
+- Every edit is in the address, so the clean groove is kept per tab in `sessionStorage`, in one
+  item with the last address, written from the page's memory (`dirtyState.remember` on each URL
+  change and on a `pageshow` from the back-forward cache). `main.js` starts from it after a reload
+  (`restoredBaseline`), so a page with edits stays dirty. A new link opened in the same tab is
+  another address and starts clean. The record
   of the open saved groove is per tab too, so Update survives a reload and no tab changes another.
 - Update reads the server first while online, and does not write over a change from another
   device. The panel reads the library again when the tab becomes visible and when the network
   returns.
 - The Save button next to Share opens the panel at its save form, or at the sign-in. It says
-  Saved only while the editor shows an open saved groove unchanged. The panel shows the button,
+  Saved only while the editor shows an open saved groove unchanged, and its save is safe on this
+  device (persistent cache or no pending write). The panel shows the button,
   so the native app and GrooveDB authoring, which have no panel, do not show it.
 - The page runs the Firebase SDK when the panel connects. The editor page load does not import
   it, the embed pages never download it, and the service worker precaches the file for offline use.

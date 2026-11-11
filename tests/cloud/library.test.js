@@ -245,6 +245,18 @@ describe('createLibrary: a change draws without a read', () => {
     expect(updated.grooves[1].query).toBe(SHUFFLE.replace('Title=Shuffle', 'Title=Swing'));
   });
 
+  it('drops the Title param for an empty title, wherever it is in the query', async () => {
+    const library = createLibrary(fake.sdk, 'db', UID);
+    const save = (query) => library.saveGroove({ query, title: ' ', lessonId: null }).query;
+    expect(save('?Title=Beat&Tempo=95')).toBe('?Tempo=95');
+    expect(save('?Tempo=95&Title=Beat&Div=16')).toBe('?Tempo=95&Div=16');
+    expect(save('?Tempo=95&Title=Beat')).toBe('?Tempo=95');
+    expect(save('?Tempo=95')).toBe('?Tempo=95');
+    expect(library.updateGroove('g1', { query: BEAT, title: '', lessonId: null }).query).toBe(
+      BEAT.replace('&Title=Beat', '')
+    );
+  });
+
   it('updates, moves and renames a groove in its place', async () => {
     await expectPatchMatchesCache(fake, (library) =>
       library.updateGroove('g1', { query: SHUFFLE, title: 'New', lessonId: null })
@@ -536,7 +548,7 @@ describe('the library panel', () => {
       await pressUpdate();
       await vi.waitFor(() =>
         expect(byId('lpMessage').textContent).toBe(
-          'This groove changed on another device. Save groove keeps your changes as a new groove.'
+          'This groove changed or was deleted on another device. Save groove keeps your changes as a new groove.'
         )
       );
       expect(savedGrooves()[0].fields.query).toBe(OTHER_DEVICE);
@@ -580,6 +592,24 @@ describe('the library panel', () => {
         EDITED.replace('Title=Beat', 'Title=Another%20name')
       );
       expect(grooveButton('Another name').getAttribute('aria-current')).toBe('true');
+      // The editor takes the saved name, so "Saved" does not show an old title.
+      expect(editor.currentTitle()).toBe('Another name');
+      expect(dirtyState.isDirty(editor.currentQuery())).toBe(false);
+      await settle();
+      expect(saveButtonStates.at(-1)).toBe(true);
+    });
+
+    it('drops the Title of the stored query, and the editor title, on a save without a title', async () => {
+      await pickBeat();
+      editor.edit(EDITED);
+      byId('libraryToggle').click();
+      byId('lpSaveTool').querySelector('summary').click();
+      byId('lpSaveTool').open = true;
+      byId('lpSaveTitle').value = '';
+      byId('lpSaveNew').click();
+      await vi.waitFor(() => expect(savedGrooves()).toHaveLength(2));
+      expect(savedGrooves()[1].fields.query).toBe(EDITED.replace('&Title=Beat', ''));
+      expect(editor.rename).toHaveBeenCalledWith('');
     });
 
     it('says why a clean open groove has only the plain save', async () => {

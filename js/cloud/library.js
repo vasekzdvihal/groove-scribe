@@ -26,8 +26,12 @@ function byName(a, b) {
 }
 
 // A groove keeps its library title in its query too, as the editor writes it, so a pick and
-// another device show the same name. A query without a title stays without one.
+// another device show the same name. A query without a title stays without one, and an empty
+// title takes the Title out.
 function withTitle(query, title) {
+  if (!title) {
+    return query.replace(/([?&])Title=[^&]*(&?)/, (match, start, next) => (next ? start : ''));
+  }
   return query.replace(
     /([?&])Title=[^&]*/,
     (match, start) => `${start}Title=${encodeURIComponent(title)}`

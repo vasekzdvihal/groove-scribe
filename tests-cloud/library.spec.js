@@ -445,6 +445,9 @@ test.describe('unsaved edits', () => {
     await page.locator('#lpSaveTitle').fill('Edited');
     await page.getByRole('button', { name: 'Save groove' }).click();
     await expect(grooveButton(page, 'Edited')).toHaveAttribute('aria-current', 'true');
+    // The editor shows the saved name.
+    await expect(page.locator('#tuneTitle')).toHaveValue('Edited');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
     await grooveButton(page, 'Rock').click();
     await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
     await expect(discardDialog(page)).toBeHidden();
@@ -549,6 +552,9 @@ test.describe('updating a saved groove', () => {
     await expect(page.locator('#lpSaveTitle')).toHaveValue('Library name');
     await updateButton(page).click();
     await expect(updateButton(page)).toBeHidden();
+    // The editor shows the library name again, and the groove is saved.
+    await expect(page.locator('#tuneTitle')).toHaveValue('Library name');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
     // The title of the document and the Title in its query agree.
     await expect
       .poll(async () =>
@@ -675,7 +681,7 @@ test.describe('updating a saved groove', () => {
     await saveTool(page).click();
     await updateButton(page).click();
     await expect(page.getByRole('alert')).toHaveText(
-      'This groove changed on another device. Save groove keeps your changes as a new groove.'
+      'This groove changed or was deleted on another device. Save groove keeps your changes as a new groove.'
     );
     await expect(updateButton(page)).toHaveCount(0);
     expect(await storedQueries(page)).toEqual([[id, otherDevice]]);
