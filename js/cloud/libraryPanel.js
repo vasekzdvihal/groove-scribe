@@ -47,6 +47,9 @@ const KEEP_TAB_TEXT = 'Keep this tab open until online';
 const WRITE_REFUSED = 'A change could not be saved. The library shows what is saved.';
 const NOTHING_TO_UPDATE = 'Nothing to update. The groove has no changes.';
 const NOT_OPEN_TO_UPDATE = 'The saved groove is no longer open. Save it as a new groove.';
+const STILL_LOADING = 'The editor is still loading…';
+const NOT_STARTED = 'The editor did not finish loading. Reload the page and try again.';
+const START_WAIT_MS = 15_000;
 
 const PANEL_HTML = `
   <header class="lp-head">
@@ -182,13 +185,15 @@ function showRetry(action) {
 
 // One submit at a time: a double tap on a slow tablet must not save twice. The buttons are off
 // until the handler returns. A change returns when it is drawn, also when its write waits
-// offline, so they do not stay off until the server answers.
+// offline, so they do not stay off until the server answers. A disabled button loses focus, so
+// the pressed button gets it back, unless the user has moved on.
 function submitOnce(form, handler) {
   let running = false;
   form.onsubmit = async (event) => {
     event.preventDefault();
     if (running) return;
     running = true;
+    const pressed = event.submitter;
     const buttons = [...form.querySelectorAll('button')];
     for (const node of buttons) node.disabled = true;
     try {
@@ -196,6 +201,8 @@ function submitOnce(form, handler) {
     } finally {
       running = false;
       for (const node of buttons) node.disabled = false;
+      const focusLost = !document.activeElement || document.activeElement === document.body;
+      if (pressed?.isConnected && focusLost) pressed.focus();
     }
   };
 }
@@ -312,6 +319,10 @@ function startLibrary({
   let openLesson = readLastLesson();
   // The user picked the lesson of the link form. It stays until the groove is added.
   let linkLessonPicked = false;
+  // The user typed a title into the save form since it was filled.
+  let saveTitleTyped = false;
+  // New documents that the server refused. A change drawn before their redraw must not keep them.
+  const refusedIds = new Set();
   let stopped = false;
 
   let drawn = null;
@@ -365,9 +376,12 @@ function startLibrary({
     if (next !== stored) writeRecord(uid, next);
   });
 
-  // A groove restored before the page marked its start becomes open only then. Draw it.
+  // A groove restored before the page marked its start becomes open only then. Draw it. A save
+  // form opened before has the title of the default groove: fill it again, unless the user typed.
   const stopStart = dirtyState.onStart(() => {
-    if (isActive()) render();
+    if (!isActive()) return;
+    render();
+    if (byId('lpSaveTool').open && !saveTitleTyped) prefillSaveForm();
   });
 
   // An edit or an Undo switches an open save form between Update and the plain save.
@@ -427,11 +441,12 @@ function startLibrary({
 
   // Report a refused write, and draw the library without it. The local cache has already
   // dropped the change when the promise rejects.
-  async function reportIfRefused({ committed, title }) {
+  async function reportIfRefused({ committed, id, title, isNew }) {
     try {
       await committed;
     } catch (error) {
       console.error(error);
+      if (isNew) refusedIds.add(id);
       if (!isActive()) return;
       showMessage(refusedMessage(title));
       const number = nextNumber();
@@ -470,26 +485,44 @@ function startLibrary({
   }
 
   // The editor puts the groove of the address in place when the page has loaded. Before that, a
-  // pick would be lost and a save would store the wrong groove, so both wait for it.
+  // pick would be lost and a save would store the wrong groove, so both wait for it, and the
+  // panel says why. Resolves to false when the editor does not start within 15 s.
   function pageStarted() {
-    if (dirtyState.startVersion() !== null) return Promise.resolve();
+    if (dirtyState.startVersion() !== null) return Promise.resolve(true);
+    showMessage(STILL_LOADING);
     return new Promise((resolve) => {
-      const stopListening = dirtyState.onStart(() => {
+      const finish = (started) => {
+        clearTimeout(timer);
         stopListening();
-        resolve();
-      });
+        if (byId('lpMessage').textContent === STILL_LOADING) {
+          showMessage(started ? '' : NOT_STARTED);
+        }
+        resolve(started);
+      };
+      const stopListening = dirtyState.onStart(() => finish(true));
+      const timer = setTimeout(() => finish(false), START_WAIT_MS);
     });
   }
 
-  // A renamed groove that is open shows its new name in the editor. A clean editor stays clean.
-  function showNewName(id) {
-    const groove = openSavedGroove();
-    if (groove?.id !== id || !current) return;
-    const wasClean = !dirtyState.isDirty(editor.currentQuery());
-    editor.rename(groove.title);
-    if (!wasClean) return;
-    dirtyState.markClean(editor.currentQuery());
-    setCurrentGroove(id, current.savedQuery);
+  // The groove in the editor takes the new name of its saved groove. Its query changed in the
+  // library too, so the groove stays open. A clean editor stays clean, unless the server refuses.
+  function showNewName(written, wasClean) {
+    if (current?.id !== written.id) return;
+    const savedQuery = grooves.find((item) => item.id === written.id)?.query;
+    if (!savedQuery) return;
+    editor.rename(written.title);
+    if (!wasClean) {
+      // The edits are not saved: Update still saves them over this groove.
+      current = { ...current, savedQuery };
+      const stored = readRecord(uid);
+      if (stored?.id === written.id) writeRecord(uid, { ...stored, savedQuery });
+      render();
+      return;
+    }
+    const query = editor.currentQuery();
+    dirtyState.markClean(query);
+    written.committed.catch(() => dirtyState.forget(query));
+    setCurrentGroove(written.id, savedQuery);
   }
 
   // The saved groove that the editor shows, or null.
@@ -530,7 +563,11 @@ function startLibrary({
         if (!isActive()) return { ok: false };
         // Only a change closes a menu. A load that finishes must not close one the user opened.
         menuGrooveId = null;
-        const next = written.patch({ lessons, grooves });
+        const kept = (item) => !refusedIds.has(item.id);
+        const next = written.patch({
+          lessons: lessons.filter(kept),
+          grooves: grooves.filter(kept),
+        });
         drawIfNewest(nextNumber(), next.lessons, next.grooves, true, false);
         return { ok: true };
       }
@@ -572,18 +609,24 @@ function startLibrary({
       lessonOptions(lessons, groove.lessonId)
     );
     move.addEventListener('change', () =>
-      act(() => library.moveGroove(groove.id, move.value || null))
+      act(() => library.moveGroove(groove.id, move.value || null, name))
     );
     const rename = button('Rename', async () => {
       const title = prompt('Groove name', groove.title)?.trim();
       if (!title) return;
-      const renamed = await act(() => library.renameGroove(groove.id, title));
-      if (renamed.ok) showNewName(groove.id);
+      // Ask before the change: its new query no longer matches the open groove until
+      // showNewName follows it.
+      const wasOpen = openSavedGroove()?.id === groove.id;
+      const wasClean = wasOpen && !dirtyState.isDirty(editor.currentQuery());
+      const query = grooves.find((item) => item.id === groove.id)?.query ?? groove.query;
+      let written = null;
+      const renamed = await act(() => (written = library.renameGroove(groove.id, title, query)));
+      if (renamed.ok && wasOpen) showNewName(written, wasClean);
     });
     const remove = button(
       'Delete',
       () => {
-        if (confirm(`Delete "${name}"?`)) act(() => library.deleteGroove(groove.id));
+        if (confirm(`Delete "${name}"?`)) act(() => library.deleteGroove(groove.id, name));
       },
       { className: 'lp-danger' }
     );
@@ -596,7 +639,7 @@ function startLibrary({
     const open = button(
       name,
       async () => {
-        await pageStarted();
+        if (!(await pageStarted())) return;
         if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
         if (!isActive()) return;
         selectLesson(lessonKey);
@@ -739,6 +782,7 @@ function startLibrary({
   }
 
   function prefillSaveForm() {
+    saveTitleTyped = false;
     byId('lpSaveTitle').value = editor.currentTitle();
     const groove = refreshSaveForm();
     if (!groove) {
@@ -777,6 +821,10 @@ function startLibrary({
     });
     if (created.ok) byId('lpLessonName').value = '';
   });
+
+  byId('lpSaveTitle').oninput = () => {
+    saveTitleTyped = true;
+  };
 
   byId('lpLinkLesson').onchange = () => {
     linkLessonPicked = true;
@@ -844,8 +892,7 @@ function startLibrary({
 
   submitOnce(byId('lpSaveForm'), async (event) => {
     const pressed = event.submitter;
-    await pageStarted();
-    if (!isActive()) return;
+    if (!(await pageStarted()) || !isActive()) return;
     const parsed = parseGrooveLink(editor.currentQuery());
     if (!parsed.ok) {
       showMessage(LINK_ERRORS[parsed.reason]);

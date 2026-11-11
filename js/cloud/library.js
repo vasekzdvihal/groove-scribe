@@ -25,6 +25,15 @@ function byName(a, b) {
   return first < second ? -1 : 1;
 }
 
+// A renamed groove keeps its title in its query too, as the editor writes it, so a pick and
+// another device show the new name. A query without a title stays without one.
+function withTitle(query, title) {
+  return query.replace(
+    /([?&])Title=[^&]*/,
+    (match, start) => `${start}Title=${encodeURIComponent(title)}`
+  );
+}
+
 /**
  * @param {object} sdk  The Firebase module exports.
  * @param {object} db   The Firestore instance.
@@ -46,6 +55,8 @@ export function createLibrary(sdk, db, uid) {
    * @param {function(Lists): Lists} patch
    */
   const queued = (committed, id, title, patch) => ({ committed, id, title, patch });
+  // A new document. If the server refuses it, it is gone for good.
+  const isNew = (...args) => ({ ...queued(...args), isNew: true });
 
   // The cached list has the same owner filter as the server list, so another account on this
   // device never shows.
@@ -71,12 +82,13 @@ export function createLibrary(sdk, db, uid) {
     return toList(await sdk.getDocsFromCache(ownedQuery(ref, sortField, direction)));
   }
 
-  // Change some fields of a saved groove. createdAt stays, so the groove keeps its place.
-  function changeGroove(id, fields) {
+  // Change some fields of a saved groove. createdAt stays, so the groove keeps its place. The
+  // name is for the message about a refusal.
+  function changeGroove(id, fields, name = fields.title) {
     return queued(
       sdk.updateDoc(sdk.doc(db, 'grooves', id), { ...fields, updatedAt: now() }),
       id,
-      fields.title,
+      name,
       (lists) => ({ ...lists, grooves: editItem(lists.grooves, id, fields) })
     );
   }
@@ -107,10 +119,10 @@ export function createLibrary(sdk, db, uid) {
     createLesson(name) {
       const ref = sdk.doc(lessons);
       const fields = { ownerId: uid, name: cleanName(name) };
-      return queued(
+      return isNew(
         sdk.setDoc(ref, { ...fields, createdAt: now(), updatedAt: now() }),
         ref.id,
-        undefined,
+        fields.name,
         (lists) => ({
           ...lists,
           lessons: [
@@ -126,7 +138,7 @@ export function createLibrary(sdk, db, uid) {
       return queued(
         sdk.updateDoc(sdk.doc(db, 'lessons', id), { ...fields, updatedAt: now() }),
         id,
-        undefined,
+        fields.name,
         (lists) => ({ ...lists, lessons: editItem(lists.lessons, id, fields).sort(byName) })
       );
     },
@@ -161,7 +173,7 @@ export function createLibrary(sdk, db, uid) {
     saveGroove({ query, title, lessonId }) {
       const ref = sdk.doc(grooves);
       const fields = { ownerId: uid, lessonId: lessonId ?? null, title: cleanName(title), query };
-      return queued(
+      return isNew(
         sdk.setDoc(ref, { ...fields, createdAt: now(), updatedAt: now() }),
         ref.id,
         fields.title,
@@ -180,12 +192,17 @@ export function createLibrary(sdk, db, uid) {
       return changeGroove(id, { query, title: cleanName(title), lessonId: lessonId ?? null });
     },
 
-    moveGroove: (id, lessonId) => changeGroove(id, { lessonId: lessonId ?? null }),
+    // title: the name of the groove, for the message about a refusal.
+    moveGroove: (id, lessonId, title) => changeGroove(id, { lessonId: lessonId ?? null }, title),
 
-    renameGroove: (id, title) => changeGroove(id, { title: cleanName(title) }),
+    // query: the stored query of the groove. Its title changes too.
+    renameGroove(id, title, query) {
+      const cleanTitle = cleanName(title);
+      return changeGroove(id, { title: cleanTitle, query: withTitle(query, cleanTitle) });
+    },
 
-    deleteGroove: (id) =>
-      queued(sdk.deleteDoc(sdk.doc(db, 'grooves', id)), id, undefined, (lists) => ({
+    deleteGroove: (id, title) =>
+      queued(sdk.deleteDoc(sdk.doc(db, 'grooves', id)), id, title, (lists) => ({
         ...lists,
         grooves: lists.grooves.filter((groove) => groove.id !== id),
       })),

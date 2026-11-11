@@ -46,6 +46,8 @@ function createFakeSdk() {
   const popups = [];
   const fake = {
     online: true,
+    // The next write is refused by the server: the cache drops it again.
+    refuseNext: false,
     calls,
     collections,
     popups,
@@ -74,6 +76,19 @@ function createFakeSdk() {
 
   function write(ref, update) {
     const docs = collections.get(ref.collection);
+    if (fake.refuseNext) {
+      fake.refuseNext = false;
+      const before = docs.get(ref.id);
+      const changed = update(before);
+      if (changed) docs.set(ref.id, { ...changed, pending: true });
+      return Promise.reject(
+        Object.assign(new Error('refused'), { code: 'permission-denied' })
+      ).catch((error) => {
+        if (before) docs.set(ref.id, before);
+        else docs.delete(ref.id);
+        throw error;
+      });
+    }
     const item = update(docs.get(ref.id));
     if (item) {
       item.pending = !fake.online;
@@ -220,9 +235,29 @@ describe('createLibrary: a change draws without a read', () => {
     );
     await expectPatchMatchesCache(fake, (library) => library.moveGroove('g2', 'l-b'));
     const patched = await expectPatchMatchesCache(fake, (library) =>
-      library.renameGroove('g2', ' Later ')
+      library.renameGroove('g2', ' Later ', SHUFFLE)
     );
     expect(patched.grooves.map((groove) => groove.title)).toEqual(['New', 'Later']);
+  });
+
+  it('writes a new name into the Title of the stored query, if it has one', async () => {
+    const patched = await expectPatchMatchesCache(fake, (library) =>
+      library.renameGroove('g1', '100% Funk', BEAT)
+    );
+    expect(patched.grooves[0].query).toBe(BEAT.replace('Title=Beat', 'Title=100%25%20Funk'));
+    const untitled = BEAT.replace('&Title=Beat', '');
+    fake.add('grooves', 'g3', { lessonId: null, title: 'Plain', query: untitled, createdAt: 3 });
+    const again = await expectPatchMatchesCache(fake, (library) =>
+      library.renameGroove('g3', 'Named', untitled)
+    );
+    expect(again.grooves.at(-1)).toMatchObject({ title: 'Named', query: untitled });
+  });
+
+  it('names the item in a refusal of a move, a delete and a lesson rename', async () => {
+    const library = createLibrary(fake.sdk, 'db', UID);
+    expect(library.moveGroove('g1', null, 'Beat').title).toBe('Beat');
+    expect(library.deleteGroove('g2', 'Shuffle').title).toBe('Shuffle');
+    expect(library.renameLesson('l-b', 'Samba').title).toBe('Samba');
   });
 
   it('removes a deleted groove', async () => {
@@ -411,12 +446,12 @@ describe('the library panel', () => {
       byId('libraryToggle').click(); // a pick closes the slide-over panel
     }
 
-    async function renameBeat() {
+    async function renameBeat({ wait = true } = {}) {
       document.querySelector('.lp-more').click();
       [...document.querySelectorAll('.lp-actions button')]
         .find((node) => node.textContent === 'Rename')
         .click();
-      await vi.waitFor(() => expect(grooveButton('Fresh')).toBeDefined());
+      if (wait) await vi.waitFor(() => expect(grooveButton('Fresh')).toBeDefined());
       await settle();
     }
 
@@ -434,6 +469,28 @@ describe('the library panel', () => {
       editor.edit(BEAT.replace('S=|--O-|', 'S=|O-O-|'));
       await renameBeat();
       expect(editor.currentTitle()).toBe('Fresh');
+      expect(dirtyState.isDirty(editor.currentQuery())).toBe(true);
+    });
+
+    it('stores the new title, and a pick of the renamed groove shows it', async () => {
+      await pickBeat();
+      await renameBeat();
+      const stored = BEAT.replace('Title=Beat', 'Title=Fresh');
+      expect(savedGrooves()[0].fields.query).toBe(stored);
+      expect(editor.currentQuery()).toBe(stored);
+      // Another groove, as from the Grooves menu, then the renamed one again.
+      editor.openGroove(START);
+      dirtyState.markClean(START);
+      byId('libraryToggle').click();
+      grooveButton('Fresh').click();
+      await vi.waitFor(() => expect(editor.currentTitle()).toBe('Fresh'));
+    });
+
+    it('makes the page dirty when the server refuses the rename', async () => {
+      await pickBeat();
+      fake.refuseNext = true;
+      await renameBeat({ wait: false });
+      await vi.waitFor(() => expect(byId('lpMessage').textContent).toContain('"Fresh"'));
       expect(dirtyState.isDirty(editor.currentQuery())).toBe(true);
     });
 
@@ -503,6 +560,7 @@ describe('the library panel', () => {
       await loaded();
       grooveButton('Beat').click();
       await settle();
+      expect(byId('lpMessage').textContent).toBe('The editor is still loading…');
       editor.load();
       await vi.waitFor(() => expect(editor.currentQuery()).toBe(BEAT));
       await settle();
@@ -524,5 +582,79 @@ describe('the library panel', () => {
     editor.load();
     await vi.waitFor(() => expect(savedGrooves()).toHaveLength(1));
     expect(savedGrooves()[0].fields.query).toBe(START);
+    // The form opened with the empty title of the default groove, and now has the loaded one.
+    expect(savedGrooves()[0].fields.title).toBe('Start');
+    expect(byId('lpMessage').hidden).toBe(true);
+  });
+
+  it('gives up waiting for the editor after 15 s, and the buttons come back', async () => {
+    await openPanel({ load: false });
+    await loaded();
+    vi.useFakeTimers();
+    try {
+      byId('lpSaveTool').open = true;
+      byId('lpSaveNew').click();
+      expect(byId('lpSaveNew').disabled).toBe(true);
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(byId('lpSaveNew').disabled).toBe(false);
+      expect(byId('lpMessage').textContent).toContain('did not finish loading');
+      expect(savedGrooves()).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('puts focus back on the pressed button when it comes back', async () => {
+    await openPanel();
+    await loaded();
+    const create = byId('lpLessonForm').querySelector('button');
+    byId('lpLessonName').value = 'Bossa';
+    create.focus();
+    create.click();
+    // A browser moves focus to the page when a focused button turns disabled. jsdom does not.
+    document.body.tabIndex = -1;
+    document.body.focus();
+    await vi.waitFor(() => expect(create.disabled).toBe(false));
+    expect(document.activeElement).toBe(create);
+  });
+
+  it('shows "Will sync" on a new row while offline', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    try {
+      await openPanel();
+      await loaded();
+      fake.online = false;
+      byId('lpLessonName').value = 'Bossa';
+      byId('lpLessonForm').querySelector('button').click();
+      await vi.waitFor(() => expect(lessonNames()).toEqual(['Bossa']));
+      expect(document.querySelector('.lp-lesson .lp-sync').textContent).toBe('Will sync');
+    } finally {
+      delete navigator.onLine;
+    }
+  });
+
+  it('does not bring back a refused new groove with the next change', async () => {
+    fake.add('lessons', 'l-a', { name: 'Afro' });
+    await openPanel();
+    await loaded();
+    // The cache read after the refusal is slow, and a newer change is drawn first.
+    const realCacheRead = fake.sdk.getDocsFromCache;
+    let release;
+    const held = new Promise((resolve) => (release = resolve));
+    fake.sdk.getDocsFromCache = async (query) => {
+      const answer = await realCacheRead(query);
+      await held;
+      return answer;
+    };
+    fake.refuseNext = true;
+    byId('lpLinkUrl').value = 'https://example.com/' + BEAT;
+    byId('lpLinkTitle').value = 'Refused';
+    byId('lpLinkForm').querySelector('button').click();
+    await vi.waitFor(() => expect(byId('lpMessage').textContent).toContain('"Refused"'));
+    byId('lpLessonName').value = 'Bossa';
+    byId('lpLessonForm').querySelector('button').click();
+    await vi.waitFor(() => expect(lessonNames()).toEqual(['Afro', 'Bossa']));
+    expect(grooveButton('Refused')).toBeUndefined();
+    release();
   });
 });

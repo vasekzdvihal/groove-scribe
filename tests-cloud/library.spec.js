@@ -725,11 +725,24 @@ test.describe('updating a saved groove', () => {
     await expect(page.locator('#grooveTitleDisplay')).toHaveText('Single paradiddle');
     await expect(page.locator('#saveButton')).toHaveText('Saved');
     await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
+    // The library has the new name in the query too, so another device shows it.
+    const [[, stored]] = await storedQueries(page);
+    expect(stored).toContain('Title=Single%20paradiddle');
     // The reload finds the same groove, with the new name in the address.
     await reload(page);
     await expect(page.locator('#tuneTitle')).toHaveValue('Single paradiddle');
     await openPanel(page);
     await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
+    // A later pick shows the new name.
+    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.click('#groovesAnchor');
+    await page
+      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
+      .first()
+      .click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+    await openPanel(page);
+    await pickSaved(page, 'Single paradiddle');
   });
 
   test('renaming an open groove without a title changes only the top bar', async ({ page }) => {
@@ -1218,7 +1231,6 @@ test.describe('without a network', () => {
   test.describe('offline writes', () => {
     const WILL_SYNC = 'Will sync';
     const KEEP_TAB = 'Keep this tab open until online';
-    const REFUSED = 'A change could not be saved. The library shows what is saved.';
     const refusedSave = (title) =>
       `"${title}" could not be saved. The library shows what is saved.`;
 
@@ -1448,11 +1460,14 @@ test.describe('without a network', () => {
       await page.getByRole('button', { name: 'Delete', exact: true }).click();
       await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
 
-      // A delete leaves no row to compare, so only the write promise can report it.
+      // A delete leaves no row to compare, so only the write promise can report it. It names
+      // the groove.
       const [saved] = await savedDocs(page, 'grooves');
       await changeOwner(page, `grooves/${saved.id}`);
       await goOnline(page);
-      await expect(alert(page)).toHaveText(REFUSED);
+      await expect(alert(page)).toHaveText(
+        '"Paradiddle" could not be saved. The library shows what is saved.'
+      );
     });
 
     test('a queued delete keeps the flag until the server has it', async ({ page }) => {
