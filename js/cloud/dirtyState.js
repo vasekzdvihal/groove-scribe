@@ -11,23 +11,33 @@ function normalise(query) {
   return parsed.ok ? parsed.query : String(query ?? '');
 }
 
+/** Are two queries the same groove? Flags and the address around the query do not count. */
+export function sameGroove(a, b) {
+  return normalise(a) === normalise(b);
+}
+
 /**
  * Before the first markClean, nothing is dirty.
  *
  * @returns {{markClean: function(string): void, isDirty: function(string): boolean,
- *            rebase: function(string, string): void, forget: function(string): void}}
+ *            rebase: function(string, string): void, forget: function(string): void,
+ *            cleanVersion: function(): number}}
  *   markClean takes the query that was loaded or saved. isDirty takes the query of the groove
  *   in the editor now. rebase takes the query before and after a change that is not an edit,
  *   such as the tempo that the metronome raises: a clean editor stays clean. forget takes the
- *   query of a save that the server refused.
+ *   query of a save that the server refused. cleanVersion changes on each markClean, so a
+ *   caller can tell that another groove was loaded or saved since its own markClean.
  */
 export function createDirtyState() {
   /** @type {string | symbol | null} */
   let clean = null;
+  let version = 0;
   return {
     markClean(query) {
       clean = normalise(query);
+      version += 1;
     },
+    cleanVersion: () => version,
     isDirty(query) {
       return clean !== null && normalise(query) !== clean;
     },

@@ -9,6 +9,7 @@
 // precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { askToDiscard, isAskingToDiscard } from '../discardDialog.js';
+import { sameGroove } from './dirtyState.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
 import {
@@ -27,6 +28,8 @@ const LINK_ERRORS = {
 const LAST_LESSON_KEY = 'grooveScribe.lastLesson';
 const USER_KEY = 'grooveScribe.user';
 const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
+// One per account, so another account on this device never offers to update its groove.
+const currentGrooveKey = (uid) => `grooveScribe.currentGroove.${uid}`;
 // Keep the same width in css/library-panel.css.
 const DOCKED_QUERY = '(min-width: 1100px)';
 const UNFILED = 'unfiled';
@@ -60,7 +63,10 @@ const PANEL_HTML = `
           <input id="lpSaveTitle" type="text" maxlength="200">
           <label for="lpSaveLesson">Lesson</label>
           <select id="lpSaveLesson"></select>
-          <button class="lp-primary" type="submit">Save groove</button>
+          <p id="lpUpdateHint" class="lp-hint" hidden></p>
+          <div id="lpSaveButtons" class="lp-save-buttons">
+            <button id="lpSaveNew" class="lp-primary" type="submit">Save groove</button>
+          </div>
         </form>
       </details>
       <details class="lp-tool">
@@ -118,6 +124,26 @@ function writeLastLesson(id) {
     localStorage.setItem(LAST_LESSON_KEY, id);
   } catch {
     /* the lesson is simply not remembered */
+  }
+}
+
+// The saved groove that is open in the editor, kept for a reload: its id, the query it has
+// in the library, and the query the editor showed. A reload trusts it only when both still match.
+function readCurrentGroove(uid) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(currentGrooveKey(uid)));
+    return typeof saved?.id === 'string' ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCurrentGroove(uid, current) {
+  try {
+    if (current) localStorage.setItem(currentGrooveKey(uid), JSON.stringify(current));
+    else localStorage.removeItem(currentGrooveKey(uid));
+  } catch {
+    /* after a reload, the groove is simply not the current one */
   }
 }
 
@@ -257,6 +283,7 @@ function clearLibrary() {
 
 function startLibrary({
   library,
+  uid,
   isActive: isSignedIn,
   persistent,
   editor,
@@ -266,6 +293,11 @@ function startLibrary({
   let lessons = [];
   let grooves = [];
   let currentGrooveId = null;
+  // The cleanVersion of the editor when the current groove was loaded or saved. Another groove
+  // loaded since, such as one from the Grooves menu, is not the current groove.
+  let currentVersion = null;
+  // The current groove of the last visit, until a list shows whether it is still current.
+  let restoring = readCurrentGroove(uid);
   let menuGrooveId = null;
   let openLesson = readLastLesson();
   let stopped = false;
@@ -280,6 +312,7 @@ function startLibrary({
     const next = JSON.stringify([nextLessons, nextGrooves]);
     lessons = nextLessons;
     grooves = nextGrooves;
+    restoreCurrentGroove();
     if (redraw || next !== drawn) render();
     drawn = next;
     sync.update([...lessons, ...grooves]);
@@ -361,6 +394,36 @@ function startLibrary({
     }
   }
 
+  // Call after markClean: the groove in the editor is now this saved groove.
+  function setCurrentGroove(id, savedQuery) {
+    currentGrooveId = id;
+    currentVersion = dirtyState.cleanVersion();
+    writeCurrentGroove(uid, { id, savedQuery, editorQuery: editor.currentQuery() });
+  }
+
+  // The saved groove that the editor shows, or null.
+  function openSavedGroove() {
+    if (currentGrooveId === null || currentVersion !== dirtyState.cleanVersion()) return null;
+    return grooves.find((groove) => groove.id === currentGrooveId) ?? null;
+  }
+
+  // After a reload, the groove of the last visit is current only if the library still has it
+  // as it was, and the editor still shows it.
+  function restoreCurrentGroove() {
+    const groove = restoring && grooves.find((item) => item.id === restoring.id);
+    if (!groove) return;
+    if (
+      sameGroove(groove.query, restoring.savedQuery) &&
+      sameGroove(editor.currentQuery(), restoring.editorQuery)
+    ) {
+      currentGrooveId = groove.id;
+      currentVersion = dirtyState.cleanVersion();
+    } else {
+      writeCurrentGroove(uid, null);
+    }
+    restoring = null;
+  }
+
   // Run one change and draw it from the cache, so it shows at once, also offline. Without a
   // change, load from the server. Failures stay on screen.
   // A change makes one write and returns its `queued` result, or nothing if it already finished.
@@ -376,6 +439,11 @@ function startLibrary({
       // Only a change closes a menu. A load that finishes must not close one the user opened.
       if (change) menuGrooveId = null;
       draw(nextLessons.items, nextGrooves.items, Boolean(change));
+      // The server has the whole library, so a groove of the last visit that is not in it is gone.
+      if (!change && restoring && !nextGrooves.fromCache) {
+        restoring = null;
+        writeCurrentGroove(uid, null);
+      }
       return {
         ok: true,
         fromCache: nextLessons.fromCache || nextGrooves.fromCache,
@@ -440,6 +508,8 @@ function startLibrary({
         editor.openGroove(groove.query, name);
         // The editor writes the groove its own way, so its query is the clean one.
         dirtyState.markClean(editor.currentQuery());
+        setCurrentGroove(groove.id, groove.query);
+        refreshSaveForm();
         afterPick();
       },
       { className: 'lp-open' }
@@ -508,6 +578,30 @@ function startLibrary({
     return section;
   }
 
+  const updateButton = element('button', {
+    id: 'lpUpdate',
+    type: 'submit',
+    className: 'lp-primary',
+    textContent: 'Update groove',
+  });
+
+  // A saved groove that is open and has edits can be updated. Otherwise the form has the plain
+  // save. Enter in the title presses the first button.
+  function refreshSaveForm() {
+    const groove = openSavedGroove();
+    const canUpdate = Boolean(groove) && dirtyState.isDirty(editor.currentQuery());
+    const saveNew = byId('lpSaveNew');
+    saveNew.textContent = canUpdate ? 'Save as new' : 'Save groove';
+    saveNew.className = canUpdate ? '' : 'lp-primary';
+    const hint = byId('lpUpdateHint');
+    hint.textContent = canUpdate
+      ? `Update saves the changes in "${grooveName(groove)}". Save as new keeps it as it is.`
+      : '';
+    hint.hidden = !canUpdate;
+    byId('lpSaveButtons').replaceChildren(...(canUpdate ? [updateButton, saveNew] : [saveNew]));
+    return canUpdate ? groove : null;
+  }
+
   function render() {
     for (const id of ['lpSaveLesson', 'lpLinkLesson']) {
       const select = byId(id);
@@ -527,6 +621,7 @@ function startLibrary({
     const openKey = entries.some((entry) => entry.key === openLesson)
       ? openLesson
       : entries[0]?.key;
+    refreshSaveForm();
     byId('lpLessons').replaceChildren(
       ...(entries.length
         ? entries.map(({ lesson, key, items }) => lessonSection(lesson, items, key === openKey))
@@ -540,7 +635,16 @@ function startLibrary({
   }
 
   byId('lpSaveTool').ontoggle = () => {
-    if (byId('lpSaveTool').open) byId('lpSaveTitle').value = editor.currentTitle();
+    if (!byId('lpSaveTool').open) return;
+    byId('lpSaveTitle').value = editor.currentTitle();
+    const groove = refreshSaveForm();
+    // Update keeps the library name of the groove, unless the user types another one.
+    if (groove?.title) byId('lpSaveTitle').value = groove.title;
+    // A copy goes next to the groove it was made from.
+    const lessonId = groove?.lessonId;
+    if (lessonId && lessons.some((lesson) => lesson.id === lessonId)) {
+      byId('lpSaveLesson').value = lessonId;
+    }
   };
 
   byId('lpLessonForm').onsubmit = async (event) => {
@@ -580,31 +684,53 @@ function startLibrary({
     }
   };
 
-  byId('lpSaveForm').onsubmit = async (event) => {
+  // The editor now shows the saved groove, unless the server refuses the write later.
+  function afterSave(written, query) {
+    dirtyState.markClean(query);
+    // A save that the server refuses later did not save the edits.
+    written.committed.catch(() => dirtyState.forget(query));
+    setCurrentGroove(written.id, query);
+    byId('lpSaveTool').open = false;
+  }
+
+  async function updateCurrent(groove, query) {
+    let written = null;
+    const saved = await act(() => {
+      written = library.updateGroove(groove.id, {
+        query,
+        title: byId('lpSaveTitle').value.trim() || groove.title,
+      });
+      return written;
+    });
+    if (saved.ok) afterSave(written, query);
+  }
+
+  async function saveAsNew(query) {
+    const lessonId = byId('lpSaveLesson').value || null;
+    let written = null;
+    const saved = await act(() => {
+      written = library.saveGroove({ query, title: byId('lpSaveTitle').value.trim(), lessonId });
+      currentGrooveId = written.id;
+      selectLesson(lessonId ?? UNFILED);
+      return written;
+    });
+    if (saved.ok) afterSave(written, query);
+  }
+
+  byId('lpSaveForm').onsubmit = (event) => {
     event.preventDefault();
     const parsed = parseGrooveLink(editor.currentQuery());
     if (!parsed.ok) {
       showMessage(LINK_ERRORS[parsed.reason]);
       return;
     }
-    const lessonId = byId('lpSaveLesson').value || null;
-    let written = null;
-    const saved = await act(() => {
-      written = library.saveGroove({
-        query: parsed.query,
-        title: byId('lpSaveTitle').value.trim(),
-        lessonId,
-      });
-      currentGrooveId = written.id;
-      selectLesson(lessonId ?? UNFILED);
-      return written;
-    });
-    if (saved.ok) {
-      dirtyState.markClean(parsed.query);
-      // A save that the server refuses later did not save the edits.
-      written?.committed?.catch(() => dirtyState.forget(parsed.query));
-      byId('lpSaveTool').open = false;
+    if (event.submitter !== updateButton) {
+      saveAsNew(parsed.query);
+      return;
     }
+    // The groove can be gone, or another groove loaded, since the form was drawn.
+    const groove = refreshSaveForm();
+    if (groove) updateCurrent(groove, parsed.query);
   };
 
   return { drawCached, load: () => act(), stop };
@@ -667,6 +793,7 @@ async function startCloud(search, editor, dirtyState, afterPick) {
     // Attach the form handlers before the library becomes visible.
     const session = startLibrary({
       library,
+      uid: user.uid,
       isActive: () => activeUid === user.uid,
       persistent,
       editor,
@@ -721,7 +848,8 @@ async function startCloud(search, editor, dirtyState, afterPick) {
  *        by itself waits for it before it starts Firebase.
  * @param {{openGroove: function(string): void, currentQuery: function(): string,
  *          currentTitle: function(): string}} options.editor
- * @param {{markClean: function(string): void, isDirty: function(string): boolean}}
+ * @param {{markClean: function(string): void, isDirty: function(string): boolean,
+ *          forget: function(string): void, cleanVersion: function(): number}}
  *        options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
  *        the groove that the page starts with.
  */

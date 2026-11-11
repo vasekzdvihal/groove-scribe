@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createDirtyState } from '../../js/cloud/dirtyState.js';
+import { createDirtyState, sameGroove } from '../../js/cloud/dirtyState.js';
 
 const QUERY = '?TimeSig=4/4&Div=16&Title=Beat&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
 const EDITED = QUERY.replace('S=|--O-|', 'S=|O-O-|');
@@ -77,5 +77,25 @@ describe('createDirtyState', () => {
     state.markClean('?Debug=1');
     expect(state.isDirty('?Debug=1')).toBe(false);
     expect(state.isDirty('?Debug=2')).toBe(true);
+  });
+
+  it('changes cleanVersion on each markClean, and not on rebase or forget', () => {
+    const state = createDirtyState();
+    const start = state.cleanVersion();
+    state.markClean(QUERY);
+    const marked = state.cleanVersion();
+    expect(marked).not.toBe(start);
+    state.rebase(QUERY, EDITED);
+    state.forget(EDITED);
+    expect(state.cleanVersion()).toBe(marked);
+    state.markClean(QUERY);
+    expect(state.cleanVersion()).not.toBe(marked);
+  });
+});
+
+describe('sameGroove', () => {
+  it('compares the groove only, not the flags or the address around it', () => {
+    expect(sameGroove('https://example.com/index.html' + QUERY + '&Debug=1', QUERY)).toBe(true);
+    expect(sameGroove(QUERY, EDITED)).toBe(false);
   });
 });
