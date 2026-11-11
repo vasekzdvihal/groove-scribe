@@ -17,16 +17,16 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **962 pass**                                                                                                                                                                                                                        |
-| `npm run test:e2e`     | Playwright golden-master and UI — **210 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
+| `npm test`             | Vitest unit suite — **1059 pass**                                                                                                                                                                                                                       |
+| `npm run test:e2e`     | Playwright golden-master and UI — **213 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~85 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
 | `npm run format:check` | Prettier clean (`npm run format` to fix)                                                                                                                                                                                                                |
 | `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                  |
 | `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                          |
-| `npm run test:rules`   | Firestore security rules against the emulator (needs Java)                                                                                                                                                                                              |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **96 pass** (needs Java)                                                                                                                                                             |
+| `npm run test:rules`   | Firestore security rules against the emulator — **22 pass** (needs Java)                                                                                                                                                                                |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **100 pass** (needs Java)                                                                                                                                                            |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -80,6 +80,12 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 `registerServiceWorker.js` (decides whether this page uses the service worker, and registers it),
 `cloud/pendingSync.js` (the library's queued-write tracking: the flag, the sync wait, the slow timer
 and the leave warning),
+`discardDialog.js` (the "Discard your changes?" question; the page owns it, so it works without
+the panel),
+`cloud/dirtyState.js` (the clean groove: `createDirtyState`, `watchDirty`, and the per-tab baseline
+that survives a reload),
+`cloud/currentGroove.js` (the saved groove open in the editor: `createCurrentGroove` for one
+signed-in session, and its per-tab record),
 `grooves.js` (built-in groove library).
 
 ### Tests
@@ -106,6 +112,15 @@ and the leave warning),
 - Unsaved edits: `dirtyState.js` keeps the groove that was last loaded or saved. `watchDirty`
   checks once after each URL change (`GrooveWriter.onUrlChange`) and each dirty-state change, and
   `editor.onDirtyChange` reports only real flips. The leave warning is attached only while dirty.
+- Rule: any code that replaces the groove in the editor checks `dirtyState.isDirty`, asks with
+  `askToDiscard`, and after the load calls `dirtyState.markClean` with the editor's new query.
+- Every edit is in the address, so the clean groove is kept per tab in `sessionStorage`, with the
+  last address. `main.js` starts from it after a reload (`restoredBaseline`), so a page with edits
+  stays dirty. A new link opened in the same tab is another address and starts clean. The record
+  of the open saved groove is per tab too, so Update survives a reload and no tab changes another.
+- Update reads the server first while online, and does not write over a change from another
+  device. The panel reads the library again when the tab becomes visible and when the network
+  returns.
 - The Save button next to Share opens the panel at its save form, or at the sign-in. It says
   Saved only while the editor shows an open saved groove unchanged. The panel shows the button,
   so the native app and GrooveDB authoring, which have no panel, do not show it.
