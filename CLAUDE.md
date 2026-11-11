@@ -26,7 +26,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                  |
 | `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                          |
 | `npm run test:rules`   | Firestore security rules against the emulator — **22 pass** (needs Java)                                                                                                                                                                                |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **100 pass** (needs Java)                                                                                                                                                            |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **101 pass** (needs Java)                                                                                                                                                            |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.

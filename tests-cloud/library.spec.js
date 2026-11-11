@@ -445,8 +445,10 @@ test.describe('unsaved edits', () => {
     await page.locator('#lpSaveTitle').fill('Edited');
     await page.getByRole('button', { name: 'Save groove' }).click();
     await expect(grooveButton(page, 'Edited')).toHaveAttribute('aria-current', 'true');
-    // The editor shows the saved name.
-    await expect(page.locator('#tuneTitle')).toHaveValue('Edited');
+    // The editor shows the saved name. The default groove has no title in its address, so the
+    // name shows in the top bar only.
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Edited');
+    await expect(page.locator('#tuneTitle')).toHaveValue('');
     await expect(page.locator('#saveButton')).toHaveText('Saved');
     await grooveButton(page, 'Rock').click();
     await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
@@ -534,6 +536,19 @@ test.describe('updating a saved groove', () => {
     await expect(grooveButton(page, 'Paradiddle')).not.toHaveAttribute('aria-current', 'true');
     await expect.poll(async () => (await storedQueries(page)).length).toBe(2);
     expect(await storedQueries(page)).toContainEqual([id, updatedQuery]);
+  });
+
+  test('a save with a typed title puts it in the editor', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await saveTool(page).click();
+    await page.locator('#lpSaveTitle').fill('Typed name');
+    await saveAsNewButton(page).click();
+    await expect(grooveButton(page, 'Typed name')).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator('#tuneTitle')).toHaveValue('Typed name');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
   });
 
   test('Update keeps the library name, not the title in the editor', async ({ page }) => {
