@@ -19,6 +19,12 @@ async function savedDocs(page, collection) {
   return documents.map((item) => ({ id: item.name.split('/').pop(), ...item.fields }));
 }
 
+// The panel draws a change before the server has it. Read the server after the sync.
+async function syncedDocs(page, collection) {
+  await synced(page);
+  return savedDocs(page, collection);
+}
+
 async function clearEmulators(request) {
   await request.delete(
     'http://127.0.0.1:8080/emulator/v1/projects/demo-groovescribe/databases/(default)/documents'
@@ -470,7 +476,7 @@ test.describe('updating a saved groove', () => {
   const saveAsNewButton = (page) => page.getByRole('button', { name: 'Save as new' });
   const plainSaveButton = (page) => page.getByRole('button', { name: 'Save groove' });
   const storedQueries = async (page) =>
-    (await savedDocs(page, 'grooves')).map((item) => [item.id, item.query.stringValue]);
+    (await syncedDocs(page, 'grooves')).map((item) => [item.id, item.query.stringValue]);
 
   // The slide-over panel covers the grid, so it closes for the edit.
   async function editNote(page, note = '#snare4') {
@@ -555,7 +561,7 @@ test.describe('updating a saved groove', () => {
     const [[id]] = await storedQueries(page);
     await updateButton(page).click();
     await expect(updateButton(page)).toBeHidden();
-    const [lesson] = await savedDocs(page, 'lessons');
+    const [lesson] = await syncedDocs(page, 'lessons');
     await expect
       .poll(async () =>
         (await savedDocs(page, 'grooves')).map((item) => [item.id, item.lessonId.stringValue])
@@ -697,6 +703,71 @@ test.describe('updating a saved groove', () => {
     await saveTool(page).click();
     await expect(plainSaveButton(page)).toBeVisible();
     await expect(updateButton(page)).toHaveCount(0);
+  });
+
+  // Rename is in the ⋯ menu of the row. The browser asks for the name.
+  async function renameSaved(page, title, newTitle) {
+    page.once('dialog', (dialog) => dialog.accept(newTitle));
+    await page.getByRole('button', { name: `Options for ${title}` }).click();
+    await page.getByRole('button', { name: 'Rename', exact: true }).click();
+    await expect(grooveButton(page, newTitle)).toBeVisible();
+  }
+
+  test('renaming the open groove renames it in the editor, and it stays saved', async ({
+    page,
+  }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await openPanel(page);
+    await renameSaved(page, 'Paradiddle', 'Single paradiddle');
+    await expect(page.locator('#tuneTitle')).toHaveValue('Single paradiddle');
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Single paradiddle');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+    await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
+    // The reload finds the same groove, with the new name in the address.
+    await reload(page);
+    await expect(page.locator('#tuneTitle')).toHaveValue('Single paradiddle');
+    await openPanel(page);
+    await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('renaming an open groove without a title changes only the top bar', async ({ page }) => {
+    const untitled = '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
+    await signedInPanel(page);
+    await addLink(page, untitled, 'No title');
+    await pickSaved(page, 'No title', '');
+    const address = page.url();
+    await openPanel(page);
+    await renameSaved(page, 'No title', 'Named');
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Named');
+    await expect(page.locator('#tuneTitle')).toHaveValue('');
+    expect(page.url()).toBe(address);
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+  });
+
+  test('a groove picked before the page has loaded opens when it has', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await synced(page);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    // The logo holds the load event, as a slow network can.
+    let release;
+    const held = new Promise((resolve) => (release = resolve));
+    await page.route('**/GScribe_Logo_word_stack.svg', async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(EDITOR + '#library', { waitUntil: 'commit' });
+    await grooveButton(page, 'Paradiddle').click();
+    expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
+    release();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toHaveAttribute('aria-current', 'true');
+    expect(errors).toEqual([]);
   });
 });
 
@@ -1840,7 +1911,7 @@ test.describe('docked on a wide screen', () => {
     await addLink(page, QUERY, 'Paradiddle');
     await createLesson(page, 'Week 1');
     await addLink(page, ROCK, 'Rock');
-    const [lesson] = await savedDocs(page, 'lessons');
+    const [lesson] = await syncedDocs(page, 'lessons');
     await page.locator('.lp-lesson summary', { hasText: 'No lesson' }).click();
     await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
     await page.click('#snare4');

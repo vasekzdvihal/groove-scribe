@@ -133,6 +133,17 @@ const editor = {
   },
   currentQuery: () => utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
   currentTitle: () => document.getElementById('tuneTitle').value.trim(),
+  // A groove renamed in the library shows its new name. A groove with no title in its address
+  // keeps it that way: the name shows in the top bar only, and the music stays the same.
+  rename(name) {
+    const title = /** @type {HTMLInputElement} */ (document.getElementById('tuneTitle'));
+    if (!title.value.trim()) {
+      myGrooveWriter.setNameWhenUntitled(name);
+      return;
+    }
+    title.value = name;
+    myGrooveWriter.refresh_ABC();
+  },
   // Calls the listener with true when the groove gets unsaved edits, and with false when it
   // is clean again. Returns the call that stops listening.
   onDirtyChange: (listener) => dirtyWatch.onDirtyChange(listener),

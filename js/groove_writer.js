@@ -3783,6 +3783,12 @@ function GrooveWriter() {
     updateSheetMusic();
   }
 
+  // Name the groove in the top bar while its URL has no title, as loadNewGroove does.
+  root.setNameWhenUntitled = function (name) {
+    grooveNameWhenUntitled = name || '';
+    showGrooveTitle();
+  };
+
   // nameWhenUntitled names the groove in the top bar when its URL has no title.
   root.loadNewGroove = function (encodedURLData, nameWhenUntitled) {
     grooveNameWhenUntitled = nameWhenUntitled || '';

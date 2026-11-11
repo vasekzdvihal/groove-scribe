@@ -180,6 +180,26 @@ function showRetry(action) {
   retry.hidden = false;
 }
 
+// One submit at a time: a double tap on a slow tablet must not save twice. The buttons are off
+// until the handler returns. A change returns when it is drawn, also when its write waits
+// offline, so they do not stay off until the server answers.
+function submitOnce(form, handler) {
+  let running = false;
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (running) return;
+    running = true;
+    const buttons = [...form.querySelectorAll('button')];
+    for (const node of buttons) node.disabled = true;
+    try {
+      await handler(event);
+    } finally {
+      running = false;
+      for (const node of buttons) node.disabled = false;
+    }
+  };
+}
+
 function lessonOptions(lessons, selectedId) {
   return [
     element('option', { value: '', textContent: 'No lesson', selected: !selectedId }),
@@ -290,9 +310,16 @@ function startLibrary({
   let restoring = readRecord(uid);
   let menuGrooveId = null;
   let openLesson = readLastLesson();
+  // The user picked the lesson of the link form. It stays until the groove is added.
+  let linkLessonPicked = false;
   let stopped = false;
 
   let drawn = null;
+  // Each read and each local change gets a number when it starts. An answer that arrives after
+  // a newer one is on screen is out of date, so it is not drawn.
+  let lastNumber = 0;
+  let drawnNumber = 0;
+  const nextNumber = () => ++lastNumber;
 
   const isActive = () => !stopped && isSignedIn();
 
@@ -306,6 +333,14 @@ function startLibrary({
     if (redraw || restored || next !== drawn) render();
     drawn = next;
     sync.update([...lessons, ...grooves]);
+  }
+
+  // Draw an answer unless a newer one is on screen. Returns false for an answer that is too old.
+  function drawIfNewest(number, nextLessons, nextGrooves, redraw, fromServer) {
+    if (number < drawnNumber) return false;
+    drawnNumber = number;
+    draw(nextLessons, nextGrooves, redraw, fromServer);
+    return true;
   }
 
   const readCached = () => Promise.all([library.listCachedLessons(), library.listCachedGrooves()]);
@@ -361,8 +396,10 @@ function startLibrary({
 
   // The server has answered every write, so the labels can go. A write from an earlier visit
   // has no promise to report a refusal: a pending row that is gone is the sign.
+  // This is the one server read that follows edits: a burst of edits shares it.
   async function redrawAfterSync() {
     const wasPending = [...lessons, ...grooves].filter(isPending);
+    const number = nextNumber();
     let lists;
     try {
       lists = await readServer();
@@ -373,10 +410,16 @@ function startLibrary({
     }
     if (!lists || !isActive()) return;
     const [nextLessons, nextGrooves] = lists;
+    sync.forgetIfSynced(nextLessons, nextGrooves);
+    // A change made during the read is not in the answer, so a missing row says nothing. The
+    // next sync checks again.
+    if (
+      !drawIfNewest(number, nextLessons.items, nextGrooves.items, false, !nextGrooves.fromCache)
+    ) {
+      return;
+    }
     const answer = new Set([...nextLessons.items, ...nextGrooves.items].map((item) => item.id));
     const refused = wasPending.find((item) => !answer.has(item.id));
-    draw(nextLessons.items, nextGrooves.items, false, !nextGrooves.fromCache);
-    sync.forgetIfSynced(nextLessons, nextGrooves);
     if (refused && byId('lpMessage').hidden) {
       showMessage(refusedMessage(refused.title || refused.name));
     }
@@ -391,9 +434,10 @@ function startLibrary({
       console.error(error);
       if (!isActive()) return;
       showMessage(refusedMessage(title));
+      const number = nextNumber();
       try {
         const [nextLessons, nextGrooves] = await readCached();
-        if (isActive()) draw(nextLessons.items, nextGrooves.items);
+        if (isActive()) drawIfNewest(number, nextLessons.items, nextGrooves.items);
       } catch (readError) {
         console.warn('The library cache could not be read:', readError);
       }
@@ -403,10 +447,11 @@ function startLibrary({
   // Draw what this device has, before the server answers. A failure here costs nothing: the
   // server answer comes next.
   async function drawCached() {
+    const number = nextNumber();
     try {
       const [cachedLessons, cachedGrooves] = await readCached();
       if (!isActive() || (!cachedLessons.items.length && !cachedGrooves.items.length)) return false;
-      draw(cachedLessons.items, cachedGrooves.items);
+      drawIfNewest(number, cachedLessons.items, cachedGrooves.items);
       return true;
     } catch (error) {
       console.warn('The library cache could not be read:', error);
@@ -422,6 +467,29 @@ function startLibrary({
     render();
     // A docked panel can have the save form open: it is now about this groove.
     if (byId('lpSaveTool').open) prefillSaveForm();
+  }
+
+  // The editor puts the groove of the address in place when the page has loaded. Before that, a
+  // pick would be lost and a save would store the wrong groove, so both wait for it.
+  function pageStarted() {
+    if (dirtyState.startVersion() !== null) return Promise.resolve();
+    return new Promise((resolve) => {
+      const stopListening = dirtyState.onStart(() => {
+        stopListening();
+        resolve();
+      });
+    });
+  }
+
+  // A renamed groove that is open shows its new name in the editor. A clean editor stays clean.
+  function showNewName(id) {
+    const groove = openSavedGroove();
+    if (groove?.id !== id || !current) return;
+    const wasClean = !dirtyState.isDirty(editor.currentQuery());
+    editor.rename(groove.title);
+    if (!wasClean) return;
+    dirtyState.markClean(editor.currentQuery());
+    setCurrentGroove(id, current.savedQuery);
   }
 
   // The saved groove that the editor shows, or null.
@@ -447,21 +515,29 @@ function startLibrary({
     return decision === 'keep';
   }
 
-  // Run one change and draw it from the cache, so it shows at once, also offline. Without a
-  // change, load from the server. Failures stay on screen.
-  // A change makes one write and returns its `queued` result, or nothing if it already finished.
+  // Run one change and draw it at once, also offline: the lists change as the write changed the
+  // cache, so a change reads nothing. Without a change, load from the server. Failures stay on
+  // screen. A change makes one write and returns its `queued` result, with the patch for the
+  // lists. An answer that a newer one overtook is not drawn, see drawIfNewest.
   async function act(change) {
     showMessage('');
     try {
-      const written = await change?.();
-      if (written) reportIfRefused(written);
-      if (change) sync.changeRan(written);
-      const [nextLessons, nextGrooves] = await (change ? readCached() : readServer());
-      // A slow response must not draw into another user's session.
+      if (change) {
+        const written = await change();
+        reportIfRefused(written);
+        sync.changeRan(written);
+        // A slow response must not draw into another user's session.
+        if (!isActive()) return { ok: false };
+        // Only a change closes a menu. A load that finishes must not close one the user opened.
+        menuGrooveId = null;
+        const next = written.patch({ lessons, grooves });
+        drawIfNewest(nextNumber(), next.lessons, next.grooves, true, false);
+        return { ok: true };
+      }
+      const number = nextNumber();
+      const [nextLessons, nextGrooves] = await readServer();
       if (!isActive()) return { ok: false };
-      // Only a change closes a menu. A load that finishes must not close one the user opened.
-      if (change) menuGrooveId = null;
-      draw(nextLessons.items, nextGrooves.items, Boolean(change), !nextGrooves.fromCache);
+      drawIfNewest(number, nextLessons.items, nextGrooves.items, false, !nextGrooves.fromCache);
       return {
         ok: true,
         fromCache: nextLessons.fromCache || nextGrooves.fromCache,
@@ -498,9 +574,11 @@ function startLibrary({
     move.addEventListener('change', () =>
       act(() => library.moveGroove(groove.id, move.value || null))
     );
-    const rename = button('Rename', () => {
+    const rename = button('Rename', async () => {
       const title = prompt('Groove name', groove.title)?.trim();
-      if (title) act(() => library.renameGroove(groove.id, title));
+      if (!title) return;
+      const renamed = await act(() => library.renameGroove(groove.id, title));
+      if (renamed.ok) showNewName(groove.id);
     });
     const remove = button(
       'Delete',
@@ -518,6 +596,7 @@ function startLibrary({
     const open = button(
       name,
       async () => {
+        await pageStarted();
         if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
         if (!isActive()) return;
         selectLesson(lessonKey);
@@ -582,9 +661,10 @@ function startLibrary({
         : element('p', { className: 'lp-empty', textContent: 'No grooves yet.' }),
       ...(lesson ? [lessonControls(lesson)] : []),
     ]);
-    // Keep one lesson open, so that a long library stays short.
+    // Keep one lesson open, so that a long library stays short. The event comes after the
+    // task: a section that a newer render has replaced must not close the new ones.
     section.addEventListener('toggle', () => {
-      if (!section.open) return;
+      if (!section.open || !section.isConnected) return;
       selectLesson(key);
       for (const other of byId('lpLessons').querySelectorAll('.lp-lesson')) {
         if (other !== section) other.open = false;
@@ -621,8 +701,12 @@ function startLibrary({
     for (const id of ['lpSaveLesson', 'lpLinkLesson']) {
       const select = byId(id);
       const known = lessons.some((lesson) => lesson.id === openLesson);
-      // An open save form keeps its lesson, also "No lesson": Update moves the groove there.
-      const keep = id === 'lpSaveLesson' && byId('lpSaveTool').open && select.options.length > 0;
+      // A redraw must not file the groove in another lesson, also when it is "No lesson". The
+      // open save form keeps its lesson: Update moves the groove there. The link form follows
+      // the open lesson until the user picks one.
+      const keep =
+        select.options.length > 0 &&
+        (id === 'lpSaveLesson' ? byId('lpSaveTool').open : linkLessonPicked);
       const selected = keep ? select.value : select.value || (known && openLesson);
       select.replaceChildren(...lessonOptions(lessons, selected));
     }
@@ -683,8 +767,7 @@ function startLibrary({
     prefilled = false;
   };
 
-  byId('lpLessonForm').onsubmit = async (event) => {
-    event.preventDefault();
+  submitOnce(byId('lpLessonForm'), async () => {
     const name = byId('lpLessonName').value.trim();
     if (!name) return;
     const created = await act(() => {
@@ -693,6 +776,10 @@ function startLibrary({
       return written;
     });
     if (created.ok) byId('lpLessonName').value = '';
+  });
+
+  byId('lpLinkLesson').onchange = () => {
+    linkLessonPicked = true;
   };
 
   byId('lpLinkUrl').oninput = () => {
@@ -700,8 +787,7 @@ function startLibrary({
     if (parsed.ok && !byId('lpLinkTitle').value) byId('lpLinkTitle').value = parsed.title;
   };
 
-  byId('lpLinkForm').onsubmit = async (event) => {
-    event.preventDefault();
+  submitOnce(byId('lpLinkForm'), async () => {
     const parsed = parseGrooveLink(byId('lpLinkUrl').value);
     if (!parsed.ok) {
       showMessage(LINK_ERRORS[parsed.reason]);
@@ -716,9 +802,10 @@ function startLibrary({
     );
     if (saved.ok) {
       byId('lpLinkUrl').value = '';
+      linkLessonPicked = false;
       byId('lpLinkTitle').value = '';
     }
-  };
+  });
 
   // The editor now shows the saved groove, unless the server refuses the write later.
   function afterSave(written, query) {
@@ -755,15 +842,17 @@ function startLibrary({
     if (saved.ok) afterSave(written, query);
   }
 
-  byId('lpSaveForm').onsubmit = (event) => {
-    event.preventDefault();
+  submitOnce(byId('lpSaveForm'), async (event) => {
+    const pressed = event.submitter;
+    await pageStarted();
+    if (!isActive()) return;
     const parsed = parseGrooveLink(editor.currentQuery());
     if (!parsed.ok) {
       showMessage(LINK_ERRORS[parsed.reason]);
       return;
     }
-    if (event.submitter !== updateButton) {
-      saveAsNew(parsed.query);
+    if (pressed !== updateButton) {
+      await saveAsNew(parsed.query);
       return;
     }
     // The form can be out of date: the groove can be gone, another groove loaded, or the edits
@@ -777,8 +866,8 @@ function startLibrary({
       showMessage(reason);
       return;
     }
-    updateCurrent(groove, parsed.query);
-  };
+    await updateCurrent(groove, parsed.query);
+  });
 
   return { drawCached, load: () => act(), stop };
 }
@@ -806,12 +895,18 @@ async function startCloud(search, editor, dirtyState, hooks) {
   setLoading(true);
   const { sdk, auth, db, persistent } = await connectCloud(resolved);
 
-  byId('lpSignIn').onclick = async () => {
+  // One popup at a time. The button comes back when the popup closes, also without a sign-in.
+  const signIn = byId('lpSignIn');
+  signIn.onclick = async () => {
+    if (signIn.disabled) return;
+    signIn.disabled = true;
     showMessage('');
     try {
       await sdk.signInWithPopup(auth, new sdk.GoogleAuthProvider());
     } catch (error) {
       if (error.code !== 'auth/popup-closed-by-user') reportFailure(error);
+    } finally {
+      signIn.disabled = false;
     }
   };
 
@@ -899,8 +994,8 @@ async function startCloud(search, editor, dirtyState, hooks) {
  * @param {string} options.search  The URL query at page start, before the editor rewrites it.
  * @param {Promise<void>} [options.whenReady]  Settles when Play is ready. A panel that opens
  *        by itself waits for it before it starts Firebase.
- * @param {{openGroove: function(string): void, currentQuery: function(): string,
- *          currentTitle: function(): string,
+ * @param {{openGroove: function(string, string): void, currentQuery: function(): string,
+ *          currentTitle: function(): string, rename: function(string): void,
  *          onDirtyChange: function(function(boolean): void): function(): void}} options.editor
  * @param {{markClean: function(string): void, isDirty: function(string): boolean,
  *          forget: function(string): void, cleanVersion: function(): number,

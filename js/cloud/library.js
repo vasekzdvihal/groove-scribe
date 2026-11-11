@@ -8,6 +8,24 @@ const NAME_LIMIT = 200;
 const cleanName = (value) => (value ?? '').trim().slice(0, NAME_LIMIT);
 
 /**
+ * @typedef {{id: string, hasPendingWrites: boolean, [field: string]: unknown}} Item
+ * @typedef {{lessons: Item[], grooves: Item[]}} Lists
+ */
+
+// The lists after a write, without a read: the cache has the write at once, so this is what a
+// read of the cache shows. A time from the server reads as null until the server answers.
+const pendingItem = (item) => ({ ...item, hasPendingWrites: true });
+const editItem = (items, id, fields) =>
+  items.map((item) =>
+    item.id === id ? pendingItem({ ...item, ...fields, updatedAt: null }) : item
+  );
+// The order of the lesson list: by name, and by id for the same name.
+function byName(a, b) {
+  const [first, second] = a.name === b.name ? [a.id, b.id] : [String(a.name), String(b.name)];
+  return first < second ? -1 : 1;
+}
+
+/**
  * @param {object} sdk  The Firebase module exports.
  * @param {object} db   The Firestore instance.
  * @param {string} uid  The signed-in user.
@@ -19,8 +37,15 @@ export function createLibrary(sdk, db, uid) {
 
   // A write promise settles only when the server answers, and offline it does not settle. The
   // local cache has the change as soon as the SDK has the call, so the panel does not wait:
-  // it draws from the cache and watches `committed` only to report a refusal.
-  const queued = (committed, id, title) => ({ committed, id, title });
+  // it draws the change with `patch`, which changes its lists as the write changed the cache,
+  // and it watches `committed` only to report a refusal.
+  /**
+   * @param {Promise<unknown>} committed
+   * @param {string} id
+   * @param {string | undefined} title
+   * @param {function(Lists): Lists} patch
+   */
+  const queued = (committed, id, title, patch) => ({ committed, id, title, patch });
 
   // The cached list has the same owner filter as the server list, so another account on this
   // device never shows.
@@ -44,6 +69,16 @@ export function createLibrary(sdk, db, uid) {
   // Answers at once and never touches the network, so the panel can draw before the server.
   async function listCached(ref, sortField, direction) {
     return toList(await sdk.getDocsFromCache(ownedQuery(ref, sortField, direction)));
+  }
+
+  // Change some fields of a saved groove. createdAt stays, so the groove keeps its place.
+  function changeGroove(id, fields) {
+    return queued(
+      sdk.updateDoc(sdk.doc(db, 'grooves', id), { ...fields, updatedAt: now() }),
+      id,
+      fields.title,
+      (lists) => ({ ...lists, grooves: editItem(lists.grooves, id, fields) })
+    );
   }
 
   return {
@@ -71,26 +106,36 @@ export function createLibrary(sdk, db, uid) {
     // The id comes from the SDK at once, so a groove can go into a lesson that is still queued.
     createLesson(name) {
       const ref = sdk.doc(lessons);
+      const fields = { ownerId: uid, name: cleanName(name) };
       return queued(
-        sdk.setDoc(ref, {
-          ownerId: uid,
-          name: cleanName(name),
-          createdAt: now(),
-          updatedAt: now(),
-        }),
-        ref.id
+        sdk.setDoc(ref, { ...fields, createdAt: now(), updatedAt: now() }),
+        ref.id,
+        undefined,
+        (lists) => ({
+          ...lists,
+          lessons: [
+            ...lists.lessons,
+            pendingItem({ id: ref.id, ...fields, createdAt: null, updatedAt: null }),
+          ].sort(byName),
+        })
       );
     },
 
-    renameLesson: (id, name) =>
-      queued(
-        sdk.updateDoc(sdk.doc(db, 'lessons', id), { name: cleanName(name), updatedAt: now() })
-      ),
+    renameLesson(id, name) {
+      const fields = { name: cleanName(name) };
+      return queued(
+        sdk.updateDoc(sdk.doc(db, 'lessons', id), { ...fields, updatedAt: now() }),
+        id,
+        undefined,
+        (lists) => ({ ...lists, lessons: editItem(lists.lessons, id, fields).sort(byName) })
+      );
+    },
 
     // The grooves stay in the library, unfiled. Lesson delete is the last write,
     // so a failure part-way never leaves a groove that points to a missing lesson.
     // This read asks the server only: a cached list can miss grooves in the lesson, and it
-    // fails offline, so the delete is refused and the error shows in the panel.
+    // fails offline, so the delete is refused and the error shows in the panel. It returns when
+    // the server has the change, so `committed` has nothing left to wait for.
     async deleteLesson(id) {
       const snapshot = await sdk.getDocsFromServer(
         sdk.query(grooves, sdk.where('ownerId', '==', uid), sdk.where('lessonId', '==', id))
@@ -103,53 +148,46 @@ export function createLibrary(sdk, db, uid) {
         await batch.commit();
       }
       await sdk.deleteDoc(sdk.doc(db, 'lessons', id));
+      const moved = new Set(snapshot.docs.map((item) => item.id));
+      return queued(Promise.resolve(), id, undefined, (lists) => ({
+        lessons: lists.lessons.filter((lesson) => lesson.id !== id),
+        grooves: lists.grooves.map((groove) =>
+          moved.has(groove.id) ? { ...groove, lessonId: null } : groove
+        ),
+      }));
     },
 
+    // A new groove is the newest, so it goes last, as in the list from the server.
     saveGroove({ query, title, lessonId }) {
       const ref = sdk.doc(grooves);
-      const cleanTitle = cleanName(title);
+      const fields = { ownerId: uid, lessonId: lessonId ?? null, title: cleanName(title), query };
       return queued(
-        sdk.setDoc(ref, {
-          ownerId: uid,
-          lessonId: lessonId ?? null,
-          title: cleanTitle,
-          query,
-          createdAt: now(),
-          updatedAt: now(),
-        }),
+        sdk.setDoc(ref, { ...fields, createdAt: now(), updatedAt: now() }),
         ref.id,
-        cleanTitle
+        fields.title,
+        (lists) => ({
+          ...lists,
+          grooves: [
+            ...lists.grooves,
+            pendingItem({ id: ref.id, ...fields, createdAt: null, updatedAt: null }),
+          ],
+        })
       );
     },
 
     // Replace the groove of a saved document, and file it in a lesson. createdAt stays.
     updateGroove(id, { query, title, lessonId }) {
-      const cleanTitle = cleanName(title);
-      return queued(
-        sdk.updateDoc(sdk.doc(db, 'grooves', id), {
-          query,
-          title: cleanTitle,
-          lessonId: lessonId ?? null,
-          updatedAt: now(),
-        }),
-        id,
-        cleanTitle
-      );
+      return changeGroove(id, { query, title: cleanName(title), lessonId: lessonId ?? null });
     },
 
-    moveGroove: (id, lessonId) =>
-      queued(
-        sdk.updateDoc(sdk.doc(db, 'grooves', id), {
-          lessonId: lessonId ?? null,
-          updatedAt: now(),
-        })
-      ),
+    moveGroove: (id, lessonId) => changeGroove(id, { lessonId: lessonId ?? null }),
 
-    renameGroove: (id, title) =>
-      queued(
-        sdk.updateDoc(sdk.doc(db, 'grooves', id), { title: cleanName(title), updatedAt: now() })
-      ),
+    renameGroove: (id, title) => changeGroove(id, { title: cleanName(title) }),
 
-    deleteGroove: (id) => queued(sdk.deleteDoc(sdk.doc(db, 'grooves', id))),
+    deleteGroove: (id) =>
+      queued(sdk.deleteDoc(sdk.doc(db, 'grooves', id)), id, undefined, (lists) => ({
+        ...lists,
+        grooves: lists.grooves.filter((groove) => groove.id !== id),
+      })),
   };
 }
