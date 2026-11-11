@@ -6,10 +6,11 @@ import { parseGrooveLink } from './grooveLink.js';
 export const NOTHING_SAVED = Symbol('nothing saved');
 
 // Each tab keeps its clean groove for a reload. Every edit is in the address, so without it a
-// reload, or iPad Safari bringing back a tab it dropped, would count the edits as clean.
-const CLEAN_KEY = 'grooveScribe.cleanGroove';
-// The address the tab showed last. A new link opened in the same tab is another page.
-const ADDRESS_KEY = 'grooveScribe.address';
+// reload, or iPad Safari bringing back a tab it dropped, would count the edits as clean. The
+// item holds the address the tab showed last with the clean groove of that page, written
+// together from the page's own memory: a new link opened in the same tab is another page, and
+// Back can bring an older page out of the back-forward cache after a newer page wrote.
+const TAB_KEY = 'grooveScribe.tab';
 
 // sessionStorage can be missing or throw, for example in a private window. Then a reload
 // starts clean, as before.
@@ -38,15 +39,6 @@ function writeItem(storage, key, value) {
 }
 
 /**
- * Remember the address the tab shows. Call after each change of the address.
- * @param {string} query
- * @param {Storage | null} [storage]
- */
-export function rememberAddress(query, storage = tabStorage()) {
-  writeItem(storage, ADDRESS_KEY, String(query ?? ''));
-}
-
-/**
  * The clean groove this tab had before a reload, if the page shows the address the tab showed
  * last. Read it before the editor rewrites the address.
  * @param {string} pageQuery  the query the page started with
@@ -54,15 +46,16 @@ export function rememberAddress(query, storage = tabStorage()) {
  * @returns {string | typeof NOTHING_SAVED | null}  null when the tab has none for this page
  */
 export function restoredBaseline(pageQuery, storage = tabStorage()) {
-  const address = readItem(storage, ADDRESS_KEY);
-  if (address === null || !sameGroove(address, pageQuery)) return null;
+  let saved;
   try {
-    const saved = JSON.parse(readItem(storage, CLEAN_KEY));
-    if (typeof saved?.clean === 'string') return saved.clean;
-    return saved && saved.clean === null ? NOTHING_SAVED : null;
+    saved = JSON.parse(readItem(storage, TAB_KEY));
   } catch {
     return null;
   }
+  if (typeof saved?.address !== 'string' || !sameGroove(saved.address, pageQuery)) return null;
+  if (typeof saved.clean === 'string') return saved.clean;
+  // A refused save is kept as null: JSON has no symbol. No clean key: nothing was marked.
+  return saved.clean === null ? NOTHING_SAVED : null;
 }
 
 // Compare the groove only: flags such as Debug, and the address around the query, do not count.
@@ -77,8 +70,9 @@ export function sameGroove(a, b) {
 }
 
 /**
- * Before the first markClean, nothing is dirty. The clean groove is kept in the tab's storage,
- * see restoredBaseline.
+ * Before the first markClean, nothing is dirty. The clean groove is kept in the tab's storage
+ * with the address the page shows, see restoredBaseline. The page calls remember with its
+ * address after each change of it, and when Back brings it out of the back-forward cache.
  *
  * @param {Storage | null} [storage]  the tab's sessionStorage
  *
@@ -86,6 +80,7 @@ export function sameGroove(a, b) {
  *            rebase: function(string, string): void, forget: function(string): void,
  *            cleanVersion: function(): number,
             cleanQuery: function(): (string | symbol | null),
+            remember: function(string): void,
             markStart: function(string | symbol): void,
  *            startVersion: function(): (number | null),
  *            onRebase: function(function(string, string): void): function(): void,
@@ -118,13 +113,15 @@ export function createDirtyState(storage = tabStorage()) {
   const changed = () => {
     for (const listener of changeListeners) listener();
   };
-  // A refused save is kept as null: JSON has no symbol.
-  const save = () =>
-    writeItem(
-      storage,
-      CLEAN_KEY,
-      JSON.stringify({ clean: clean === NOTHING_SAVED ? null : clean })
-    );
+  /** @type {string | null} */
+  let address = null;
+  // Nothing before the page knows its address. A refused save is kept as null.
+  const save = () => {
+    if (address === null) return;
+    const item =
+      clean === null ? { address } : { address, clean: clean === NOTHING_SAVED ? null : clean };
+    writeItem(storage, TAB_KEY, JSON.stringify(item));
+  };
   function setClean(query) {
     clean = query === NOTHING_SAVED ? NOTHING_SAVED : normalise(query);
     version += 1;
@@ -143,6 +140,10 @@ export function createDirtyState(storage = tabStorage()) {
     },
     cleanVersion: () => version,
     cleanQuery: () => clean,
+    remember(query) {
+      address = String(query ?? '');
+      save();
+    },
     startVersion: () => start,
     onRebase: (listener) => listen(rebaseListeners, listener),
     onStart: (listener) => listen(startListeners, listener),

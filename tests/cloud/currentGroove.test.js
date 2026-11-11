@@ -121,8 +121,11 @@ describe('the stored record', () => {
 });
 
 describe('createCurrentGroove', () => {
+  // Each tracker listens on the window, so each test stops the ones it made.
+  const trackers = [];
   beforeEach(() => vi.stubGlobal('sessionStorage', globalThis.jsdom.window.sessionStorage));
   afterEach(() => {
+    trackers.splice(0).forEach((tracker) => tracker.stop());
     sessionStorage.clear();
     vi.unstubAllGlobals();
   });
@@ -151,6 +154,7 @@ describe('createCurrentGroove', () => {
       onStart: () => (calls.start += 1),
       onCleanChange: () => (calls.change += 1),
     });
+    trackers.push(tracker);
     const end = () => (active = false);
     return { dirtyState, editor, tracker, calls, end, list };
   }
@@ -303,6 +307,36 @@ describe('createCurrentGroove', () => {
     dirtyState.rebase(QUERY, FASTER);
     await Promise.resolve();
     expect(calls).toEqual({ start: 1, change: 1 });
+  });
+
+  // Back can bring the page out of the back-forward cache after another page in the tab wrote
+  // its own record. The page writes its own again.
+  const pageshow = (persisted) => Object.assign(new Event('pageshow'), { persisted });
+  const otherPage = { id: 'g2', savedQuery: EDITED, editorQuery: EDITED };
+
+  it('writes its own record again when Back brings the page back', () => {
+    const { dirtyState, tracker } = setUp();
+    dirtyState.markStart(QUERY);
+    tracker.set('g1', QUERY);
+    writeRecord('ana', otherPage);
+    window.dispatchEvent(pageshow(false));
+    expect(readRecord('ana')).toEqual(otherPage);
+    window.dispatchEvent(pageshow(true));
+    expect(readRecord('ana')).toEqual(record);
+    tracker.stop();
+    writeRecord('ana', otherPage);
+    window.dispatchEvent(pageshow(true));
+    expect(readRecord('ana')).toEqual(otherPage);
+  });
+
+  it('removes the record of another page when it has no open groove', () => {
+    const { dirtyState, tracker } = setUp();
+    dirtyState.markStart(QUERY);
+    expect(tracker.restore(true)).toBe(false);
+    writeRecord('ana', otherPage);
+    window.dispatchEvent(pageshow(true));
+    expect(readRecord('ana')).toBeNull();
+    tracker.stop();
   });
 
   it('tells nothing to a session that is over', async () => {

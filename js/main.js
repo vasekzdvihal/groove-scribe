@@ -12,12 +12,7 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
-import {
-  createDirtyState,
-  rememberAddress,
-  restoredBaseline,
-  watchDirty,
-} from './cloud/dirtyState.js';
+import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
 import { askToDiscard } from './discardDialog.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
@@ -166,7 +161,7 @@ myGrooveWriter.onChangeWithoutEdit = (before, after) => dirtyState.rebase(before
 // Each change of the URL can make the editor dirty or clean again, for example an Undo.
 const dirtyWatch = watchDirty(dirtyState, editor.currentQuery);
 myGrooveWriter.onUrlChange = () => {
-  rememberAddress(window.location.search);
+  dirtyState.remember(window.location.search);
   dirtyWatch.changed();
 };
 
@@ -202,6 +197,12 @@ if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(wind
 
 initPopovers();
 
+// Back can bring this page out of the back-forward cache after another page in the tab wrote
+// the tab's storage. Write this page's own address and clean groove again.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) dirtyState.remember(window.location.search);
+});
+
 // Initialize the notes/player once the page has fully loaded (matches the
 // original window.onload handler).
 window.addEventListener('load', function () {
@@ -209,5 +210,6 @@ window.addEventListener('load', function () {
   // The groove the page starts with, from a link or the default, is clean until it is edited.
   // A reloaded page keeps the clean groove it had, also signed out.
   dirtyState.markStart(baseline ?? editor.currentQuery());
+  dirtyState.remember(window.location.search);
   initPlaybackControls(utils);
 });

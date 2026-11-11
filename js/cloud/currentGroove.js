@@ -116,16 +116,28 @@ export function createCurrentGroove({
   let current = null;
   // The current groove of the last visit, until a list shows whether it is still current.
   let restoring = readRecord(uid);
+  // The record as this page knows it. Every write goes through store.
+  let record = restoring;
+  const store = (next) => {
+    record = next;
+    writeRecord(uid, next);
+  };
   // The grooves on screen are the whole library.
   let listFromServer = false;
 
   // A tempo raise is not an edit. The record follows it, so a reload still finds the groove.
   const stopRebase = dirtyState.onRebase((before, after) => {
     restoring = rebaseRecord(restoring, before, after);
-    const stored = readRecord(uid);
-    const next = rebaseRecord(stored, before, after);
-    if (next !== stored) writeRecord(uid, next);
+    const next = rebaseRecord(record, before, after);
+    if (next !== record) store(next);
   });
+
+  // Back can bring the page out of the back-forward cache after another page in the tab wrote
+  // its own record. Write this page's record again, or remove the other one.
+  const onPageShow = (event) => {
+    if (event.persisted) store(record);
+  };
+  window.addEventListener('pageshow', onPageShow);
 
   // Before the start, the editor has the default groove, so the decision waits for it.
   const stopStart = dirtyState.onStart(() => {
@@ -148,7 +160,7 @@ export function createCurrentGroove({
   function set(id, savedQuery) {
     restoring = null;
     current = { id, savedQuery, version: dirtyState.cleanVersion() };
-    writeRecord(uid, { id, savedQuery, editorQuery: editor.currentQuery() });
+    store({ id, savedQuery, editorQuery: editor.currentQuery() });
   }
 
   /**
@@ -174,7 +186,7 @@ export function createCurrentGroove({
         version: dirtyState.cleanVersion(),
       };
     } else {
-      writeRecord(uid, null);
+      store(null);
     }
     restoring = null;
     return decision === 'keep';
@@ -197,8 +209,7 @@ export function createCurrentGroove({
     if (!isClean) {
       // The edits are not saved: Update still saves them over this groove.
       current = { ...current, savedQuery };
-      const stored = readRecord(uid);
-      if (stored?.id === written.id) writeRecord(uid, { ...stored, savedQuery });
+      if (record?.id === written.id) store({ ...record, savedQuery });
       return 'edits';
     }
     const query = editor.currentQuery();
@@ -214,6 +225,7 @@ export function createCurrentGroove({
     stopRebase();
     stopStart();
     stopChange();
+    window.removeEventListener('pageshow', onPageShow);
   }
 
   return { open, set, restore, followRename, stop };

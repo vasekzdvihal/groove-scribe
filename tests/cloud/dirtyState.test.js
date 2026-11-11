@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   NOTHING_SAVED,
   createDirtyState,
-  rememberAddress,
   restoredBaseline,
   sameGroove,
   watchDirty,
@@ -262,17 +261,15 @@ describe('watchDirty', () => {
 });
 
 describe('the clean groove of the tab', () => {
-  // After a reload, the page shows the address the tab showed last.
-  function reload(storage, address) {
-    rememberAddress(address, storage);
-    return restoredBaseline(address, storage);
-  }
+  const OTHER = QUERY.replace('Tempo=95', 'Tempo=60');
 
   it('survives a reload, so a page with edits stays dirty', () => {
     const storage = createStorage();
     const state = createDirtyState(storage);
+    state.remember(QUERY);
     state.markStart(QUERY);
-    const baseline = reload(storage, EDITED);
+    state.remember(EDITED);
+    const baseline = restoredBaseline(EDITED, storage);
     expect(sameGroove(baseline, QUERY)).toBe(true);
     const after = createDirtyState(storage);
     after.markStart(baseline);
@@ -283,12 +280,13 @@ describe('the clean groove of the tab', () => {
   it('follows markClean, rebase and forget', () => {
     const storage = createStorage();
     const state = createDirtyState(storage);
-    state.markClean(QUERY);
     const faster = QUERY.replace('Tempo=95', 'Tempo=96');
+    state.remember(faster);
+    state.markClean(QUERY);
     state.rebase(QUERY, faster);
-    expect(sameGroove(reload(storage, faster), faster)).toBe(true);
+    expect(sameGroove(restoredBaseline(faster, storage), faster)).toBe(true);
     state.forget(faster);
-    expect(reload(storage, faster)).toBe(NOTHING_SAVED);
+    expect(restoredBaseline(faster, storage)).toBe(NOTHING_SAVED);
     const after = createDirtyState(storage);
     after.markStart(NOTHING_SAVED);
     expect(after.isDirty(faster)).toBe(true);
@@ -296,15 +294,49 @@ describe('the clean groove of the tab', () => {
 
   it('is not used for another address, such as a new link opened in the same tab', () => {
     const storage = createStorage();
-    createDirtyState(storage).markStart(QUERY);
-    rememberAddress(EDITED, storage);
-    expect(restoredBaseline(QUERY.replace('Tempo=95', 'Tempo=60'), storage)).toBeNull();
+    const state = createDirtyState(storage);
+    state.markStart(QUERY);
+    state.remember(EDITED);
+    expect(restoredBaseline(OTHER, storage)).toBeNull();
     // Flags around the groove do not count.
     expect(sameGroove(restoredBaseline(EDITED + '&Debug=1', storage), QUERY)).toBe(true);
   });
 
   it('is null in a tab that has none', () => {
     expect(restoredBaseline(QUERY, createStorage())).toBeNull();
+  });
+
+  // Page A, then page B in the same tab, then Back: the back-forward cache brings page A back
+  // with its own memory. Page B wrote the tab's storage last.
+  it('belongs to the page that wrote the address, after Back restores an older page', () => {
+    const storage = createStorage();
+    const pageA = createDirtyState(storage);
+    pageA.remember(QUERY);
+    pageA.markStart(QUERY);
+    const pageB = createDirtyState(storage);
+    pageB.remember(OTHER);
+    pageB.markStart(OTHER);
+    // Back to A, which shows again, then an edit and a reload.
+    pageA.remember(QUERY);
+    expect(sameGroove(restoredBaseline(QUERY, storage), QUERY)).toBe(true);
+    pageA.remember(EDITED);
+    const baseline = restoredBaseline(EDITED, storage);
+    expect(sameGroove(baseline, QUERY)).toBe(true);
+    expect(sameGroove(baseline, OTHER)).toBe(false);
+  });
+
+  it('writes the address and the clean groove as one item', () => {
+    const storage = createStorage();
+    const pageA = createDirtyState(storage);
+    pageA.remember(QUERY);
+    pageA.markStart(QUERY);
+    const pageB = createDirtyState(storage);
+    pageB.remember(OTHER);
+    pageB.markClean(OTHER);
+    // A rebase on A after Back writes A's own address with A's clean groove.
+    const faster = QUERY.replace('Tempo=95', 'Tempo=96');
+    pageA.rebase(QUERY, faster);
+    expect(restoredBaseline(OTHER, storage)).toBeNull();
   });
 
   it('works without storage, and with storage that throws', () => {
@@ -320,7 +352,7 @@ describe('the clean groove of the tab', () => {
     for (const storage of [null, throwing]) {
       const state = createDirtyState(storage);
       expect(() => state.markStart(QUERY)).not.toThrow();
-      expect(() => rememberAddress(QUERY, storage)).not.toThrow();
+      expect(() => state.remember(QUERY)).not.toThrow();
       expect(restoredBaseline(QUERY, storage)).toBeNull();
     }
   });
