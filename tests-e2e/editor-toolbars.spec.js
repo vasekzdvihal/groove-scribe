@@ -8,6 +8,40 @@ async function openEditor(page, query = GROOVE) {
   await page.waitForSelector('#svgTarget svg');
 }
 
+// Save is the button just before Share, with the same size, shape and colours.
+async function expectSaveLikeShare(page) {
+  const save = page.locator('#saveButton');
+  const share = page.locator('#shareSaveButton');
+  await expect(save).toBeVisible();
+  await save.scrollIntoViewIfNeeded();
+  await share.scrollIntoViewIfNeeded();
+  const [saveBox, shareBox] = [await save.boundingBox(), await share.boundingBox()];
+  expect(saveBox.y).toBe(shareBox.y);
+  expect(saveBox.height).toBe(shareBox.height);
+  expect(saveBox.x + saveBox.width).toBeLessThanOrEqual(shareBox.x);
+  expect(shareBox.x - (saveBox.x + saveBox.width)).toBeLessThanOrEqual(12);
+  // A label that is hidden on one is hidden on the other, so the widths match too.
+  expect(Math.abs(saveBox.width - shareBox.width)).toBeLessThanOrEqual(12);
+  const look = (locator) =>
+    locator.evaluate((node) => {
+      const style = getComputedStyle(node);
+      const label = node.querySelector('.tool-label');
+      return {
+        background: style.backgroundColor,
+        color: style.color,
+        radius: style.borderRadius,
+        weight: style.fontWeight,
+        label: label ? getComputedStyle(label).display : null,
+      };
+    });
+  expect(await look(save)).toEqual(await look(share));
+  const layoutWidth = await page.evaluate(() => document.documentElement.clientWidth);
+  for (const box of [saveBox, shareBox]) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(layoutWidth);
+  }
+}
+
 for (const [name, width, height] of [
   ['tablet landscape', 1180, 820],
   ['tablet portrait', 820, 1180],
@@ -45,6 +79,11 @@ for (const [name, width, height] of [
         };
       });
       expect(report).toEqual({ overflowing: [], small: [], outside: [], overlapping: [] });
+    });
+
+    test('Save sits next to Share and looks like it', async ({ page }) => {
+      await openEditor(page);
+      await expectSaveLikeShare(page);
     });
 
     test('the tempo controls do not overlap the click buttons', async ({ page }) => {
@@ -224,4 +263,44 @@ test('GrooveDB authoring mode still loads', async ({ page }) => {
   await openEditor(page, '?GDB_Author=1');
   await expect(page.locator('#permutationAnchor')).toBeHidden();
   expect(errors).toEqual([]);
+});
+
+// A phone lays out the page 980 px wide (see index.html). A narrow desktop window does not,
+// and neither does an iPad app in Slide Over or a narrow Split View.
+for (const [name, isMobile, width, height] of [
+  ['phone', true, 390, 844],
+  ['narrow window', false, 390, 844],
+  ['iPad Slide Over', false, 375, 1024],
+]) {
+  test.describe(name, () => {
+    test.use({ viewport: { width, height }, hasTouch: true, isMobile });
+
+    test('Save, Share and More can be reached', async ({ page }) => {
+      await openEditor(page);
+      await expectSaveLikeShare(page);
+      const more = page.locator('#moreButton');
+      await more.scrollIntoViewIfNeeded();
+      const box = await more.boundingBox();
+      const layoutWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(box.x + box.width).toBeLessThanOrEqual(layoutWidth);
+    });
+  });
+}
+
+test('Save has a name and a focus ring, and a fresh groove is not called saved', async ({
+  page,
+}) => {
+  await openEditor(page);
+  const save = page.locator('#saveButton');
+  await expect(save).toHaveAccessibleName('Save');
+  await expect(save).toHaveText('Save');
+  await save.focus();
+  const outline = await save.evaluate((node) => getComputedStyle(node).outlineStyle);
+  expect(outline).toBe('solid');
+});
+
+test('Save stays in view mode', async ({ page }) => {
+  await openEditor(page);
+  await page.click('#view-edit-switch');
+  await expect(page.locator('#saveButton')).toBeVisible();
 });

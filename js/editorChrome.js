@@ -95,3 +95,25 @@ export function initPlaybackControls(utils) {
   new MutationObserver(showSwing).observe(swingOutput, { childList: true, characterData: true });
   showSwing();
 }
+
+/**
+ * Show the Save button next to Share. It says Saved while the editor shows a saved groove
+ * without changes. A new groove is not saved anywhere, so it says Save.
+ *
+ * @param {function(): void} onClick
+ * @returns {function(boolean): void}  shows whether the groove is saved
+ */
+export function initSaveButton(onClick) {
+  const button = document.getElementById('saveButton');
+  const icon = button.querySelector('.fa');
+  const label = button.querySelector('.tool-label');
+  button.addEventListener('click', onClick);
+  button.hidden = false;
+  return function showSaved(saved) {
+    const text = saved ? 'Saved' : 'Save';
+    label.textContent = text;
+    // The label is hidden on a narrow screen, so the name must not come from it.
+    button.setAttribute('aria-label', text);
+    icon.className = saved ? 'fa fa-check' : 'fa fa-floppy-o';
+  };
+}

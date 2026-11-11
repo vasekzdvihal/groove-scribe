@@ -56,6 +56,32 @@ describe('GrooveUtils context menu handling', () => {
       expect(document.body.style.cursor).toBe('auto');
     });
 
+    // A pick within 100 ms of opening must not leave the close handler armed: it would close
+    // the next menu with the click that opens it.
+    it('a menu hidden within 100 ms does not arm the close handler later', () => {
+      document.body.innerHTML = '<div id="ctxMenu" style="display:none;"></div>';
+      const menu = document.getElementById('ctxMenu');
+
+      gu.showContextMenu(menu);
+      gu.hideContextMenu(menu);
+      vi.advanceTimersByTime(100);
+
+      expect(document.onclick).toBeFalsy();
+      expect(document.body.style.cursor).toBe('auto');
+    });
+
+    it('a second menu shown within 100 ms arms the close handler once', () => {
+      document.body.innerHTML =
+        '<div id="menuA" style="display:none;"></div><div id="menuB" style="display:none;"></div>';
+      gu.showContextMenu(document.getElementById('menuA'));
+      vi.advanceTimersByTime(50);
+      gu.showContextMenu(document.getElementById('menuB'));
+      vi.advanceTimersByTime(50);
+      expect(document.onclick).toBeFalsy();
+      vi.advanceTimersByTime(50);
+      expect(typeof document.onclick).toBe('function');
+    });
+
     it('closes a previously visible menu before showing a new one', () => {
       document.body.innerHTML =
         '<div id="menuA" style="display:none;"></div><div id="menuB" style="display:none;"></div>';

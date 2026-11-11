@@ -160,6 +160,14 @@
   flex: 1;
 }
 
+/* Buttons that stay together when a bar spreads out its items. */
+.tool-group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: inherit;
+}
+
 #advancedEditSlot:empty {
   display: none;
 }
@@ -683,6 +691,11 @@
 
   #PlaybackBar {
     justify-content: space-between;
+    gap: 6px;
+  }
+
+  #PlaybackBar .tool-sep {
+    margin: 0 2px;
   }
 
   #ToolBar .tool-sep {
@@ -718,4 +731,19 @@
   left: 12px;
   bottom: 100%;
   margin-bottom: 8px;
+}
+
+/* Narrow windows. A phone lays out 980 px wide (see index.html), so this is a narrow desktop
+   window, or an iPad app in Slide Over or a narrow Split View. The playback bar scrolls sideways
+   like the tool bar, so Save, Share and More can be reached. The failed-sound button is fixed to the screen, because the scrolling bar would
+   clip it. This block comes after the rule above, which it overrides. */
+@media (max-width: 600px) {
+  #PlaybackBar {
+    overflow-x: auto;
+  }
+
+  #PlaybackBar .soundRetryNote {
+    position: fixed;
+    bottom: var(--bar-playback-height);
+  }
 }

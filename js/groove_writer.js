@@ -2147,14 +2147,26 @@ function GrooveWriter() {
     updateCurrentURLWithHistory(root.AddFullURLToUndoStack);
   };
 
+  // The page calls this with the URL before and after a change that is not an edit, such as
+  // the tempo that the metronome raises. The editor page uses it to keep unsaved-edit
+  // tracking right.
+  root.onChangeWithoutEdit = null;
+  // Called after each change of the URL, an edit or not, such as an Undo. The editor page uses
+  // it to tell whether the groove has unsaved edits.
+  root.onUrlChange = null;
+  var class_last_page_url = null;
+
   // the same, for a change that is not an edit: the newest history step shows it
   root.updateCurrentURLWithoutNewUndoStep = function () {
+    var before = class_last_page_url;
     updateCurrentURLWithHistory(root.ReplaceNewestUndoStep);
+    if (root.onChangeWithoutEdit) root.onChangeWithoutEdit(before, class_last_page_url);
   };
 
   function updateCurrentURLWithHistory(recordInHistory) {
     var newURL = get_FullURLForPage();
     var newTitle = false;
+    class_last_page_url = newURL;
 
     recordInHistory(newURL);
 
@@ -2185,6 +2197,8 @@ function GrooveWriter() {
         searchDataEle.innerHTML = '<p style="margin-left: 10px;"><b>' + searchURL + '</b><p>';
       }
     }
+
+    if (root.onUrlChange) root.onUrlChange();
   }
 
   function generate_ABC(renderWidth) {
@@ -3768,6 +3782,12 @@ function GrooveWriter() {
 
     updateSheetMusic();
   }
+
+  // Name the groove in the top bar while its URL has no title, as loadNewGroove does.
+  root.setNameWhenUntitled = function (name) {
+    grooveNameWhenUntitled = name || '';
+    showGrooveTitle();
+  };
 
   // nameWhenUntitled names the groove in the top bar when its URL has no title.
   root.loadNewGroove = function (encodedURLData, nameWhenUntitled) {

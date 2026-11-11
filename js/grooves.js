@@ -75,10 +75,11 @@ if (typeof grooves === 'undefined') var grooves = {};
         HTML += '<li class="grooveListHeaderLI">' + key + '</li>\n';
         HTML += root.arrayAsHTMLList(arrayToPrint[key]);
       } else {
+        // The editor handles the click, so it can ask before it drops unsaved edits.
         HTML +=
-          '<li class="grooveListLI" onClick="myGrooveWriter.loadNewGroove(\'' +
-          arrayToPrint[key] +
-          '\')">' +
+          '<li class="grooveListLI" data-groove="' +
+          arrayToPrint[key].replace(/&/g, '&amp;').replace(/"/g, '&quot;') +
+          '">' +
           key +
           '</li>\n';
       }

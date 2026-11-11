@@ -178,6 +178,46 @@ describe('grooves', () => {
     );
   });
 
+  describe('updating the query and title', () => {
+    const update = (uid, fields) =>
+      updateDoc(doc(db(uid), 'grooves/g'), {
+        query: '?H=|xx|',
+        title: 'Beat 2',
+        updatedAt: serverTimestamp(),
+        ...fields,
+      });
+
+    beforeEach(() =>
+      seed('grooves/g', { ownerId: 'ana', lessonId: null, title: 'Beat', query: '?H=|x|' })
+    );
+
+    it('lets the owner update a groove', async () => {
+      await assertSucceeds(update('ana'));
+    });
+
+    it('blocks another user', async () => {
+      await assertFails(update('bob'));
+      await assertFails(update(null));
+    });
+
+    it('blocks a change of ownerId or createdAt', async () => {
+      await assertFails(update('ana', { ownerId: 'bob' }));
+      await assertFails(update('ana', { createdAt: serverTimestamp() }));
+    });
+
+    it('rejects an invalid query, title or timestamp', async () => {
+      await assertFails(update('ana', { query: 'H=|xx|' }));
+      await assertFails(update('ana', { query: '?' + 'x'.repeat(8000) }));
+      await assertFails(update('ana', { title: 'x'.repeat(201) }));
+      await assertFails(update('ana', { updatedAt: OLD }));
+    });
+
+    it('rejects an extra key and a title that is not a string', async () => {
+      await assertFails(update('ana', { extra: 1 }));
+      await assertFails(update('ana', { title: 5 }));
+    });
+  });
+
   it('blocks moving a groove into a missing or foreign lesson', async () => {
     await seed('lessons/theirs', { ownerId: 'bob', name: 'Week 1' });
     await seed('grooves/g', { ownerId: 'ana', lessonId: null, title: 'Beat', query: '?H=|x|' });

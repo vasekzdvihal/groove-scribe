@@ -2,6 +2,28 @@ import { expect, test } from '@playwright/test';
 
 const QUERY = '?TimeSig=4/4&Div=16&Title=Paradiddle&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
 const EDITOR = '/index.html?emulator=1';
+const DOCUMENTS =
+  'http://127.0.0.1:8080/v1/projects/demo-groovescribe/databases/(default)/documents';
+const OWNER = { Authorization: 'Bearer owner' };
+
+const PENDING_KEY = 'grooveScribe.pendingWrites';
+
+// The flag goes away when the server has answered, also when no label was on screen.
+const synced = (page) =>
+  page.waitForFunction((key) => localStorage.getItem(key) === null, PENDING_KEY);
+
+// Read a collection from the emulator as the owner, past the rules.
+async function savedDocs(page, collection) {
+  const response = await page.request.get(`${DOCUMENTS}/${collection}`, { headers: OWNER });
+  const { documents = [] } = await response.json();
+  return documents.map((item) => ({ id: item.name.split('/').pop(), ...item.fields }));
+}
+
+// The panel draws a change before the server has it. Read the server after the sync.
+async function syncedDocs(page, collection) {
+  await synced(page);
+  return savedDocs(page, collection);
+}
 
 async function clearEmulators(request) {
   await request.delete(
@@ -348,6 +370,537 @@ test('the top bar shows the library name of a groove without a title', async ({ 
   await expect(page.locator('#tuneTitle')).toHaveValue('');
 });
 
+test.describe('unsaved edits', () => {
+  const OTHER =
+    '?TimeSig=4/4&Div=8&Title=Rock&Tempo=100&Measures=1&H=|xxxxxxxx|&S=|--O---O-|&K=|o---o---|';
+  const discardDialog = (page) => page.getByRole('dialog', { name: 'Discard your changes?' });
+  const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
+
+  // The slide-over panel covers the grid, so close it for the edit.
+  async function editNote(page) {
+    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.click('#snare4');
+    await openPanel(page);
+  }
+
+  test('picking a groove with edits asks first, and Keep editing keeps them', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await editNote(page);
+    const edited = page.url();
+
+    await grooveButton(page, 'Paradiddle').click();
+    const dialog = discardDialog(page);
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Discard changes' })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    expect(page.url()).toBe(edited);
+
+    // Escape means Keep editing, and it leaves the panel open.
+    await grooveButton(page, 'Paradiddle').click();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    expect(page.url()).toBe(edited);
+
+    await grooveButton(page, 'Paradiddle').click();
+    await dialog.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    await expect(page.locator('#libraryPanel')).toBeHidden();
+  });
+
+  test('picking a groove without edits does not ask', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await addLink(page, OTHER, 'Rock');
+    await grooveButton(page, 'Paradiddle').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    // A picked groove is clean until it is edited.
+    await openPanel(page);
+    await grooveButton(page, 'Rock').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    await expect(discardDialog(page)).toBeHidden();
+  });
+
+  test('a groove from a shared link is clean until it is edited', async ({ page }) => {
+    await openEditor(page, EDITOR + '&' + QUERY.slice(1));
+    await openPanel(page);
+    await signIn(page, 'ana@example.com');
+    await addLink(page, OTHER, 'Rock');
+    await grooveButton(page, 'Rock').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    await expect(discardDialog(page)).toBeHidden();
+  });
+
+  test('a saved groove is clean', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, OTHER, 'Rock');
+    await editNote(page);
+    await page.locator('summary', { hasText: 'Save current groove' }).click();
+    await page.locator('#lpSaveTitle').fill('Edited');
+    await page.getByRole('button', { name: 'Save groove' }).click();
+    await expect(grooveButton(page, 'Edited')).toHaveAttribute('aria-current', 'true');
+    // The editor shows the saved name. The default groove has no title in its address, so the
+    // name shows in the top bar only.
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Edited');
+    await expect(page.locator('#tuneTitle')).toHaveValue('');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+    await grooveButton(page, 'Rock').click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    await expect(discardDialog(page)).toBeHidden();
+  });
+
+  test('a page with edits asks before it leaves, and a clean page does not', async ({ page }) => {
+    const dialogs = [];
+    page.on('dialog', (dialog) => {
+      dialogs.push(dialog.type());
+      dialog.accept();
+    });
+    await openEditor(page);
+    await page.click('#snare4');
+    await openEditor(page);
+    expect(dialogs).toEqual(['beforeunload']);
+
+    // An edit that is undone leaves the page clean.
+    await page.click('#snare4');
+    await page.click('#undoButton');
+    await openEditor(page);
+    expect(dialogs).toEqual(['beforeunload']);
+  });
+});
+
+test.describe('updating a saved groove', () => {
+  const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
+  const saveTool = (page) => page.locator('summary', { hasText: 'Save current groove' });
+  const updateButton = (page) => page.getByRole('button', { name: 'Update groove' });
+  const saveAsNewButton = (page) => page.getByRole('button', { name: 'Save as new' });
+  const plainSaveButton = (page) => page.getByRole('button', { name: 'Save groove' });
+  const storedQueries = async (page) =>
+    (await syncedDocs(page, 'grooves')).map((item) => [item.id, item.query.stringValue]);
+
+  // The slide-over panel covers the grid, so it closes for the edit.
+  async function editNote(page, note = '#snare4') {
+    // A pick closes the panel by itself.
+    if (await page.locator('#libraryPanel.open').count()) {
+      await page.getByRole('button', { name: 'Close library' }).click();
+    }
+    await page.click(note);
+    await openPanel(page);
+  }
+
+  // The editor writes the groove into the address. Keep the emulator flag for the reload.
+  const reload = (page) => openEditor(page, EDITOR + '&' + new URL(page.url()).search.slice(1));
+
+  // The editor shows the title in the groove's query, which can differ from the library name.
+  async function pickSaved(page, title, editorTitle = title) {
+    await grooveButton(page, title).click();
+    await expect(page.locator('#tuneTitle')).toHaveValue(editorTitle);
+  }
+
+  test('Update changes the open groove, and Save as new adds one', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    const [[id, savedQuery]] = await storedQueries(page);
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+
+    await saveTool(page).click();
+    await expect(page.locator('#lpSaveTitle')).toHaveValue('Paradiddle');
+    await expect(updateButton(page)).toHaveClass(/lp-primary/);
+    await expect(saveAsNewButton(page)).not.toHaveClass(/lp-primary/);
+    await expect(plainSaveButton(page)).toHaveCount(0);
+    await updateButton(page).click();
+    await expect(updateButton(page)).toBeHidden();
+    await expect(grooveButton(page, 'Paradiddle')).toHaveAttribute('aria-current', 'true');
+    await expect.poll(() => storedQueries(page)).not.toEqual([[id, savedQuery]]);
+    const [[updatedId, updatedQuery]] = await storedQueries(page);
+    expect(updatedId).toBe(id);
+    expect(await storedQueries(page)).toHaveLength(1);
+
+    // The update saved the edits, so the page is clean and the form offers the plain save.
+    await saveTool(page).click();
+    await expect(plainSaveButton(page)).toBeVisible();
+    await expect(updateButton(page)).toHaveCount(0);
+    await saveTool(page).click();
+
+    await editNote(page, '#snare8');
+    await saveTool(page).click();
+    await page.locator('#lpSaveTitle').fill('Copy');
+    await saveAsNewButton(page).click();
+    await expect(grooveButton(page, 'Copy')).toHaveAttribute('aria-current', 'true');
+    await expect(grooveButton(page, 'Paradiddle')).not.toHaveAttribute('aria-current', 'true');
+    await expect.poll(async () => (await storedQueries(page)).length).toBe(2);
+    expect(await storedQueries(page)).toContainEqual([id, updatedQuery]);
+  });
+
+  test('a save with a typed title puts it in the editor', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await saveTool(page).click();
+    await page.locator('#lpSaveTitle').fill('Typed name');
+    await saveAsNewButton(page).click();
+    await expect(grooveButton(page, 'Typed name')).toHaveAttribute('aria-current', 'true');
+    await expect(page.locator('#tuneTitle')).toHaveValue('Typed name');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+  });
+
+  test('Update keeps the library name, not the title in the editor', async ({ page }) => {
+    await signedInPanel(page);
+    // The library name goes into the stored query too, so a pick shows it.
+    await addLink(page, QUERY, 'Library name');
+    await pickSaved(page, 'Library name');
+    // The title field sits in a menu, so set it in the page.
+    await page.evaluate(() => {
+      const title = document.getElementById('tuneTitle');
+      title.value = 'Editor name';
+      title.dispatchEvent(new Event('change'));
+    });
+    await openPanel(page);
+    await saveTool(page).click();
+    await expect(page.locator('#lpSaveTitle')).toHaveValue('Library name');
+    await updateButton(page).click();
+    await expect(updateButton(page)).toBeHidden();
+    // The editor shows the library name again, and the groove is saved.
+    await expect(page.locator('#tuneTitle')).toHaveValue('Library name');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+    // The title of the document and the Title in its query agree.
+    await expect
+      .poll(async () =>
+        (await syncedDocs(page, 'grooves')).map((item) => [
+          item.title.stringValue,
+          new URLSearchParams(item.query.stringValue).get('Title'),
+        ])
+      )
+      .toEqual([['Library name', 'Library name']]);
+  });
+
+  test('Update also moves the groove to the lesson in the form', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await createLesson(page, 'Week 1');
+    await page.locator('.lp-lesson summary', { hasText: 'No lesson' }).click();
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await saveTool(page).click();
+    // The form starts on the groove's own lesson.
+    await expect(page.locator('#lpSaveLesson')).toHaveValue('');
+    await page.locator('#lpSaveLesson').selectOption({ label: 'Week 1' });
+    const [[id]] = await storedQueries(page);
+    await updateButton(page).click();
+    await expect(updateButton(page)).toBeHidden();
+    const [lesson] = await syncedDocs(page, 'lessons');
+    await expect
+      .poll(async () =>
+        (await savedDocs(page, 'grooves')).map((item) => [item.id, item.lessonId.stringValue])
+      )
+      .toEqual([[id, lesson.id]]);
+  });
+
+  test('the highlight goes when another groove is loaded', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await page.click('#groovesAnchor');
+    await page
+      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
+      .first()
+      .click();
+    await openPanel(page);
+    // A change draws the list again.
+    await createLesson(page, 'Week 1');
+    // The new lesson is open, so the groove's own section is closed.
+    const row = page.locator('.lp-open', { hasText: 'Paradiddle' });
+    await expect(row).toHaveCount(1);
+    await expect(row).not.toHaveAttribute('aria-current', 'true');
+  });
+
+  test('Undo with the form open takes Update away', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await saveTool(page).click();
+    await expect(updateButton(page)).toBeVisible();
+    // The slide-over covers the button, so click it in the page.
+    await page.evaluate(() => document.getElementById('undoButton').click());
+    await expect(updateButton(page)).toHaveCount(0);
+    await expect(plainSaveButton(page)).toBeVisible();
+  });
+
+  test('Update with no changes left says so', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await saveTool(page).click();
+    // Undo and Update in one task, before the form follows the Undo.
+    await page.evaluate(() => {
+      document.getElementById('undoButton').click();
+      document.getElementById('lpUpdate').click();
+    });
+    await expect(page.getByRole('alert')).toHaveText(
+      'Nothing to update. The groove has no changes.'
+    );
+  });
+
+  test('typing right after the form opens is kept', async ({ page }) => {
+    await signedInPanel(page);
+    await page.evaluate(() => {
+      document.querySelector('#lpSaveTool summary').click();
+      document.getElementById('lpSaveTitle').value = 'Typed';
+    });
+    // Let the toggle event of the form run.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    await expect(page.locator('#lpSaveTitle')).toHaveValue('Typed');
+  });
+
+  test('a change on another device turns Update off', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    const [[id]] = await storedQueries(page);
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await page.request.patch(`${DOCUMENTS}/grooves/${id}?updateMask.fieldPaths=query`, {
+      headers: OWNER,
+      data: { fields: { query: { stringValue: QUERY.replace('Tempo=95', 'Tempo=90') } } },
+    });
+    // A write that syncs makes the panel read the library from the server.
+    await createLesson(page, 'Week 1');
+    await synced(page);
+    await expect(async () => {
+      if (await page.locator('#lpSaveTool[open]').count()) await saveTool(page).click();
+      await saveTool(page).click();
+      await expect(plainSaveButton(page)).toBeVisible({ timeout: 500 });
+    }).toPass();
+    await expect(updateButton(page)).toHaveCount(0);
+  });
+
+  test('Update does not write over a change from another device', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    const [[id]] = await storedQueries(page);
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    const otherDevice = QUERY.replace('Tempo=95', 'Tempo=90');
+    await page.request.patch(`${DOCUMENTS}/grooves/${id}?updateMask.fieldPaths=query`, {
+      headers: OWNER,
+      data: { fields: { query: { stringValue: otherDevice } } },
+    });
+    await saveTool(page).click();
+    await updateButton(page).click();
+    await expect(page.getByRole('alert')).toHaveText(
+      'This groove changed or was deleted on another device. Save groove keeps your changes as a new groove.'
+    );
+    await expect(updateButton(page)).toHaveCount(0);
+    expect(await storedQueries(page)).toEqual([[id, otherDevice]]);
+    await plainSaveButton(page).click();
+    await expect.poll(async () => (await storedQueries(page)).length).toBe(2);
+  });
+
+  test('a panel that opens before the page has loaded keeps the restored groove', async ({
+    page,
+  }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await openEditor(page, EDITOR + '&' + new URL(page.url()).search.slice(1) + '#library');
+    await expect(grooveButton(page, 'Paradiddle')).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('with no saved groove open, the form has only the plain save', async ({ page }) => {
+    await signedInPanel(page);
+    await editNote(page);
+    await saveTool(page).click();
+    await expect(plainSaveButton(page)).toHaveClass(/lp-primary/);
+    await expect(updateButton(page)).toHaveCount(0);
+    await expect(saveAsNewButton(page)).toHaveCount(0);
+  });
+
+  test('a groove from the Grooves menu is not the saved groove', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await page.click('#groovesAnchor');
+    await page
+      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
+      .first()
+      .click();
+    await editNote(page);
+    await saveTool(page).click();
+    await expect(plainSaveButton(page)).toBeVisible();
+    await expect(updateButton(page)).toHaveCount(0);
+  });
+
+  test('after a reload the open groove is still current', async ({ page }) => {
+    page.on('dialog', (dialog) => dialog.accept());
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await reload(page);
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toHaveAttribute('aria-current', 'true');
+    await editNote(page);
+    await saveTool(page).click();
+    await expect(updateButton(page)).toBeVisible();
+
+    // The address now holds the edits. The tab kept its clean groove, so after a reload the
+    // saved groove is still open with the edits, and Update saves them.
+    await reload(page);
+    await expect(page.locator('#saveButton')).toHaveText('Save');
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toHaveAttribute('aria-current', 'true');
+    await saveTool(page).click();
+    await expect(updateButton(page)).toBeVisible();
+    await updateButton(page).click();
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+  });
+
+  // Rename is in the ⋯ menu of the row. The browser asks for the name.
+  async function renameSaved(page, title, newTitle) {
+    page.once('dialog', (dialog) => dialog.accept(newTitle));
+    await page.getByRole('button', { name: `Options for ${title}` }).click();
+    await page.getByRole('button', { name: 'Rename', exact: true }).click();
+    await expect(grooveButton(page, newTitle)).toBeVisible();
+  }
+
+  test('renaming the open groove renames it in the editor, and it stays saved', async ({
+    page,
+  }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await pickSaved(page, 'Paradiddle');
+    await openPanel(page);
+    await renameSaved(page, 'Paradiddle', 'Single paradiddle');
+    await expect(page.locator('#tuneTitle')).toHaveValue('Single paradiddle');
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Single paradiddle');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+    await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
+    // The library has the new name in the query too, so another device shows it.
+    const [[, stored]] = await storedQueries(page);
+    expect(stored).toContain('Title=Single%20paradiddle');
+    // The reload finds the same groove, with the new name in the address.
+    await reload(page);
+    await expect(page.locator('#tuneTitle')).toHaveValue('Single paradiddle');
+    await openPanel(page);
+    await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
+    // A later pick shows the new name.
+    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.click('#groovesAnchor');
+    await page
+      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
+      .first()
+      .click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+    await openPanel(page);
+    await pickSaved(page, 'Single paradiddle');
+  });
+
+  test('renaming an open groove without a title changes only the top bar', async ({ page }) => {
+    const untitled = '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
+    await signedInPanel(page);
+    await addLink(page, untitled, 'No title');
+    await pickSaved(page, 'No title', '');
+    const address = page.url();
+    await openPanel(page);
+    await renameSaved(page, 'No title', 'Named');
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Named');
+    await expect(page.locator('#tuneTitle')).toHaveValue('');
+    expect(page.url()).toBe(address);
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+  });
+
+  test('a groove picked before the page has loaded opens when it has', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await synced(page);
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    // The logo holds the load event, as a slow network can.
+    let release;
+    const held = new Promise((resolve) => (release = resolve));
+    await page.route('**/GScribe_Logo_word_stack.svg', async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto(EDITOR + '#library', { waitUntil: 'commit' });
+    await grooveButton(page, 'Paradiddle').click();
+    expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
+    release();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    await expect(page.locator('#saveButton')).toHaveText('Saved');
+    await openPanel(page);
+    await expect(grooveButton(page, 'Paradiddle')).toHaveAttribute('aria-current', 'true');
+    expect(errors).toEqual([]);
+  });
+});
+
+test.describe('the Save button', () => {
+  const saveButton = (page) => page.locator('#saveButton');
+  const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
+
+  test('signed out, it opens sign-in and loads Firebase only then', async ({ page }) => {
+    const sdkRequests = [];
+    page.on('request', (request) => {
+      if (request.url().includes('vendor/firebase.js')) sdkRequests.push(request.url());
+    });
+    await openEditor(page);
+    await expect(saveButton(page)).toBeVisible();
+    expect(sdkRequests).toEqual([]);
+
+    await saveButton(page).click();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeFocused();
+    expect(sdkRequests).toHaveLength(1);
+  });
+
+  test('signed in, it opens the panel at the save form, and the form saves', async ({ page }) => {
+    await signedInPanel(page);
+    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.click('#snare4');
+    await saveButton(page).click();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    await expect(page.locator('#lpSaveTool')).toHaveAttribute('open', '');
+    await expect(page.locator('#lpSaveTool summary')).toBeFocused();
+    await page.locator('#lpSaveTitle').fill('Mine');
+    await page.getByRole('button', { name: 'Save groove' }).click();
+    await expect(grooveButton(page, 'Mine')).toHaveAttribute('aria-current', 'true');
+    await expect(saveButton(page)).toHaveText('Saved');
+  });
+
+  test('it says Saved only while the editor shows an unchanged saved groove', async ({ page }) => {
+    await signedInPanel(page);
+    // The default groove is not saved anywhere.
+    await expect(saveButton(page)).toHaveText('Save');
+    await addLink(page, QUERY, 'Paradiddle');
+    await expect(saveButton(page)).toHaveText('Save');
+
+    await grooveButton(page, 'Paradiddle').click();
+    await expect(saveButton(page)).toHaveText('Saved');
+    await expect(saveButton(page)).toHaveAccessibleName('Saved');
+    await page.click('#snare4');
+    await expect(saveButton(page)).toHaveText('Save');
+    await expect(saveButton(page)).toHaveAccessibleName('Save');
+    await page.click('#undoButton');
+    await expect(saveButton(page)).toHaveText('Saved');
+
+    // A built-in groove is not the saved groove.
+    await page.click('#groovesAnchor');
+    await page
+      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
+      .first()
+      .click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+    await expect(saveButton(page)).toHaveText('Save');
+  });
+});
+
 test.describe('without a network', () => {
   // ?sw=1 turns the service worker on for localhost. A real reload then comes up with no
   // network, the way it does for a user in a rehearsal room. A page that stays open would
@@ -356,9 +909,6 @@ test.describe('without a network', () => {
   const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
   const FIRESTORE = /127\.0\.0\.1:8080/;
   const AUTH = /127\.0\.0\.1:9099/;
-  const DOCUMENTS =
-    'http://127.0.0.1:8080/v1/projects/demo-groovescribe/databases/(default)/documents';
-  const OWNER = { Authorization: 'Bearer owner' };
 
   const retryButton = (page) => page.getByRole('button', { name: 'Retry' });
   const grooveButton = (page, title) => page.getByRole('button', { name: title, exact: true });
@@ -582,16 +1132,27 @@ test.describe('without a network', () => {
   test('the profile is saved after a server answer and not from the cache', async ({ page }) => {
     await patchLibrary(page, (source) =>
       countListAnswers(source).replace(
-        'async saveProfile({ displayName, photoURL }) {',
-        'async saveProfile({ displayName, photoURL }) {\n' +
+        'else await sdk.setDoc(ref, { ...fields, createdAt: now() });',
+        'else await sdk.setDoc(ref, { ...fields, createdAt: now() });\n' +
           'window.saveProfileCalls = (window.saveProfileCalls ?? 0) + 1;'
       )
     );
     const profileCalls = () => page.evaluate(() => window.saveProfileCalls ?? 0);
+    // A failure must name its cause: a memory cache, which happens when the storage probe
+    // times out, keeps queued writes only in the page and makes leaving ask first.
+    const logs = [];
+    const dialogs = [];
+    page.on('console', (line) => logs.push(line.text()));
+    page.on('dialog', (dialog) => {
+      dialogs.push(`${dialog.type()}: ${dialog.message()}`);
+      dialog.accept();
+    });
 
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
-    await expect.poll(profileCalls).toBeGreaterThan(0); // the counter works
+    await synced(page);
+    // The counter works, and the profile write is done, so nothing waits when Firestore goes.
+    await expect.poll(profileCalls).toBeGreaterThan(0);
 
     await page.route(FIRESTORE, (route) => route.abort());
     await openEditor(page);
@@ -599,6 +1160,8 @@ test.describe('without a network', () => {
     await expect(grooveButton(page, 'Paradiddle')).toBeVisible();
     await listsAnswered(page);
     expect(await profileCalls()).toBe(0);
+    expect(logs.filter((line) => line.includes('Falling back to memory cache'))).toEqual([]);
+    expect(dialogs).toEqual([]);
   });
 
   test('a profile save that fails shows no error over the library', async ({ page }) => {
@@ -725,26 +1288,14 @@ test.describe('without a network', () => {
   test.describe('offline writes', () => {
     const WILL_SYNC = 'Will sync';
     const KEEP_TAB = 'Keep this tab open until online';
-    const REFUSED = 'A change could not be saved. The library shows what is saved.';
     const refusedSave = (title) =>
       `"${title}" could not be saved. The library shows what is saved.`;
-    const PENDING_KEY = 'grooveScribe.pendingWrites';
 
     const syncLabel = (page, title) =>
       page.locator('.lp-groove', { has: grooveButton(page, title) }).locator('.lp-sync');
     const alert = (page) => page.getByRole('alert');
     const goOffline = (page) => page.context().setOffline(true);
     const goOnline = (page) => page.context().setOffline(false);
-
-    async function savedDocs(page, collection) {
-      const response = await page.request.get(`${DOCUMENTS}/${collection}`, { headers: OWNER });
-      const { documents = [] } = await response.json();
-      return documents.map((item) => ({ id: item.name.split('/').pop(), ...item.fields }));
-    }
-
-    // The flag goes away when the server has answered, also when no label was on screen.
-    const synced = (page) =>
-      page.waitForFunction((key) => localStorage.getItem(key) === null, PENDING_KEY);
 
     const changeOwner = (page, path) =>
       page.request.patch(`${DOCUMENTS}/${path}?updateMask.fieldPaths=ownerId`, {
@@ -883,6 +1434,79 @@ test.describe('without a network', () => {
       expect(await savedDocs(page, 'grooves')).toEqual([]);
     });
 
+    test('a refused save of the current groove leaves the page dirty', async ({ page }) => {
+      await signedInPanel(page);
+      await createLesson(page, 'Week 1');
+      await synced(page);
+      await page.getByRole('button', { name: 'Close library' }).click();
+      await page.click('#snare4');
+      await openPanel(page);
+      await goOffline(page);
+      await page.locator('summary', { hasText: 'Save current groove' }).click();
+      await page.locator('#lpSaveTitle').fill('Refused');
+      await page.getByRole('button', { name: 'Save groove' }).click();
+      await expect(syncLabel(page, 'Refused')).toHaveText(WILL_SYNC);
+      const [lesson] = await savedDocs(page, 'lessons');
+      await changeOwner(page, `lessons/${lesson.id}`);
+
+      await goOnline(page);
+      await expect(alert(page)).toHaveText(refusedSave('Refused'));
+      const dialogs = [];
+      page.on('dialog', (dialog) => {
+        dialogs.push(dialog.type());
+        dialog.accept();
+      });
+      await openEditor(page);
+      expect(dialogs).toEqual(['beforeunload']);
+    });
+
+    // Pick the saved groove, edit it, and press Update while offline.
+    async function updateOffline(page, title) {
+      await grooveButton(page, title).click();
+      await expect(page.locator('#tuneTitle')).toHaveValue(title);
+      await page.click('#snare4');
+      await openPanel(page);
+      await goOffline(page);
+      await page.locator('summary', { hasText: 'Save current groove' }).click();
+      await page.getByRole('button', { name: 'Update groove' }).click();
+      await expect(syncLabel(page, title)).toHaveText(WILL_SYNC);
+    }
+
+    test('an update shows at once with the label, and syncs when back online', async ({ page }) => {
+      await signedInPanel(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      await synced(page);
+      const [before] = await savedDocs(page, 'grooves');
+      await updateOffline(page, 'Paradiddle');
+      await expect(alert(page)).toBeHidden();
+
+      await goOnline(page);
+      await expect(syncLabel(page, 'Paradiddle')).toHaveCount(0);
+      const after = await savedDocs(page, 'grooves');
+      expect(after.map((item) => item.id)).toEqual([before.id]);
+      expect(after[0].query.stringValue).not.toBe(before.query.stringValue);
+      expect(after[0].createdAt).toEqual(before.createdAt);
+    });
+
+    test('a refused update names the groove and leaves the page dirty', async ({ page }) => {
+      await signedInPanel(page);
+      await addLink(page, QUERY, 'Paradiddle');
+      await synced(page);
+      const [groove] = await savedDocs(page, 'grooves');
+      await updateOffline(page, 'Paradiddle');
+      await changeOwner(page, `grooves/${groove.id}`);
+
+      await goOnline(page);
+      await expect(alert(page)).toHaveText(refusedSave('Paradiddle'));
+      const dialogs = [];
+      page.on('dialog', (dialog) => {
+        dialogs.push(dialog.type());
+        dialog.accept();
+      });
+      await openEditor(page);
+      expect(dialogs).toEqual(['beforeunload']);
+    });
+
     test('a refused delete says so', async ({ page }) => {
       await signedInPanel(page);
       await addLink(page, QUERY, 'Paradiddle');
@@ -893,11 +1517,14 @@ test.describe('without a network', () => {
       await page.getByRole('button', { name: 'Delete', exact: true }).click();
       await expect(grooveButton(page, 'Paradiddle')).toHaveCount(0);
 
-      // A delete leaves no row to compare, so only the write promise can report it.
+      // A delete leaves no row to compare, so only the write promise can report it. It names
+      // the groove.
       const [saved] = await savedDocs(page, 'grooves');
       await changeOwner(page, `grooves/${saved.id}`);
       await goOnline(page);
-      await expect(alert(page)).toHaveText(REFUSED);
+      await expect(alert(page)).toHaveText(
+        '"Paradiddle" could not be saved. The library shows what is saved.'
+      );
     });
 
     test('a queued delete keeps the flag until the server has it', async ({ page }) => {
@@ -1346,6 +1973,83 @@ test.describe('docked on a wide screen', () => {
     await page.keyboard.press(' ');
     await page.waitForFunction(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
     await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('picking another groove fills an open save form for it', async ({ page }) => {
+    const ROCK =
+      '?TimeSig=4/4&Div=8&Title=Rock&Tempo=100&Measures=1&H=|xxxxxxxx|&S=|--O---O-|&K=|o---o---|';
+    const saveTool = page.locator('summary', { hasText: 'Save current groove' });
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await createLesson(page, 'Week 1');
+    await addLink(page, ROCK, 'Rock');
+    const [lesson] = await syncedDocs(page, 'lessons');
+    await page.locator('.lp-lesson summary', { hasText: 'No lesson' }).click();
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    await page.click('#snare4');
+    await saveTool.click();
+    await expect(page.locator('#lpUpdateHint')).toContainText('"Paradiddle"');
+
+    await page.locator('.lp-lesson summary', { hasText: 'Week 1' }).click();
+    await page.getByRole('button', { name: 'Rock', exact: true }).click();
+    await page.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Rock');
+    // The form is still open, and it is now about Rock.
+    await expect(page.locator('#lpSaveTitle')).toHaveValue('Rock');
+    await expect(page.locator('#lpSaveLesson')).toHaveValue(lesson.id);
+    await expect(page.locator('#lpUpdateHint')).toHaveText('No changes. Save groove makes a copy.');
+
+    await page.click('#snare4');
+    await saveTool.click();
+    await saveTool.click();
+    await expect(page.locator('#lpUpdateHint')).toContainText('"Rock"');
+    await expect(page.locator('#lpSaveLesson')).toHaveValue(lesson.id);
+  });
+
+  test('picking a groove with edits asks first in the docked panel', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await page.click('#snare4');
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Discard your changes?' });
+    await expect(dialog.getByRole('button', { name: 'Keep editing' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#tuneTitle')).not.toHaveValue('Paradiddle');
+
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Paradiddle');
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('Save opens it at the save form, and the open form follows edits', async ({ page }) => {
+    const updateButton = page.getByRole('button', { name: 'Update groove' });
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
+    await page.getByRole('button', { name: 'Hide library' }).click();
+
+    await page.locator('#saveButton').click();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+    await expect(page.locator('#lpSaveTool')).toHaveAttribute('open', '');
+    await expect(page.getByRole('button', { name: 'Save groove' })).toBeVisible();
+    await expect(updateButton).toHaveCount(0);
+    await expect(page.locator('#lpUpdateHint')).toHaveText('No changes. Save groove makes a copy.');
+    // The docked panel is not a dialog: focus stays on the page, and the form scrolls into view.
+    await expect(page.locator('#lpSaveTool summary')).toBeInViewport();
+    expect(
+      await page.evaluate(() =>
+        document.getElementById('libraryPanel').contains(document.activeElement)
+      )
+    ).toBe(false);
+
+    await page.click('#snare4');
+    await expect(updateButton).toBeVisible();
+    await expect(page.locator('#lpUpdateHint')).toContainText('"Paradiddle"');
+    await page.click('#undoButton');
+    await expect(updateButton).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Save groove' })).toBeVisible();
   });
 
   test('Escape does not hide it', async ({ page }) => {

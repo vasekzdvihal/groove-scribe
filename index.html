@@ -39,12 +39,15 @@
 		<link rel="modulepreload" href="js/editorChrome.js">
 		<link rel="modulepreload" href="js/wakeLock.js">
 		<link rel="modulepreload" href="js/registerServiceWorker.js">
+		<link rel="modulepreload" href="js/discardDialog.js">
 		<link rel="modulepreload" href="js/cloud/libraryPanel.js">
 		<link rel="modulepreload" href="js/cloud/firebaseClient.js">
 		<link rel="modulepreload" href="js/cloud/firebaseConfig.js">
 		<link rel="modulepreload" href="js/cloud/grooveLink.js">
 		<link rel="modulepreload" href="js/cloud/library.js">
 		<link rel="modulepreload" href="js/cloud/pendingSync.js">
+		<link rel="modulepreload" href="js/cloud/dirtyState.js">
+		<link rel="modulepreload" href="js/cloud/currentGroove.js">
 		<script>
 			// Start the sound download now. Play needs it, and nothing else holds up Play.
 			// MIDI.js picks Ogg when the browser can play it and MP3 otherwise, and fetches the
@@ -86,6 +89,7 @@
 		<link rel="stylesheet" type="text/css" href="css/share-button.min.css">
 	    <link rel="stylesheet" type="text/css" href="css/groove_writer_orange.css">
 	    <link rel="stylesheet" type="text/css" href="css/library-panel.css">
+	    <link rel="stylesheet" type="text/css" href="css/discard-dialog.css">
 		<link rel="stylesheet" type="text/css" href="css/groove_display_orange.css">
 		<link rel="stylesheet" type="text/css" href="css/editor-toolbars.css">
 		<link rel="stylesheet" type="text/css" href="css/fonts.css">
@@ -172,7 +176,12 @@
 				</span>
 				<span class="tool-sep"></span>
 				<button type="button" class="tool tool-caret" id="swingButton" data-popover="swingPopover"><span class="tool-in"><span id="swingButtonLabel">Swing</span></span></button>
-				<button type="button" class="tool tool-primary grooveDB_hidden" id="shareSaveButton" aria-label="Share" onclick="event.preventDefault(); myGrooveWriter.show_FullURLPopup();"><span class="tool-in"><i class="fa fa-share"></i><span class="tool-label">Share</span></span></button>
+				<!-- The library panel shows Save, because without the library there is nothing to save to.
+				     The group keeps Save next to Share when the bar spreads out its items. -->
+				<span class="tool-group">
+					<button type="button" class="tool tool-primary grooveDB_hidden" id="saveButton" aria-label="Save" hidden><span class="tool-in"><i class="fa fa-floppy-o" aria-hidden="true"></i><span class="tool-label">Save</span></span></button>
+					<button type="button" class="tool tool-primary grooveDB_hidden" id="shareSaveButton" aria-label="Share" onclick="event.preventDefault(); myGrooveWriter.show_FullURLPopup();"><span class="tool-in"><i class="fa fa-share"></i><span class="tool-label">Share</span></span></button>
+				</span>
 				<button type="button" class="tool" id="moreButton" aria-label="More actions" data-popover="morePopover"><span class="tool-in"><i class="fa fa-ellipsis-h"></i></span></button>
 			</div>
 

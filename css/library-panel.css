@@ -284,6 +284,19 @@
   font-weight: 600;
 }
 
+#libraryPanel .lp-hint {
+  margin: 4px 0 0;
+  color: var(--lp-muted);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+/* Update and Save as new are full width, one above the other, like the single save. */
+.lp-save-buttons {
+  display: grid;
+  gap: 8px;
+}
+
 #libraryToggle[aria-expanded='true'] {
   background: var(--bar-selected);
 }

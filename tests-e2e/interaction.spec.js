@@ -44,12 +44,19 @@ function collectDialogs(page) {
   return messages;
 }
 
+// Close the time signature popup with the keyboard. A mouse click leaves the pointer over
+// the note grid when the popup closes, and Chromium on macOS then sends a hover event with
+// the real keyboard's Ctrl state, so a Ctrl key held in another app sets a note.
+async function closeTimeSigPopup(page, button) {
+  await page.locator(button).press('Enter');
+}
+
 // A refused change keeps the popup open, so a refusal passes { refused: true }.
 async function chooseTimeSignature(page, top, bottom, { refused = false } = {}) {
   await page.click('#timeLabel');
   await page.selectOption('#timeSigPopupTimeSigTop', top);
   await page.selectOption('#timeSigPopupTimeSigBottom', bottom);
-  await page.click('#timeSigPopupOK');
+  await closeTimeSigPopup(page, '#timeSigPopupOK');
   if (!refused) await expect(page.locator('#timeSigPopup')).toBeHidden();
 }
 
@@ -507,7 +514,7 @@ test.describe('change time signature', () => {
     await open(page, HH0);
     await page.click('#timeLabel');
     await page.selectOption('#timeSigPopupTimeSigTop', '5');
-    await page.click('#timeSigPopupCancel');
+    await closeTimeSigPopup(page, '#timeSigPopupCancel');
     await expectQuery(page, HH0);
     await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
   });
@@ -608,7 +615,7 @@ test.describe('change time signature', () => {
     // The popup stays open with the refused choice, so the user can correct it.
     await expect(page.locator('#timeSigPopup')).toBeVisible();
     await expect(page.locator('#timeSigPopupTimeSigBottom')).toHaveValue('8');
-    await page.click('#timeSigPopupCancel');
+    await closeTimeSigPopup(page, '#timeSigPopupCancel');
 
     // The refusal added no undo step: one undo takes back the note, a second does nothing.
     await page.click('#undoButton');
@@ -634,7 +641,7 @@ test.describe('change time signature', () => {
     collectDialogs(page);
     await open(page, empty(12));
     await chooseTimeSignature(page, '7', '8', { refused: true });
-    await page.click('#timeSigPopupCancel');
+    await closeTimeSigPopup(page, '#timeSigPopupCancel');
     await page.click('#timeLabel');
     await expect(page.locator('#timeSigPopupTimeSigTop')).toHaveValue('4');
     await expect(page.locator('#timeSigPopupTimeSigBottom')).toHaveValue('4');
@@ -649,7 +656,7 @@ test.describe('change time signature', () => {
     );
     await page.click('#timeLabel');
     await expect(page.locator('#timeSigPopupTimeSigTop')).not.toHaveValue('');
-    await page.click('#timeSigPopupCancel');
+    await closeTimeSigPopup(page, '#timeSigPopupCancel');
     expect(messages).toEqual([]);
   });
 
@@ -673,7 +680,7 @@ test.describe('change time signature', () => {
     await expectQuery(page, eighths);
     await expect(page.locator('#timeSigLabel')).toHaveText('4/4');
     await expect(page.locator('#timeSigPopup')).toBeVisible();
-    await page.click('#timeSigPopupCancel');
+    await closeTimeSigPopup(page, '#timeSigPopupCancel');
     // The next edit proves that the refused time signature was never stored.
     await page.click('#hi-hat0');
     await expectQuery(page, eighths.replace('H=|-', 'H=|x'));

@@ -499,6 +499,10 @@
 			fillContainer('measureContainer', gridHTML);
 
 			fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
+			document.getElementById('grooveListWrapper').addEventListener('click', function (event) {
+				var li = event.target.closest('.grooveListLI');
+				if (li) myGrooveWriter.loadNewGroove(li.getAttribute('data-groove'));
+			});
 
 			window.addEventListener('load', function () {
 				myGrooveWriter.runsOnPageLoad();

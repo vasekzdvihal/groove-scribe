@@ -10,8 +10,10 @@
 import { GrooveWriter } from './groove_writer.js';
 import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
-import { initPlaybackControls, initPopovers } from './editorChrome.js';
+import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
+import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
+import { askToDiscard } from './discardDialog.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
 
@@ -124,6 +126,56 @@ fillContainer('measureContainer', gridHTML);
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
 
+const editor = {
+  openGroove(query, name) {
+    utils.stopMIDI_playback();
+    myGrooveWriter.loadNewGroove(query, name);
+  },
+  currentQuery: () => utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
+  currentTitle: () => document.getElementById('tuneTitle').value.trim(),
+  // A groove renamed in the library shows its new name. A groove with no title in its address
+  // keeps it that way: the name shows in the top bar only, and the music stays the same.
+  rename(name) {
+    const title = /** @type {HTMLInputElement} */ (document.getElementById('tuneTitle'));
+    if (!title.value.trim()) {
+      myGrooveWriter.setNameWhenUntitled(name);
+      return;
+    }
+    title.value = name;
+    myGrooveWriter.refresh_ABC();
+  },
+  // Calls the listener with true when the groove gets unsaved edits, and with false when it
+  // is clean again. Returns the call that stops listening.
+  onDirtyChange: (listener) => dirtyWatch.onDirtyChange(listener),
+};
+
+// The groove that was last loaded or saved. The Grooves menu and the library panel ask before
+// they replace edits.
+const dirtyState = createDirtyState();
+// After a reload the address holds the edits, so the tab's own clean groove is the start. Read
+// it now: the editor rewrites the URL on load.
+const baseline = restoredBaseline(window.location.search);
+// A change that is not an edit, such as the tempo that the metronome raises, keeps a clean
+// editor clean.
+myGrooveWriter.onChangeWithoutEdit = (before, after) => dirtyState.rebase(before, after);
+// Each change of the URL can make the editor dirty or clean again, for example an Undo.
+const dirtyWatch = watchDirty(dirtyState, editor.currentQuery);
+myGrooveWriter.onUrlChange = () => {
+  dirtyState.remember(window.location.search);
+  dirtyWatch.changed();
+};
+
+// A groove from the Grooves menu replaces the one in the editor, so it asks first too.
+document.getElementById('grooveListWrapper')?.addEventListener('click', async (event) => {
+  const item = event.target instanceof Element && event.target.closest('.grooveListLI');
+  if (!item) return;
+  // Close the menu now, so it does not stay open behind the question.
+  if (utils.visible_context_menu) utils.hideContextMenu(utils.visible_context_menu);
+  if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
+  myGrooveWriter.loadNewGroove(item.getAttribute('data-groove'));
+  dirtyState.markClean(editor.currentQuery());
+});
+
 // The library panel needs a Google sign-in popup, which the native app shell does not
 // support yet, and GrooveDB authoring has its own save flow.
 if (!utils.grooveDBAuthoring && !window.Capacitor) {
@@ -131,15 +183,10 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
     whenReady: soundOrTimeout,
-    editor: {
-      openGroove(query, name) {
-        utils.stopMIDI_playback();
-        myGrooveWriter.loadNewGroove(query, name);
-      },
-      currentQuery: () =>
-        utils.getUrlStringFromGrooveData(myGrooveWriter.grooveDataFromClickableUI()),
-      currentTitle: () => document.getElementById('tuneTitle').value.trim(),
-    },
+    editor,
+    dirtyState,
+    // The panel shows the button: without the library there is nothing to save to.
+    initSaveButton,
   });
 }
 
@@ -150,9 +197,19 @@ if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(wind
 
 initPopovers();
 
+// Back can bring this page out of the back-forward cache after another page in the tab wrote
+// the tab's storage. Write this page's own address and clean groove again.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) dirtyState.remember(window.location.search);
+});
+
 // Initialize the notes/player once the page has fully loaded (matches the
 // original window.onload handler).
 window.addEventListener('load', function () {
   myGrooveWriter.runsOnPageLoad();
+  // The groove the page starts with, from a link or the default, is clean until it is edited.
+  // A reloaded page keeps the clean groove it had, also signed out.
+  dirtyState.markStart(baseline ?? editor.currentQuery());
+  dirtyState.remember(window.location.search);
   initPlaybackControls(utils);
 });
