@@ -40,6 +40,7 @@ const KEEP_TAB_TEXT = 'Keep this tab open until online';
 const WRITE_REFUSED = 'A change could not be saved. The library shows what is saved.';
 const NOTHING_TO_UPDATE = 'Nothing to update. The groove has no changes.';
 const NOT_OPEN_TO_UPDATE = 'The saved groove is no longer open. Save it as a new groove.';
+const NO_CHANGES_HINT = 'No changes. Save groove makes a copy.';
 const CHANGED_ELSEWHERE =
   'This groove changed on another device. Save groove keeps your changes as a new groove.';
 const STILL_LOADING = 'The editor is still loading…';
@@ -298,7 +299,7 @@ function startLibrary({
   editor,
   dirtyState,
   afterPick,
-  showGrooveOpen,
+  showGrooveSaved,
 }) {
   let lessons = [];
   let grooves = [];
@@ -417,7 +418,7 @@ function startLibrary({
     stopDirty();
     document.removeEventListener('visibilitychange', refresh);
     window.removeEventListener('online', refresh);
-    showGrooveOpen(false);
+    showGrooveSaved(false);
   }
 
   // The server has answered every write, so the labels can go. A write from an earlier visit
@@ -704,7 +705,8 @@ function startLibrary({
   });
 
   // A saved groove that is open and has edits can be updated. Otherwise the form has the plain
-  // save. Enter in the title presses the first button.
+  // save. Enter in the title presses the first button. An open groove without edits, for
+  // example after a tap on "Saved", says why there is no Update.
   function refreshSaveForm() {
     const groove = openSavedGroove();
     const canUpdate = Boolean(groove) && dirtyState.isDirty(editor.currentQuery());
@@ -712,10 +714,12 @@ function startLibrary({
     saveNew.textContent = canUpdate ? 'Save as new' : 'Save groove';
     saveNew.className = canUpdate ? '' : 'lp-primary';
     const hint = byId('lpUpdateHint');
-    hint.textContent = canUpdate
-      ? `Update saves the changes in "${grooveName(groove)}". Save as new keeps it as it is.`
-      : '';
-    hint.hidden = !canUpdate;
+    if (canUpdate) {
+      hint.textContent = `Update saves the changes in "${grooveName(groove)}". Save as new keeps it as it is.`;
+    } else {
+      hint.textContent = groove ? NO_CHANGES_HINT : '';
+    }
+    hint.hidden = !hint.textContent;
     byId('lpSaveButtons').replaceChildren(...(canUpdate ? [updateButton, saveNew] : [saveNew]));
     return canUpdate ? groove : null;
   }
@@ -733,8 +737,10 @@ function startLibrary({
       const selected = keep ? select.value : select.value || (known && openLesson);
       select.replaceChildren(...lessonOptions(lessons, selected));
     }
-    openGrooveId = openSavedGroove()?.id ?? null;
-    showGrooveOpen(openGrooveId !== null);
+    const openGroove = openSavedGroove();
+    openGrooveId = openGroove?.id ?? null;
+    // Without a persistent cache, a write that waits is lost when the tab closes: not saved yet.
+    showGrooveSaved(Boolean(openGroove) && (persistent || !isPending(openGroove)));
     const known = new Set(lessons.map((lesson) => lesson.id));
     const unfiled = grooves.filter((groove) => !known.has(groove.lessonId));
     const entries = [
@@ -835,12 +841,13 @@ function startLibrary({
     }
   });
 
-  // The editor now shows the saved groove, unless the server refuses the write later.
+  // The editor now shows the saved groove, unless the server refuses the write later. The
+  // stored query has the library title in it, which can differ from the title in the editor.
   function afterSave(written, query) {
     dirtyState.markClean(query);
     // A save that the server refuses later did not save the edits.
     written.committed.catch(() => dirtyState.forget(query));
-    setCurrentGroove(written.id, query);
+    setCurrentGroove(written.id, written.query);
     byId('lpSaveTool').open = false;
   }
 
@@ -893,25 +900,26 @@ function startLibrary({
       showMessage(reason);
       return;
     }
-    // Another device can have changed the groove since this device read it. Online, read the
-    // server first: Update must not write over that change. The new list closes the groove, and
-    // the form offers the plain save. Offline, the write waits, and the last writer wins after
-    // the sync.
-    if (navigator.onLine) {
-      try {
-        await readLatest();
-      } catch (error) {
-        if (isActive()) reportFailure(error);
-        return;
-      }
-      if (!isActive()) return;
-      if (openSavedGroove()?.id !== groove.id) {
-        showMessage(CHANGED_ELSEWHERE);
-        return;
-      }
-    }
-    await updateCurrent(openSavedGroove(), parsed.query);
+    if (await stillOnServer(groove)) await updateCurrent(openSavedGroove(), parsed.query);
   });
+
+  // Another device can have changed the groove since this device read it. Online, read the
+  // server first: Update must not write over that change. The new list closes the groove, and
+  // the form offers the plain save. Offline, the write waits, and the last writer wins after the
+  // sync. Returns true when Update can write.
+  async function stillOnServer(groove) {
+    if (!navigator.onLine) return true;
+    try {
+      await readLatest();
+    } catch (error) {
+      if (isActive()) reportFailure(error);
+      return false;
+    }
+    if (!isActive()) return false;
+    if (openSavedGroove()?.id === groove.id) return true;
+    showMessage(CHANGED_ELSEWHERE);
+    return false;
+  }
 
   return { drawCached, load: () => act(), stop };
 }
@@ -929,7 +937,7 @@ function whenIdle(task) {
 }
 
 // Connect to Firebase, and return the sign-out action. The hooks tell the page about the
-// library: afterPick, libraryShown, signedOut, and showGrooveOpen (see startLibrary).
+// library: afterPick, libraryShown, signedOut, and showGrooveSaved (see startLibrary).
 async function startCloud(search, editor, dirtyState, hooks) {
   const resolved = resolveCloudConfig({ hostname: location.hostname, search });
   if (!resolved) {
@@ -987,7 +995,7 @@ async function startCloud(search, editor, dirtyState, hooks) {
       editor,
       dirtyState,
       afterPick: hooks.afterPick,
-      showGrooveOpen: hooks.showGrooveOpen,
+      showGrooveSaved: hooks.showGrooveSaved,
     });
 
     currentSession = session;
@@ -1040,13 +1048,7 @@ async function startCloud(search, editor, dirtyState, hooks) {
  * @param {{openGroove: function(string, string): void, currentQuery: function(): string,
  *          currentTitle: function(): string, rename: function(string): void,
  *          onDirtyChange: function(function(boolean): void): function(): void}} options.editor
- * @param {{markClean: function(string): void, isDirty: function(string): boolean,
- *          forget: function(string): void, cleanVersion: function(): number,
- *          startVersion: function(): (number | null),
- *          onRebase: function(function(string, string): void): function(): void,
- *          onStart: function(function(): void): function(): void,
- *          onChange: function(function(): void): function(): void}}
- *        options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
+ * @param {ReturnType<typeof import('./dirtyState.js').createDirtyState>} options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
  *        the groove that the page starts with, with markStart.
  * @param {function(function(): void): function(boolean): void} options.initSaveButton  Shows
  *        the Save button of the editor with a click action, and returns the call that shows
@@ -1110,7 +1112,8 @@ export function initLibraryPanel({
   // The Save button asks for the save form. The library shows it when the user is signed in.
   let wantsSaveForm = false;
   let editorDirty = false;
-  let grooveOpen = false;
+  // The editor shows a saved groove, and the save is safe on this device.
+  let grooveSaved = false;
 
   function showSaveForm() {
     if (!wantsSaveForm || byId('lpLibrary').hidden) return;
@@ -1119,7 +1122,8 @@ export function initLibraryPanel({
     // A form opened from code fills itself on toggle.
     tool.open = true;
     const summary = tool.querySelector('summary');
-    summary.focus();
+    // A docked panel is not a dialog: focus stays on the page, so space still plays.
+    if (!docked.matches) summary.focus();
     summary.scrollIntoView({ block: 'nearest' });
   }
 
@@ -1137,7 +1141,7 @@ export function initLibraryPanel({
   }
 
   const showSaved = initSaveButton(openSaveForm);
-  const drawSaveButton = () => showSaved(grooveOpen && !editorDirty);
+  const drawSaveButton = () => showSaved(grooveSaved && !editorDirty);
 
   function connect() {
     started ??= startCloud(search, editor, dirtyState, {
@@ -1146,8 +1150,8 @@ export function initLibraryPanel({
       },
       libraryShown: showSaveForm,
       signedOut: showSignIn,
-      showGrooveOpen: (isOpen) => {
-        grooveOpen = isOpen;
+      showGrooveSaved: (isSaved) => {
+        grooveSaved = isSaved;
         drawSaveButton();
       },
     }).catch((error) => {

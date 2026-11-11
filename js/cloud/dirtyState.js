@@ -178,9 +178,9 @@ export function createDirtyState(storage = tabStorage()) {
  * @param {ReturnType<typeof createDirtyState>} dirtyState
  * @param {function(): string} currentQuery  the query of the groove in the editor now
  * @param {function(function(): void): void} [schedule]  runs the check later
- * @returns {{changed: function(): void, isDirty: function(): boolean,
+ * @returns {{changed: function(): void,
  *            onDirtyChange: function(function(boolean): void): function(): void}}
- *   isDirty is the value of the last check. onDirtyChange returns the call that stops listening.
+ *   onDirtyChange returns the call that stops listening.
  */
 export function watchDirty(dirtyState, currentQuery, schedule = queueMicrotask) {
   const listeners = new Set();
@@ -201,7 +201,6 @@ export function watchDirty(dirtyState, currentQuery, schedule = queueMicrotask) 
   dirtyState.onChange(changed);
   return {
     changed,
-    isDirty: () => dirty,
     onDirtyChange(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

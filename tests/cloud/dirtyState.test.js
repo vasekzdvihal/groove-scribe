@@ -192,12 +192,10 @@ describe('watchDirty', () => {
     watch.changed();
     flush();
     expect(calls).toEqual([true]);
-    expect(watch.isDirty()).toBe(true);
     editor.query = QUERY;
     watch.changed();
     flush();
     expect(calls).toEqual([true, false]);
-    expect(watch.isDirty()).toBe(false);
   });
 
   it('does not tell listeners about a change that keeps the dirty value', () => {
@@ -243,6 +241,11 @@ describe('watchDirty', () => {
     expect(queued).toHaveLength(1);
     flush();
     expect(calls).toEqual([]);
+  });
+
+  it('has no dirty getter: callers listen with onDirtyChange', () => {
+    const { watch } = setUp();
+    expect(Object.keys(watch).sort()).toEqual(['changed', 'onDirtyChange']);
   });
 
   it('stops telling a listener that stopped listening', () => {

@@ -25,8 +25,8 @@ function byName(a, b) {
   return first < second ? -1 : 1;
 }
 
-// A renamed groove keeps its title in its query too, as the editor writes it, so a pick and
-// another device show the new name. A query without a title stays without one.
+// A groove keeps its library title in its query too, as the editor writes it, so a pick and
+// another device show the same name. A query without a title stays without one.
 function withTitle(query, title) {
   return query.replace(
     /([?&])Title=[^&]*/,
@@ -169,11 +169,18 @@ export function createLibrary(sdk, db, uid) {
       }));
     },
 
-    // A new groove is the newest, so it goes last, as in the list from the server.
+    // A new groove is the newest, so it goes last, as in the list from the server. `query` in
+    // the result is the stored query, with the title in it.
     saveGroove({ query, title, lessonId }) {
       const ref = sdk.doc(grooves);
-      const fields = { ownerId: uid, lessonId: lessonId ?? null, title: cleanName(title), query };
-      return isNew(
+      const cleanTitle = cleanName(title);
+      const fields = {
+        ownerId: uid,
+        lessonId: lessonId ?? null,
+        title: cleanTitle,
+        query: withTitle(query, cleanTitle),
+      };
+      const written = isNew(
         sdk.setDoc(ref, { ...fields, createdAt: now(), updatedAt: now() }),
         ref.id,
         fields.title,
@@ -185,11 +192,18 @@ export function createLibrary(sdk, db, uid) {
           ],
         })
       );
+      return { ...written, query: fields.query };
     },
 
-    // Replace the groove of a saved document, and file it in a lesson. createdAt stays.
+    // Replace the groove of a saved document, and file it in a lesson. createdAt stays. `query`
+    // in the result is the stored query, with the title in it.
     updateGroove(id, { query, title, lessonId }) {
-      return changeGroove(id, { query, title: cleanName(title), lessonId: lessonId ?? null });
+      const cleanTitle = cleanName(title);
+      const fields = { query: withTitle(query, cleanTitle), title: cleanTitle };
+      return {
+        ...changeGroove(id, { ...fields, lessonId: lessonId ?? null }),
+        query: fields.query,
+      };
     },
 
     // title: the name of the groove, for the message about a refusal.

@@ -274,6 +274,18 @@ describe('createCurrentGroove', () => {
     expect(readRecord('ana')?.savedQuery).toBe(renamed);
   });
 
+  it('keeps an edit made while the rename waited, though the editor was clean before', () => {
+    const { dirtyState, editor, tracker, list } = setUp();
+    dirtyState.markStart(QUERY);
+    tracker.set('g1', QUERY);
+    editor.query = EDITED;
+    const renamed = QUERY.replace('Title=Beat', 'Title=Fresh');
+    list[0] = { ...groove(renamed), title: 'Fresh' };
+    const written = { id: 'g1', title: 'Fresh', committed: Promise.resolve() };
+    expect(tracker.followRename(written, true)).toBe('edits');
+    expect(dirtyState.isDirty(editor.query)).toBe(true);
+  });
+
   it('ignores a rename of a groove that is not open', () => {
     const { editor, tracker } = setUp();
     const written = { id: 'g1', title: 'Fresh', committed: Promise.resolve() };

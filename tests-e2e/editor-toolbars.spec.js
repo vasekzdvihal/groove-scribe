@@ -265,13 +265,15 @@ test('GrooveDB authoring mode still loads', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-// A phone lays out the page 980 px wide (see index.html). A narrow desktop window does not.
-for (const [name, isMobile] of [
-  ['phone', true],
-  ['narrow window', false],
+// A phone lays out the page 980 px wide (see index.html). A narrow desktop window does not,
+// and neither does an iPad app in Slide Over or a narrow Split View.
+for (const [name, isMobile, width, height] of [
+  ['phone', true, 390, 844],
+  ['narrow window', false, 390, 844],
+  ['iPad Slide Over', false, 375, 1024],
 ]) {
   test.describe(name, () => {
-    test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile });
+    test.use({ viewport: { width, height }, hasTouch: true, isMobile });
 
     test('Save, Share and More can be reached', async ({ page }) => {
       await openEditor(page);

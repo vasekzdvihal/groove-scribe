@@ -229,6 +229,22 @@ describe('createLibrary: a change draws without a read', () => {
     expect(patched.grooves.at(-1).title).toHaveLength(200);
   });
 
+  it('writes the title into the stored query on a save and an update', async () => {
+    const saved = await expectPatchMatchesCache(fake, (library) =>
+      library.saveGroove({ query: BEAT, title: 'My beat', lessonId: null })
+    );
+    const titled = BEAT.replace('Title=Beat', 'Title=My%20beat');
+    expect(saved.grooves.at(-1)).toMatchObject({ title: 'My beat', query: titled });
+    const library = createLibrary(fake.sdk, 'db', UID);
+    expect(library.saveGroove({ query: BEAT, title: 'My beat', lessonId: null }).query).toBe(
+      titled
+    );
+    const updated = await expectPatchMatchesCache(fake, (library) =>
+      library.updateGroove('g2', { query: SHUFFLE, title: 'Swing', lessonId: null })
+    );
+    expect(updated.grooves[1].query).toBe(SHUFFLE.replace('Title=Shuffle', 'Title=Swing'));
+  });
+
   it('updates, moves and renames a groove in its place', async () => {
     await expectPatchMatchesCache(fake, (library) =>
       library.updateGroove('g1', { query: SHUFFLE, title: 'New', lessonId: null })
@@ -278,6 +294,8 @@ describe('the library panel', () => {
   let dirtyState;
   let editor;
   let started;
+  // Each value the Save button of the editor showed: true for "Saved".
+  let saveButtonStates;
 
   const byId = (id) => document.getElementById(id);
   const savedGrooves = () => [...fake.collections.get('grooves').values()];
@@ -350,11 +368,12 @@ describe('the library panel', () => {
     });
     dirtyState = createDirtyState(null);
     editor = createEditor();
+    saveButtonStates = [];
     initLibraryPanel({
       search: START,
       editor,
       dirtyState,
-      initSaveButton: () => () => {},
+      initSaveButton: () => (saved) => saveButtonStates.push(saved),
     });
   });
 
@@ -548,6 +567,68 @@ describe('the library panel', () => {
       expect(byId('lpMessage').hidden).toBe(true);
     });
 
+    it('keeps the open groove after a save with a typed title', async () => {
+      await pickBeat();
+      editor.edit(EDITED);
+      byId('libraryToggle').click();
+      byId('lpSaveTool').querySelector('summary').click();
+      byId('lpSaveTool').open = true;
+      byId('lpSaveTitle').value = 'Another name';
+      byId('lpSaveNew').click();
+      await vi.waitFor(() => expect(grooveButton('Another name')).toBeDefined());
+      expect(savedGrooves()[1].fields.query).toBe(
+        EDITED.replace('Title=Beat', 'Title=Another%20name')
+      );
+      expect(grooveButton('Another name').getAttribute('aria-current')).toBe('true');
+    });
+
+    it('says why a clean open groove has only the plain save', async () => {
+      await pickBeat();
+      byId('libraryToggle').click();
+      byId('lpSaveTool').querySelector('summary').click();
+      byId('lpSaveTool').open = true;
+      expect(byId('lpUpdateHint').hidden).toBe(false);
+      expect(byId('lpUpdateHint').textContent).toBe('No changes. Save groove makes a copy.');
+      expect(byId('lpSaveNew').textContent).toBe('Save groove');
+      editor.edit(EDITED);
+      await settle();
+      expect(byId('lpUpdateHint').textContent).toContain('Update saves the changes in "Beat"');
+    });
+
+    it('says Saved without a persistent cache only when the server has the groove', async () => {
+      vi.mocked(connectCloud).mockResolvedValue({
+        sdk: fake.sdk,
+        auth: 'auth',
+        db: 'db',
+        persistent: false,
+      });
+      await pickBeat();
+      expect(saveButtonStates.at(-1)).toBe(true);
+      editor.edit(EDITED);
+      fake.online = false;
+      await pressUpdate();
+      await vi.waitFor(() => expect(savedGrooves()[0].fields.query).toBe(EDITED));
+      await settle();
+      expect(dirtyState.isDirty(editor.currentQuery())).toBe(false);
+      // The update waits in memory only: a closed tab loses it.
+      expect(saveButtonStates.at(-1)).toBe(false);
+      fake.online = true;
+      fake.sync();
+      await vi.waitFor(() => expect(saveButtonStates.at(-1)).toBe(true));
+    });
+
+    it('keeps an edit made while a rename of a clean groove waits', async () => {
+      await pickBeat();
+      // The edit comes while the prompt is open, after the rename looked at the editor.
+      vi.stubGlobal('prompt', () => {
+        queueMicrotask(() => editor.edit(EDITED));
+        return 'Fresh';
+      });
+      await renameBeat();
+      expect(editor.currentTitle()).toBe('Fresh');
+      expect(dirtyState.isDirty(editor.currentQuery())).toBe(true);
+    });
+
     it('leaves the editor alone on a rename of a groove that is not open', async () => {
       await openPanel();
       await loaded();
@@ -652,6 +733,19 @@ describe('the library panel', () => {
     } finally {
       window.removeEventListener('unhandledrejection', onError);
     }
+  });
+
+  it('keeps a typed save title when the editor starts', async () => {
+    await openPanel({ load: false });
+    await loaded();
+    byId('lpSaveTool').querySelector('summary').click();
+    byId('lpSaveTool').open = true;
+    await settle();
+    byId('lpSaveTitle').value = 'Mine';
+    byId('lpSaveTitle').dispatchEvent(new Event('input'));
+    editor.load();
+    await settle();
+    expect(byId('lpSaveTitle').value).toBe('Mine');
   });
 
   it('waits for the page to load before it saves, and saves the loaded groove', async () => {

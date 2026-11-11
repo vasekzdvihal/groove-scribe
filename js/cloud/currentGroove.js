@@ -191,8 +191,10 @@ export function createCurrentGroove({
     if (current?.id !== written.id) return null;
     const savedQuery = grooves().find((item) => item.id === written.id)?.query;
     if (!savedQuery) return null;
+    // An edit can come while the rename waits. Look before the new name changes the query.
+    const isClean = wasClean && !dirtyState.isDirty(editor.currentQuery());
     editor.rename(written.title);
-    if (!wasClean) {
+    if (!isClean) {
       // The edits are not saved: Update still saves them over this groove.
       current = { ...current, savedQuery };
       const stored = readRecord(uid);
@@ -201,6 +203,7 @@ export function createCurrentGroove({
     }
     const query = editor.currentQuery();
     dirtyState.markClean(query);
+    // A refused rename keeps the typed name in the editor, and the page turns dirty.
     written.committed.catch(() => dirtyState.forget(query));
     set(written.id, savedQuery);
     return 'clean';

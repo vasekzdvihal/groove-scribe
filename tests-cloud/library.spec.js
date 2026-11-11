@@ -535,16 +535,29 @@ test.describe('updating a saved groove', () => {
 
   test('Update keeps the library name, not the title in the editor', async ({ page }) => {
     await signedInPanel(page);
+    // The library name goes into the stored query too, so a pick shows it.
     await addLink(page, QUERY, 'Library name');
-    await pickSaved(page, 'Library name', 'Paradiddle');
-    await editNote(page);
+    await pickSaved(page, 'Library name');
+    // The title field sits in a menu, so set it in the page.
+    await page.evaluate(() => {
+      const title = document.getElementById('tuneTitle');
+      title.value = 'Editor name';
+      title.dispatchEvent(new Event('change'));
+    });
+    await openPanel(page);
     await saveTool(page).click();
     await expect(page.locator('#lpSaveTitle')).toHaveValue('Library name');
     await updateButton(page).click();
     await expect(updateButton(page)).toBeHidden();
+    // The title of the document and the Title in its query agree.
     await expect
-      .poll(async () => (await savedDocs(page, 'grooves')).map((item) => item.title.stringValue))
-      .toEqual(['Library name']);
+      .poll(async () =>
+        (await syncedDocs(page, 'grooves')).map((item) => [
+          item.title.stringValue,
+          new URLSearchParams(item.query.stringValue).get('Title'),
+        ])
+      )
+      .toEqual([['Library name', 'Library name']]);
   });
 
   test('Update also moves the groove to the lesson in the form', async ({ page }) => {
@@ -1963,7 +1976,7 @@ test.describe('docked on a wide screen', () => {
     // The form is still open, and it is now about Rock.
     await expect(page.locator('#lpSaveTitle')).toHaveValue('Rock');
     await expect(page.locator('#lpSaveLesson')).toHaveValue(lesson.id);
-    await expect(page.locator('#lpUpdateHint')).toBeHidden();
+    await expect(page.locator('#lpUpdateHint')).toHaveText('No changes. Save groove makes a copy.');
 
     await page.click('#snare4');
     await saveTool.click();
@@ -2001,6 +2014,14 @@ test.describe('docked on a wide screen', () => {
     await expect(page.locator('#lpSaveTool')).toHaveAttribute('open', '');
     await expect(page.getByRole('button', { name: 'Save groove' })).toBeVisible();
     await expect(updateButton).toHaveCount(0);
+    await expect(page.locator('#lpUpdateHint')).toHaveText('No changes. Save groove makes a copy.');
+    // The docked panel is not a dialog: focus stays on the page, and the form scrolls into view.
+    await expect(page.locator('#lpSaveTool summary')).toBeInViewport();
+    expect(
+      await page.evaluate(() =>
+        document.getElementById('libraryPanel').contains(document.activeElement)
+      )
+    ).toBe(false);
 
     await page.click('#snare4');
     await expect(updateButton).toBeVisible();
