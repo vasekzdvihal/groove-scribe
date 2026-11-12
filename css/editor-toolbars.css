@@ -74,6 +74,34 @@
   margin: 0;
 }
 
+/* The Help link is its own button, so the account menu never hides it. */
+#upperRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#helpLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-size);
+  height: var(--touch-size);
+  color: inherit;
+  font-size: 24px;
+  text-decoration: none;
+  border-radius: 22px;
+}
+
+#helpLink:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#helpLink:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
 #grooveTitleDisplay {
   flex: 1;
   min-width: 0;

@@ -1,0 +1,208 @@
+/* Help and About pages. The top bar and the fonts match the editor (css/editor-toolbars.css,
+   css/fonts.css). Keep the --bar-* values equal to the ones there. */
+:root {
+  --bar-height: 56px;
+  --bar-text: #eef2f4;
+  --bar-bg: #243640;
+  --bar-line: #46525a;
+  --bar-selected: #2484c0;
+  --page-text: #1f2a30;
+  --page-dim: #55646c;
+  --page-bg: #fff;
+  --page-soft: #f1f4f6;
+  --page-line: #d5dce0;
+  --page-link: #14689d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--page-text);
+  font:
+    400 18px/1.55 'Lato',
+    Calibri,
+    system-ui,
+    sans-serif;
+  background: var(--page-bg);
+  overflow-wrap: anywhere;
+}
+
+.page-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--bar-height);
+  padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+  color: var(--bar-text);
+  background: var(--bar-bg);
+}
+
+.page-bar img {
+  display: block;
+  height: 34px;
+}
+
+.page-bar-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-bar a.back {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--bar-text);
+  font-weight: 700;
+  text-decoration: none;
+  background: var(--bar-line);
+  border-radius: 6px;
+}
+
+.page-bar a.back:hover {
+  background: #566269;
+}
+
+a:focus-visible {
+  outline: 2px solid var(--bar-selected);
+  outline-offset: 2px;
+}
+
+.page-bar a:focus-visible {
+  outline-color: #fff;
+}
+
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+h2 {
+  margin: 40px 0 8px;
+  padding-top: 16px;
+  font-size: 24px;
+  line-height: 1.25;
+  border-top: 1px solid var(--page-line);
+}
+
+h3 {
+  margin: 24px 0 4px;
+  font-size: 19px;
+}
+
+.lead {
+  margin: 0 0 8px;
+  color: var(--page-dim);
+  font-size: 20px;
+}
+
+p,
+ul,
+ol,
+dl {
+  margin: 8px 0;
+}
+
+ul,
+ol {
+  padding-left: 1.4em;
+}
+
+li {
+  margin: 4px 0;
+}
+
+a {
+  color: var(--page-link);
+}
+
+.contents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contents a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  text-decoration: none;
+  background: var(--page-soft);
+  border: 1px solid var(--page-line);
+  border-radius: 6px;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  padding: 0 6px;
+  font:
+    700 0.85em/1.5 'Lato',
+    system-ui,
+    sans-serif;
+  text-align: center;
+  background: var(--page-soft);
+  border: 1px solid var(--page-line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+}
+
+.table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--page-line);
+}
+
+th {
+  font-weight: 700;
+  background: var(--page-soft);
+}
+
+.note {
+  margin: 16px 0;
+  padding: 12px 16px;
+  background: var(--page-soft);
+  border-left: 4px solid var(--bar-selected);
+  border-radius: 0 6px 6px 0;
+}

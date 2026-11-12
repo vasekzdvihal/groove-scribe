@@ -133,7 +133,7 @@ test('the help page loads offline', async ({ page, context, site }) => {
   page.on('requestfailed', (request) => failed.push(request.url()));
   const response = await page.goto('/gscribe_help.html');
   expect(response?.ok()).toBe(true);
-  await expect(page.locator('h1')).toContainText('Help!');
+  await expect(page.locator('h1')).toContainText('Help');
   expect(failed, failed.join('\n')).toEqual([]);
 });
 
