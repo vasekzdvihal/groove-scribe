@@ -136,3 +136,16 @@ test('the leave warning is listening only while the groove has edits', async ({ 
   await page.click('#undoButton');
   await expect.poll(listeners).toBe(0);
 });
+
+test('after Keep editing, focus goes back to the Grooves button', async ({ page }) => {
+  await loadGroove(page, '/index.html');
+  await page.click('#snare4');
+  for (const answer of ['Escape', 'button']) {
+    await pickBuiltIn(page, 'Train Beat');
+    const dialog = discardDialog(page);
+    if (answer === 'Escape') await page.keyboard.press('Escape');
+    else await dialog.getByRole('button', { name: 'Keep editing' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('#groovesAnchor')).toBeFocused();
+  }
+});

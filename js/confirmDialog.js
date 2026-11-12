@@ -35,9 +35,9 @@ function createDialog({ id, title, text, yes, no }) {
   <form method="dialog">
     <h2 id="${id}Title">${title}</h2>
     <p id="${id}Text">${text}</p>
-    <div class="discard-actions">
-      <button type="submit" class="discard-danger" value="yes">${yes}</button>
-      <button type="submit" class="discard-primary" value="no" autofocus>${no}</button>
+    <div class="confirm-actions">
+      <button type="submit" class="confirm-danger" value="yes">${yes}</button>
+      <button type="submit" class="confirm-primary" value="no" autofocus>${no}</button>
     </div>
   </form>
 `;
@@ -47,13 +47,23 @@ function createDialog({ id, title, text, yes, no }) {
   return node;
 }
 
+// The dialog gives focus back to the control that opened it. A control in a menu is hidden by
+// then, so focus would fall to the page. Give it to the button that opens that menu instead.
+function restoreFocus(returnFocus) {
+  const active = document.activeElement;
+  const lost = !active || active === document.body || active.getClientRects().length === 0;
+  if (lost && returnFocus) returnFocus.focus();
+}
+
 /**
  * Show a question and wait for the answer. Escape gives the safe answer.
  *
  * @param {keyof typeof QUESTIONS} name
+ * @param {HTMLElement | null | undefined} returnFocus  gets focus after the answer, if the
+ *   control that opened the question is hidden
  * @returns {Promise<boolean>} true for the answer that loses notes
  */
-function ask(name) {
+function ask(name, returnFocus) {
   let dialog = dialogs.get(name);
   if (!dialog) {
     dialog = createDialog(QUESTIONS[name]);
@@ -61,9 +71,14 @@ function ask(name) {
   }
   const shown = dialog;
   return new Promise((resolve) => {
-    shown.addEventListener('close', () => resolve(shown.returnValue === 'yes'), {
-      once: true,
-    });
+    shown.addEventListener(
+      'close',
+      () => {
+        restoreFocus(returnFocus);
+        resolve(shown.returnValue === 'yes');
+      },
+      { once: true }
+    );
     if (shown.open) return; // already asking: both callers get the one answer
     shown.returnValue = '';
     shown.showModal();
@@ -78,17 +93,19 @@ export function isAskingToDiscard() {
 /**
  * Ask whether to discard the unsaved changes. Escape means Keep editing.
  *
+ * @param {HTMLElement | null} [returnFocus]  for a question opened from a menu: its button
  * @returns {Promise<boolean>} true for Discard changes
  */
-export function askToDiscard() {
-  return ask('discard');
+export function askToDiscard(returnFocus) {
+  return ask('discard', returnFocus);
 }
 
 /**
  * Ask before all notes are cleared. Escape means Keep the notes.
  *
+ * @param {HTMLElement | null} [returnFocus]  for a question opened from a menu: its button
  * @returns {Promise<boolean>} true for Clear all notes
  */
-export function askToClearNotes() {
-  return ask('clearNotes');
+export function askToClearNotes(returnFocus) {
+  return ask('clearNotes', returnFocus);
 }

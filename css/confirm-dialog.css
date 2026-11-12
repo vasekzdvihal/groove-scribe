@@ -1,4 +1,4 @@
-/* The questions before notes are lost: unsaved edits and Clear all notes (js/discardDialog.js).
+/* The questions before notes are lost: unsaved edits and Clear all notes (js/confirmDialog.js).
    They sit in the top layer, in the middle of the screen, and have the colours of the library
    panel. */
 .confirm-dialog {
@@ -44,7 +44,7 @@
   color: var(--dd-muted);
 }
 
-.discard-actions {
+.confirm-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -64,11 +64,11 @@
   cursor: pointer;
 }
 
-.confirm-dialog .discard-danger {
+.confirm-dialog .confirm-danger {
   color: var(--dd-danger);
 }
 
-.confirm-dialog .discard-primary {
+.confirm-dialog .confirm-primary {
   color: var(--dd-accent-text);
   background: var(--dd-accent);
   border-color: var(--dd-accent);

@@ -507,10 +507,11 @@ test.describe('finger-size notes, the symbols in the grid', () => {
         kick.getBoundingClientRect().top +
         parseFloat(getComputedStyle(kick).backgroundPositionY) +
         3;
-      // Note 1 is off in both lanes, so both circles have the same off size.
+      // Centres, so the size of an on or off circle does not matter.
+      const centre = (id) => (box(id).top + box(id).bottom) / 2;
       return {
-        snare: Math.round(box('snare_circle1').top - lineBottom(hh)),
-        kick: Math.round(box('kick_circle1').top - lineBottom(snare)),
+        snare: Math.round(centre('snare_circle0') - lineBottom(hh)),
+        kick: Math.round(centre('kick_circle0') - lineBottom(snare)),
         highlightEnd: Math.round(box('bg-highlight0').bottom - kickLine),
       };
     });
@@ -748,3 +749,118 @@ for (const [width, height] of [
     });
   }
 }
+
+test.describe('controls, fix round 1', () => {
+  test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
+
+  test('after Escape or Keep the notes, focus goes back to the More button', async ({ page }) => {
+    await openEditor(page);
+    const dialog = page.getByRole('dialog', { name: 'Clear all notes?' });
+    for (const answer of ['Escape', 'button']) {
+      await page.click('#moreButton');
+      await page.click('#clearAllNotesButton');
+      await expect(dialog).toBeVisible();
+      if (answer === 'Escape') await page.keyboard.press('Escape');
+      else await dialog.getByRole('button', { name: 'Keep the notes' }).click();
+      await expect(dialog).toBeHidden();
+      await expect(page.locator('#moreButton')).toBeFocused();
+    }
+  });
+});
+
+// The tempo can be typed, and a held - or + repeats, so a big tempo change takes no 40 taps.
+for (const [width, height] of [
+  [768, 1024],
+  [1024, 768],
+]) {
+  test.describe(`tempo entry at ${width}x${height}`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true });
+
+    test('a typed tempo applies on Enter and on blur, inside the tempo range', async ({ page }) => {
+      await openEditor(page);
+      const field = page.locator('[id^="tempoTextField"]');
+      await expect(field).toBeVisible();
+      await expect(field).toHaveAttribute('inputmode', 'numeric');
+      await expect(field).toHaveAttribute('enterkeyhint', 'done');
+      await expect(field).toHaveAccessibleName('Beats per minute');
+      await field.click();
+      // Select all on focus: the typed number replaces the old one.
+      await page.keyboard.type('120');
+      await page.keyboard.press('Enter');
+      await expect(field).toHaveValue('120');
+      await expect(page).toHaveURL(/Tempo=120/);
+      await expect(field).not.toBeFocused();
+
+      await field.click();
+      await page.keyboard.type('999');
+      await page.locator('#svgTarget').click({ position: { x: 5, y: 5 } });
+      await expect(field).toHaveValue('300');
+      await expect(page).toHaveURL(/Tempo=300/);
+
+      await field.click();
+      await page.keyboard.type('abc');
+      await page.keyboard.press('Enter');
+      await expect(field).toHaveValue('300');
+    });
+
+    test('a click on + steps by one, and holding + repeats', async ({ page }) => {
+      await openEditor(page);
+      const field = page.locator('[id^="tempoTextField"]');
+      const faster = page.getByRole('button', { name: 'Faster' });
+      await faster.click();
+      await expect(field).toHaveValue('81');
+
+      const box = await faster.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.waitForTimeout(1500);
+      await page.mouse.up();
+      const held = Number(await field.inputValue());
+      expect(held).toBeGreaterThan(81 + 10);
+      // The click that ends the hold adds no extra step.
+      await page.waitForTimeout(200);
+      expect(Number(await field.inputValue())).toBe(held);
+      await expect(page).toHaveURL(new RegExp('Tempo=' + held));
+    });
+  });
+}
+
+for (const hasTouch of [true, false]) {
+  test.describe(`tempo slider at 1024x768${hasTouch ? ' with touch' : ''}`, () => {
+    test.use({ viewport: { width: 1024, height: 768 }, hasTouch });
+
+    test('the slider is back and at least 120 px wide', async ({ page }) => {
+      await openEditor(page);
+      const slider = page.locator('input[id^="tempoInput"]');
+      await expect(slider).toBeVisible();
+      expect((await slider.boundingBox()).width).toBeGreaterThanOrEqual(120);
+      await expect(page.locator('#saveButton')).toHaveAccessibleName('Save');
+      await expect(page.locator('#shareSaveButton')).toHaveAccessibleName('Share');
+    });
+  });
+}
+
+test.describe('tempo slider at 1150x800', () => {
+  test.use({ viewport: { width: 1150, height: 800 } });
+
+  test('the slider shows between 1100 and 1199 px too', async ({ page }) => {
+    await openEditor(page);
+    const slider = page.locator('input[id^="tempoInput"]');
+    await expect(slider).toBeVisible();
+    expect((await slider.boundingBox()).width).toBeGreaterThanOrEqual(120);
+  });
+});
+
+test.describe('tool bar groups at 768x1024 with touch', () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+
+  test('the groups of tools have a visible separator', async ({ page }) => {
+    await openEditor(page);
+    const separators = await page
+      .locator('#ToolBar .tool-sep')
+      .evaluateAll(
+        (nodes) => nodes.filter((node) => node.getBoundingClientRect().width > 0).length
+      );
+    expect(separators).toBeGreaterThanOrEqual(3);
+  });
+});

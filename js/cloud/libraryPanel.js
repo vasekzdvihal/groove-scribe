@@ -8,7 +8,7 @@
 // it open, so a shared link does not load the SDK into the page. The service worker still
 // precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
-import { askToDiscard, isAskingToDiscard } from '../discardDialog.js';
+import { askToDiscard, isAskingToDiscard } from '../confirmDialog.js';
 import { createCurrentGroove } from './currentGroove.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';

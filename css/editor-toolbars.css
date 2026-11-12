@@ -746,20 +746,43 @@
   text-transform: uppercase;
 }
 
+/* The tempo field looks like a field: a tap types a new tempo. */
 #midiPlayer .tempoTextField {
+  box-sizing: border-box;
   flex: none;
-  width: 44px;
+  width: 56px;
   height: var(--touch-size);
   margin: 0;
+  padding: 0;
   color: var(--bar-text);
-  background: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+  border-bottom: 2px solid var(--bar-dim);
+  border-radius: 6px 6px 0 0;
   font-size: 22px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+#midiPlayer .tempoTextField:focus {
+  background: rgba(255, 255, 255, 0.16);
+  border-bottom-color: var(--bar-selected);
+  outline: none;
+}
+
+#midiPlayer .tempoTextField:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
 }
 
 .tempoStep {
   flex: none;
+  /* A held button repeats. A long press must not select text or open a menu. */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
   width: var(--touch-size);
   height: var(--touch-size);
   padding: 0;
@@ -1054,17 +1077,46 @@
   color: #14191c;
 }
 
-/* Landscape tablets. Undo and Redo show only their icons, so every tool fits in the bar. */
-@media (max-width: 1100px) {
-  #ToolBar .tool-label {
+/* Below 1200 px, including landscape tablets. Undo, Redo, Save and Share show only their icons (their aria-labels stay),
+   so every tool fits, and the tempo slider keeps room. */
+@media (max-width: 1199px) {
+  .tool-label {
+    display: none;
+  }
+
+  #PlaybackBar {
+    gap: 4px;
+  }
+
+  #PlaybackBar .tool-sep {
+    margin: 0 3px;
+  }
+
+  #ToolBar .tool-sep {
+    margin: 0 4px;
+  }
+
+  #midiPlayer .MIDIPlayTime {
+    width: 58px;
+  }
+}
+
+/* The tempo slider and the BPM label show only when the player has room for them, so the
+   slider is never shorter than 120 px and never covers CLICK. The player is a size container
+   only while it fills the free room of the bar; in portrait it has its content width. */
+@media (min-width: 1001px) {
+  #midiPlayer {
+    container: player / inline-size;
+  }
+}
+
+@container player (max-width: 465px) {
+  #midiPlayer .tempoLabel {
     display: none;
   }
 }
 
-/* The tempo slider shows only where it is long enough to set a tempo. Narrower screens have the
-   slower and faster buttons, which a finger can hit, and a slider that is too short covers the
-   CLICK label. */
-@media (max-width: 1199px) {
+@container player (max-width: 429px) {
   #midiPlayer .tempoInput {
     display: none;
   }
@@ -1091,6 +1143,11 @@
     font-size: 18px;
   }
 
+  /* Portrait has no room for the tempo slider next to the click buttons. */
+  #midiPlayer .tempoInput {
+    display: none;
+  }
+
   #midiPlayer .tempoAndProgress {
     flex: none;
   }
@@ -1102,17 +1159,26 @@
   /* The items spread out over the bar, so the gaps between them part the groups. */
   #PlaybackBar {
     justify-content: space-between;
-    gap: 6px;
+    gap: 4px;
     padding: 0 6px;
+  }
+
+  #midiPlayer .tempoTextField {
+    width: 50px;
   }
 
   #midiPlayer .playerControlsRow {
     gap: 4px;
   }
 
-  #PlaybackBar .tool-sep,
-  #ToolBar .tool-sep {
+  #PlaybackBar .tool-sep {
     display: none;
+  }
+
+  /* A short line between the groups of tools, so the groups do not run together. */
+  #ToolBar .tool-sep {
+    height: 20px;
+    margin: 0 2px;
   }
 
   #ToolBar {
