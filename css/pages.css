@@ -206,3 +206,9 @@ th {
   border-left: 4px solid var(--bar-selected);
   border-radius: 0 6px 6px 0;
 }
+
+.page-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}

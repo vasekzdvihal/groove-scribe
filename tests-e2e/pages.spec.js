@@ -6,6 +6,11 @@ import { loadGroove } from './helpers.js';
 
 const PAGES = ['gscribe_help.html', 'gscribe_about.html'];
 const WIDTHS = [390, 1024];
+const SIZES = [
+  [1024, 768],
+  [768, 1024],
+  [390, 844],
+];
 
 for (const path of PAGES) {
   test(`${path} is a complete HTML document`, async ({ page, request, baseURL }) => {
@@ -35,18 +40,52 @@ for (const path of PAGES) {
   }
 }
 
-test('the pages use the editor font and the top bar colour', async ({ page }) => {
+test('the pages use the editor font and the editor top bar colour', async ({ page }) => {
+  await loadGroove(page, '/index.html');
+  const editorColor = await page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.style.backgroundColor = getComputedStyle(document.documentElement)
+      .getPropertyValue('--header-bg-color')
+      .trim();
+    document.body.append(probe);
+    return getComputedStyle(probe).backgroundColor;
+  });
+  expect(editorColor).not.toBe('rgba(0, 0, 0, 0)');
   await page.goto('/gscribe_help.html');
   expect(await page.evaluate(() => getComputedStyle(document.body).fontFamily)).toContain('Lato');
   expect(
     await page.evaluate(() => getComputedStyle(document.querySelector('.page-bar')).backgroundColor)
-  ).not.toBe('rgba(0, 0, 0, 0)');
+  ).toBe(editorColor);
 });
 
-for (const [width, height] of [
-  [1024, 768],
-  [390, 844],
-]) {
+test('the footer links are 44 px tall', async ({ page }) => {
+  for (const path of PAGES) {
+    await page.goto(`/${path}`);
+    const box = await page.locator('.page-links a').first().boundingBox();
+    expect(box.height, path).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('the editor keeps a readable title at 390 px', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loadGroove(page, '/index.html');
+  const title = await page.locator('#grooveTitleDisplay').boundingBox();
+  expect(title.width).toBeGreaterThanOrEqual(80);
+  const account = await page.locator('#helpAnchor').boundingBox();
+  expect(account.width).toBeGreaterThanOrEqual(44);
+  expect(account.height).toBeGreaterThanOrEqual(44);
+  await expect(page.locator('#helpAnchor')).toHaveAttribute('aria-label', 'Sign in and help');
+});
+
+test('the account button has its own label before the script runs', async ({
+  request,
+  baseURL,
+}) => {
+  const source = await (await request.get(`${baseURL}/index.html`)).text();
+  expect(source).toMatch(/id="helpAnchor"[^>]*aria-label="Help menu"/);
+});
+
+for (const [width, height] of SIZES) {
   test(`the Help link in the editor is visible and uncovered at ${width}x${height}`, async ({
     page,
   }) => {
@@ -59,7 +98,7 @@ for (const [width, height] of [
     expect(box.width).toBeGreaterThanOrEqual(44);
     expect(box.height).toBeGreaterThanOrEqual(44);
     const onTop = await page.evaluate(
-      ({ x, y }) => document.elementFromPoint(x, y)?.closest('#helpLink') !== null,
+      ({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('#helpLink')),
       { x: box.x + box.width / 2, y: box.y + box.height / 2 }
     );
     expect(onTop).toBe(true);

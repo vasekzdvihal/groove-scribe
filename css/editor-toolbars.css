@@ -253,6 +253,21 @@
   cursor: pointer;
 }
 
+@media (max-width: 479px) {
+  #TopNav {
+    gap: 4px;
+  }
+
+  .signin-label {
+    display: none;
+  }
+
+  #helpAnchor:not(.signedIn) {
+    width: var(--touch-size);
+    padding: 0;
+  }
+}
+
 #helpAnchor:hover {
   background: rgba(255, 255, 255, 0.1);
 }

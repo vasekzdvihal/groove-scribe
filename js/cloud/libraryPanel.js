@@ -271,7 +271,11 @@ function renderUserMenu(user) {
     anchor.replaceChildren(...avatarContent(user));
     anchor.setAttribute('aria-label', 'User menu');
   } else {
-    anchor.replaceChildren(element('i', { className: 'fa fa-user' }), ' Sign in');
+    anchor.replaceChildren(
+      element('i', { className: 'fa fa-user' }),
+      ' ',
+      element('span', { className: 'signin-label', textContent: 'Sign in' })
+    );
     anchor.setAttribute('aria-label', 'Sign in and help');
   }
   byId('userMenuName').textContent = user?.name ?? '';
