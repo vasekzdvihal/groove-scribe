@@ -1,4 +1,5 @@
 import { test, expect } from './fixtures.js';
+import { grooveData } from './helpers.js';
 
 const GROOVE =
   '?TimeSig=4/4&Div=16&Title=Paradiddle&Tempo=80&Measures=1&H=|xxxxxxxxxxxxxxxx|&S=|----O-------O---|&K=|o-------o-------|';
@@ -297,6 +298,138 @@ test('Save has a name and a focus ring, and a fresh groove is not called saved',
   await save.focus();
   const outline = await save.evaluate((node) => getComputedStyle(node).outlineStyle);
   expect(outline).toBe('solid');
+});
+
+// Note cells are large enough for a finger on a tablet (audit item 27).
+const lane = (notes, bars, pattern) => `|${Array(bars).fill(pattern.slice(0, notes)).join('|')}|`;
+const grid = (div, bars, extra = '') =>
+  `?TimeSig=4/4&Div=${div}&Tempo=80&Measures=${bars}` +
+  `&H=${lane(div, bars, 'x-'.repeat(16))}&S=${lane(div, bars, '-'.repeat(32))}` +
+  `&K=${lane(div, bars, 'o' + '-'.repeat(31))}${extra}`;
+const withToms = (div, bars) =>
+  `&T1=${lane(div, bars, '-'.repeat(32))}&T4=${lane(div, bars, '-'.repeat(32))}`;
+
+// The box of every note cell that is shown, and the element at the centre of each one.
+function measureCells(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('#musicalInput :is(.hi-hat, .tom, .snare, .kick)')]
+      .map((cell) => ({ cell, box: cell.getBoundingClientRect() }))
+      .filter(({ box }) => box.width > 0 && box.height > 0)
+      .map(({ cell, box }) => {
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return {
+          id: cell.id,
+          width: box.width,
+          height: box.height,
+          top: Math.round(box.top),
+          bar: cell.closest('.staff-container').id,
+          hitsItself: !!hit && cell.contains(hit),
+        };
+      })
+  );
+}
+
+// Short failure lists: the cells that are too small, and the cells a tap at the centre misses.
+const small = (cells, isSmall) =>
+  cells.filter(isSmall).map((c) => `${c.id} ${c.width.toFixed(1)}x${c.height.toFixed(1)}`);
+const missed = (cells) => cells.filter((c) => !c.hitsItself).map((c) => c.id);
+
+// The left edge of the first cell of each bar.
+function barLefts(page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('#musicalInput .staff-container')].map((bar) =>
+      Math.round(bar.querySelector('.hi-hat').getBoundingClientRect().left)
+    )
+  );
+}
+
+// Nothing makes the page scroll sideways, and the bars fit inside the note grid.
+function horizontalOverflow(page) {
+  return page.evaluate(() => {
+    const root = document.documentElement;
+    const input = document.getElementById('musicalInput');
+    return {
+      page: root.scrollWidth - root.clientWidth,
+      grid: input.scrollWidth - input.clientWidth,
+    };
+  });
+}
+
+for (const [name, width, height] of [
+  ['tablet landscape', 1024, 768],
+  ['tablet portrait', 768, 1024],
+  ['desktop', 1440, 900],
+]) {
+  test.describe(`finger-size notes, ${name}`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true });
+
+    for (const [groove, query] of [
+      ['1/16 notes with toms', grid(16, 1, withToms(16, 1))],
+      ['1/8 notes', grid(8, 2)],
+    ]) {
+      test(`every cell is at least 44 px and a tap at its centre hits it (${groove})`, async ({
+        page,
+      }) => {
+        await openEditor(page, query);
+        const cells = await measureCells(page);
+        // hi-hat, two toms, snare and kick in every column
+        expect(cells).toHaveLength(query.includes('T1=') ? 16 * 5 : 8 * 2 * 3);
+        expect(small(cells, (c) => c.width < 44 || c.height < 44)).toEqual([]);
+        expect(missed(cells)).toEqual([]);
+        expect(await horizontalOverflow(page)).toEqual({ page: 0, grid: 0 });
+      });
+    }
+
+    test('1/32 notes are 44 px tall, and a bar stays on one line', async ({ page }) => {
+      await openEditor(page, grid(32, 2));
+      const cells = await measureCells(page);
+      expect(cells).toHaveLength(32 * 2 * 3);
+      expect(small(cells, (c) => c.height < 44)).toEqual([]);
+      expect(missed(cells)).toEqual([]);
+      for (const bar of ['staff-container1', 'staff-container2']) {
+        const lanes = new Set(cells.filter((c) => c.bar === bar).map((c) => c.top));
+        // One line of hi-hat, one of snare, one of kick: the bar did not split.
+        expect(lanes.size, bar).toBe(3);
+      }
+      expect((await horizontalOverflow(page)).page).toBe(0);
+    });
+
+    test('the rows of a wrapped grid all start at the same left edge', async ({ page }) => {
+      await openEditor(page, grid(16, 3));
+      const lefts = await barLefts(page);
+      expect(lefts).toHaveLength(3);
+      expect(new Set(lefts).size).toBe(1);
+    });
+  });
+}
+
+test.describe('finger-size notes, desktop with 1/8 notes', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('the rows of a wrapped grid all start at the same left edge', async ({ page }) => {
+    await openEditor(page, grid(8, 3));
+    const lefts = await barLefts(page);
+    expect(lefts).toHaveLength(3);
+    expect(new Set(lefts).size).toBe(1);
+  });
+});
+
+test.describe('finger-size notes, reading the grid back', () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+
+  test('taps on the larger cells still write the notes into the URL', async ({ page }) => {
+    await openEditor(
+      page,
+      '?TimeSig=4/4&Div=16&Tempo=80&Measures=1&H=|----------------|&S=|----------------|&K=|----------------|'
+    );
+    await page.locator('#hi-hat0').tap();
+    await page.locator('#snare4').tap();
+    await page.locator('#kick8').tap();
+    const written =
+      '?TimeSig=4/4&Div=16&Tempo=80&Measures=1&H=|x---------------|&S=|----O-----------|&K=|--------o-------|';
+    await expect(page).toHaveURL((url) => url.search === written);
+    expect(await grooveData(page)).toMatchObject({ hhOn: 1, snareOn: 1, kickOn: 1 });
+  });
 });
 
 test('Save stays in view mode', async ({ page }) => {
