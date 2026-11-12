@@ -147,8 +147,8 @@
 				<button type="button" class="tool tool-filled edit-block" id="timeLabel" aria-label="Time signature" onclick="myGrooveWriter.timeSigPopupOpen();"><span class="tool-in"><span id="timeSigLabel"><sup>4</sup>/<sub>4</sub></span></span></button>
 				<button type="button" class="tool tool-filled tool-caret edit-block" id="divisionMenuButton" aria-label="Note division" data-popover="divisionPopover"><span class="tool-in"><span id="divisionMenuLabel">1/16 notes</span></span></button>
 				<span class="tool-sep edit-block"></span>
-				<button type="button" class="tool edit-block" id="undoButton" aria-label="Undo" onclick="myGrooveWriter.undoCommand();"><span class="tool-in"><i class="fa fa-undo"></i><span class="tool-label">Undo</span></span></button>
-				<button type="button" class="tool edit-block" id="redoButton" aria-label="Redo" onclick="myGrooveWriter.redoCommand();"><span class="tool-in"><i class="fa fa-repeat"></i><span class="tool-label">Redo</span></span></button>
+				<button type="button" class="tool edit-block" id="undoButton" aria-disabled="true" aria-label="Undo" onclick="myGrooveWriter.undoCommand();"><span class="tool-in"><i class="fa fa-undo"></i><span class="tool-label">Undo</span></span></button>
+				<button type="button" class="tool edit-block" id="redoButton" aria-disabled="true" aria-label="Redo" onclick="myGrooveWriter.redoCommand();"><span class="tool-in"><i class="fa fa-repeat"></i><span class="tool-label">Redo</span></span></button>
 				<span class="tool-sep edit-block"></span>
 				<button type="button" class="tool tool-caret grooveDB_hidden" id="permutationAnchor" onclick="myGrooveWriter.permutationAnchorClick(event);"><span class="tool-in">Permutations</span></button>
 				<button type="button" class="tool tool-caret" id="groovesAnchor" onclick="myGrooveWriter.groovesAnchorClick(event);"><span class="tool-in">Grooves</span></button>
@@ -210,9 +210,11 @@
 			<div class="tool-popover" id="swingPopover" hidden><!-- js/editorChrome.js moves the swing row of the player here. --></div>
 
 			<div class="tool-popover" id="morePopover" hidden>
+				<button type="button" class="grooveDB_hidden" id="downloadButton" data-popover-close onclick="myGrooveWriter.DownloadAnchorClick();"><i class="fa fa-download"></i> Download SVG, PNG or MIDI</button>
 				<button type="button" class="grooveDB_hidden" id="printButton" data-popover-close onclick="myGrooveWriter.printMusic();"><i class="fa fa-print"></i> Print</button>
-				<button type="button" class="grooveDB_hidden" id="downloadButton" data-popover-close onclick="myGrooveWriter.DownloadAnchorClick();"><i class="fa fa-download"></i> Download</button>
-				<button type="button" class="tool-danger edit-block" id="clearAllNotesButton" data-popover-close onclick="event.preventDefault(); myGrooveWriter.clearAllNotes();"><i class="fa fa-trash"></i> Clear all notes</button>
+				<!-- Clear all notes is apart from the other actions, and js/main.js asks before it clears. -->
+				<div class="tool-popover-sep grooveDB_hidden edit-block" role="separator"></div>
+				<button type="button" class="tool-danger edit-block" id="clearAllNotesButton" data-popover-close><i class="fa fa-trash"></i> Clear all notes</button>
 			</div>
 		</div>
 

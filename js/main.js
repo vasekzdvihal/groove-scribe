@@ -13,7 +13,7 @@ import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
-import { askToDiscard } from './discardDialog.js';
+import { askToClearNotes, askToDiscard } from './discardDialog.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
 
@@ -109,9 +109,9 @@ if (!utils.grooveDBAuthoring) {
 if (utils.is_touch_device()) {
   replaceSlot(
     'advancedEditSlot',
-    '<button type="button" class="tool edit-block" id="advancedEditAnchor" ' +
+    '<button type="button" class="tool edit-block" id="advancedEditAnchor" aria-pressed="false" ' +
       'onclick="event.preventDefault(); myGrooveWriter.toggleAdvancedEdit()">' +
-      '<span class="tool-in">Advanced</span></button>'
+      '<span class="tool-in">Note types</span></button>'
   );
 }
 
@@ -170,6 +170,11 @@ document.getElementById('grooveListWrapper')?.addEventListener('click', async (e
   if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
   myGrooveWriter.loadNewGroove(item.getAttribute('data-groove'));
   dirtyState.markClean(editor.currentQuery());
+});
+
+// Clear all notes asks first, so a wrong tap in the More menu does not lose the groove.
+document.getElementById('clearAllNotesButton')?.addEventListener('click', async () => {
+  if (await askToClearNotes()) myGrooveWriter.clearAllNotes();
 });
 
 // The library panel needs a Google sign-in popup, which the native app shell does not

@@ -192,6 +192,7 @@ test('the more menu clears the notes, and undo brings them back', async ({ page 
   await page.click('#moreButton');
   await page.click('#clearAllNotesButton');
   await expect(page.locator('#morePopover')).toBeHidden();
+  await page.getByRole('dialog').getByRole('button', { name: 'Clear all notes' }).click();
   await expect(page).not.toHaveURL(url);
   await page.click('#undoButton');
   await expect(page).toHaveURL(/H=\|x/);
@@ -506,9 +507,10 @@ test.describe('finger-size notes, the symbols in the grid', () => {
         kick.getBoundingClientRect().top +
         parseFloat(getComputedStyle(kick).backgroundPositionY) +
         3;
+      // Note 1 is off in both lanes, so both circles have the same off size.
       return {
-        snare: Math.round(box('snare_circle0').top - lineBottom(hh)),
-        kick: Math.round(box('kick_circle0').top - lineBottom(snare)),
+        snare: Math.round(box('snare_circle1').top - lineBottom(hh)),
+        kick: Math.round(box('kick_circle1').top - lineBottom(snare)),
         highlightEnd: Math.round(box('bg-highlight0').bottom - kickLine),
       };
     });
@@ -552,3 +554,197 @@ test('Save stays in view mode', async ({ page }) => {
   await page.click('#view-edit-switch');
   await expect(page.locator('#saveButton')).toBeVisible();
 });
+
+// Controls (audit item 31 and the Severity 2 and 1 rows).
+test.describe('controls', () => {
+  test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
+
+  const isOff = (locator) => locator.evaluate((node) => node.getAttribute('aria-disabled'));
+  const opacity = (locator) => locator.evaluate((node) => Number(getComputedStyle(node).opacity));
+
+  test('Undo and Redo are off when there is nothing to undo or redo', async ({ page }) => {
+    await openEditor(page);
+    const undo = page.locator('#undoButton');
+    const redo = page.locator('#redoButton');
+    expect([await isOff(undo), await isOff(redo)]).toEqual(['true', 'true']);
+    expect(await opacity(undo)).toBeLessThan(1);
+    expect(await opacity(redo)).toBeLessThan(1);
+
+    await page.click('#snare1');
+    expect([await isOff(undo), await isOff(redo)]).toEqual(['false', 'true']);
+    expect(await opacity(undo)).toBe(1);
+
+    await undo.click();
+    expect([await isOff(undo), await isOff(redo)]).toEqual(['true', 'false']);
+    expect(await opacity(redo)).toBe(1);
+
+    await redo.click();
+    expect([await isOff(undo), await isOff(redo)]).toEqual(['false', 'true']);
+
+    // A loaded groove can be undone, so Undo is on after a load too. The Grooves menu and the
+    // library open a groove with loadNewGroove.
+    await undo.click();
+    await page.evaluate(() =>
+      window.myGrooveWriter.loadNewGroove('?TimeSig=4/4&Div=8&Tempo=90&Measures=1&H=|x-x-x-x-|')
+    );
+    expect([await isOff(undo), await isOff(redo)]).toEqual(['false', 'true']);
+  });
+
+  test('Clear all notes is apart from Download, and asks first in the page', async ({ page }) => {
+    page.on('dialog', (dialog) => {
+      throw new Error('window dialog: ' + dialog.message());
+    });
+    await openEditor(page);
+    const order = await page
+      .locator('#morePopover > *')
+      .evaluateAll((nodes) => nodes.map((node) => node.id || node.className));
+    const at = order.indexOf('clearAllNotesButton');
+    expect(order[at - 1]).not.toBe('downloadButton');
+    expect(order[at + 1]).not.toBe('downloadButton');
+
+    const start = page.url();
+    const dialog = page.getByRole('dialog', { name: 'Clear all notes?' });
+    await page.click('#moreButton');
+    await page.click('#clearAllNotesButton');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Keep the notes' }).click();
+    await expect(dialog).toBeHidden();
+    expect(page.url()).toBe(start);
+    expect((await grooveData(page)).hhOn).toBe(16);
+
+    await page.click('#moreButton');
+    await page.click('#clearAllNotesButton');
+    await dialog.getByRole('button', { name: 'Clear all notes' }).click();
+    await expect(dialog).toBeHidden();
+    expect(await grooveData(page)).toMatchObject({ hhOn: 0, snareOn: 0, kickOn: 0 });
+  });
+
+  test('Download names the formats it makes', async ({ page }) => {
+    await openEditor(page);
+    await expect(page.locator('#downloadButton')).toHaveText(/SVG.*PNG.*MIDI/);
+  });
+
+  test('the click buttons are at least 44 px in both directions', async ({ page }) => {
+    await openEditor(page);
+    const sizes = await page.locator('#metronomeContainer .metronomeButton').evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const box = node.getBoundingClientRect();
+        return { id: node.id, small: box.width < 44 || box.height < 44, height: box.height };
+      })
+    );
+    expect(sizes).toHaveLength(5);
+    expect(sizes.filter((size) => size.small)).toEqual([]);
+  });
+
+  test('a note that is on differs from one that is off in size, not only in colour', async ({
+    page,
+  }) => {
+    await openEditor(page);
+    const size = (id) =>
+      page.locator('#' + id).evaluate((node) => Math.round(node.getBoundingClientRect().width));
+    const cue = async () => ({
+      snareOn: await size('snare_circle4'),
+      snareOff: await size('snare_circle1'),
+      kickOn: await size('kick_circle0'),
+      kickOff: await size('kick_circle1'),
+      on: await page.locator('#snare1').getAttribute('data-on'),
+    });
+    const before = await cue();
+    expect(before.snareOff).toBeLessThan(before.snareOn);
+    expect(before.kickOff).toBeLessThan(before.kickOn);
+    expect(before.on).toBeNull();
+
+    // The note setters keep the cue: an edit, an undo and Clear all notes.
+    await page.click('#snare1');
+    expect(await cue()).toMatchObject({ snareOff: before.snareOn, on: '' });
+    await page.click('#undoButton');
+    expect(await cue()).toMatchObject({ snareOff: before.snareOff, on: null });
+    await page.evaluate(() => window.myGrooveWriter.clearAllNotes());
+    expect(await cue()).toMatchObject({ snareOn: before.snareOff, kickOn: before.kickOff });
+    expect(await page.locator('#musicalInput [data-on]').count()).toBe(0);
+  });
+
+  test('the touch note-type switch says what it does', async ({ page }) => {
+    await openEditor(page);
+    const button = page.locator('#advancedEditAnchor');
+    await expect(button).toHaveText('Note types');
+    await expect(button).toHaveAttribute('aria-pressed', 'false');
+    await button.click();
+    await expect(button).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('no empty band under the note grid', async ({ page }) => {
+    await openEditor(page);
+    const band = await page.evaluate(() => {
+      const input = document.getElementById('musicalInput');
+      const add = document.getElementById('addMeasureButton').getBoundingClientRect();
+      return {
+        below: Math.round(input.getBoundingClientRect().bottom - add.bottom),
+        line: getComputedStyle(input).borderBottomWidth,
+      };
+    });
+    expect(band.below).toBeLessThanOrEqual(8);
+    expect(band.line).toBe('0px');
+  });
+});
+
+// Every item of the tool bar and the playback bar is in view, without sideways scroll, and no
+// item covers another. Note types shows only on a touch screen, so both kinds are checked.
+for (const [width, height] of [
+  [1024, 768],
+  [768, 1024],
+  [1440, 900],
+]) {
+  for (const hasTouch of [true, false]) {
+    test.describe(`bar items at ${width}x${height}${hasTouch ? ' with touch' : ''}`, () => {
+      test.use({ viewport: { width, height }, hasTouch });
+
+      test('every item is in view and covers no other', async ({ page }) => {
+        await openEditor(page);
+        const report = await page.evaluate(() => {
+          const result = {};
+          for (const id of ['ToolBar', 'PlaybackBar']) {
+            const bar = document.getElementById(id);
+            const edge = bar.getBoundingClientRect();
+            const items = [
+              ...bar.querySelectorAll(
+                'button, input, .tempoLabel, #metronomeLabel, .MIDIPlayTime, .midiPlayImage'
+              ),
+            ]
+              .filter(
+                (node) =>
+                  node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden'
+              )
+              .filter((node) => !node.closest('.tool-popover, .swingRow'))
+              .map((node) => ({
+                name: node.id || node.className,
+                box: node.getBoundingClientRect(),
+              }))
+              .filter(({ box }) => box.width > 0);
+            result[id] = {
+              scroll: bar.scrollWidth - bar.clientWidth,
+              outside: items
+                .filter(({ box }) => box.left < edge.left || box.right > edge.right + 0.5)
+                .map(({ name }) => name),
+              overlapping: items.flatMap((a, i) =>
+                items
+                  .slice(i + 1)
+                  .filter(
+                    (b) =>
+                      a.box.left < b.box.right - 0.5 &&
+                      b.box.left < a.box.right - 0.5 &&
+                      a.box.top < b.box.bottom - 0.5 &&
+                      b.box.top < a.box.bottom - 0.5
+                  )
+                  .map((b) => `${a.name} / ${b.name}`)
+              ),
+            };
+          }
+          return result;
+        });
+        const clean = { scroll: 0, outside: [], overlapping: [] };
+        expect(report).toEqual({ ToolBar: clean, PlaybackBar: clean });
+      });
+    });
+  }
+}

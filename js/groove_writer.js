@@ -270,8 +270,17 @@ function GrooveWriter() {
   // false = off
   // "x" = normal tom
 
+  // A cell shows that its note is on by more than colour: css/editor-toolbars.css draws the
+  // symbols of a cell without data-on smaller. Each note setter writes data-on, so the cue
+  // follows every edit, undo, load and Clear all notes. gridState still reads only the colours.
+  function markNoteOn(partId, on) {
+    var part = document.getElementById(partId);
+    if (part && part.parentElement) part.parentElement.toggleAttribute('data-on', on);
+  }
+
   // set the tom note on with type
   function set_tom_state(id, tom_num, mode, make_sound) {
+    markNoteOn('tom_circle' + tom_num + '-' + id, mode !== 'off');
     // turn stuff on conditionally
     switch (mode) {
       case 'off':
@@ -323,6 +332,7 @@ function GrooveWriter() {
 
   // set the kick note on with type
   function set_kick_state(id, mode, make_sound) {
+    markNoteOn('kick_circle' + id, mode !== 'off');
     // hide everything optional
     document.getElementById('kick_circle' + id).style.backgroundColor =
       constant_note_hidden_color_rgb;
@@ -363,6 +373,7 @@ function GrooveWriter() {
   }
 
   function set_snare_state(id, mode, make_sound) {
+    markNoteOn('snare_circle' + id, mode !== 'off');
     // hide everything optional
     document.getElementById('snare_circle' + id).style.backgroundColor =
       constant_note_hidden_color_rgb;
@@ -430,6 +441,7 @@ function GrooveWriter() {
 
   // TODO: refactor this using a lookup table of constants
   function set_hh_state(id, mode, make_sound) {
+    markNoteOn('hh_cross' + id, mode !== 'off');
     // hide everything optional
     document.getElementById('hh_cross' + id).style.color = constant_note_hidden_color_rgb;
     document.getElementById('hh_ride' + id).style.color = constant_note_hidden_color_rgb;
@@ -1080,16 +1092,19 @@ function GrooveWriter() {
     }
   };
 
-  // user has clicked on the advanced edit button
+  // The "Note types" switch on a touch screen: while it is on, a tap on a note opens the menu of
+  // note types (accent, ghost, flam and more) instead of turning the note on or off.
   this.toggleAdvancedEdit = function () {
+    var button = document.getElementById('advancedEditAnchor');
     if (class_advancedEditIsOn) {
       // turn it off
       class_advancedEditIsOn = false;
-      unselectButton(document.getElementById('advancedEditAnchor'));
+      unselectButton(button);
     } else {
       class_advancedEditIsOn = true;
-      selectButton(document.getElementById('advancedEditAnchor'));
+      selectButton(button);
     }
+    if (button) button.setAttribute('aria-pressed', String(class_advancedEditIsOn));
   };
 
   // context menu for labels
@@ -2089,6 +2104,7 @@ function GrooveWriter() {
       undoURL = class_undo_stack[class_undo_stack.length - 1];
       applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(undoURL));
     }
+    showUndoRedoState();
   };
 
   root.redoCommand = function () {
@@ -2097,7 +2113,21 @@ function GrooveWriter() {
       root.AddItemToUndoOrRedoStack(redoURL, class_undo_stack); // add to undo stack
       applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(redoURL));
     }
+    showUndoRedoState();
   };
+
+  // Undo and Redo look off while there is nothing to undo or redo. aria-disabled keeps them in
+  // the tab order, so focus does not jump away after the last undo. Every change of the two
+  // stacks ends with this call.
+  function showUndoRedoState() {
+    setButtonOff('undoButton', class_undo_stack.length <= 1);
+    setButtonOff('redoButton', class_redo_stack.length === 0);
+  }
+
+  function setButtonOff(id, off) {
+    var button = document.getElementById(id);
+    if (button) button.setAttribute('aria-disabled', off ? 'true' : 'false');
+  }
 
   // push the new URL on the undo or redo stack
   // keep the stacks at a managable size
@@ -2130,6 +2160,7 @@ function GrooveWriter() {
 
     if (class_undo_stack.length === 0) class_undo_stack.push(urlFragment);
     else class_undo_stack[class_undo_stack.length - 1] = urlFragment;
+    showUndoRedoState();
   };
 
   root.AddFullURLToUndoStack = function (fullURL) {
@@ -2140,6 +2171,7 @@ function GrooveWriter() {
     if (root.AddItemToUndoOrRedoStack(urlFragment, class_undo_stack)) {
       class_redo_stack = [];
     }
+    showUndoRedoState();
   };
 
   // update the current URL so that reloads and history traversal and link shares and bookmarks work correctly

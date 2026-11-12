@@ -142,6 +142,16 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* Undo or Redo with nothing to undo or redo. groove_writer.js sets aria-disabled. */
+.tool[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tool[aria-disabled='true']:hover {
+  background: none;
+}
+
 .tool:focus-visible,
 .metronomeButton:focus-visible,
 .tempoStep:focus-visible,
@@ -200,7 +210,7 @@
   display: none;
 }
 
-/* A control that is on: toms shown, stickings shown, permutation active, advanced edit on. */
+/* A control that is on: toms shown, stickings shown, permutation active, note types on. */
 .tool.ClickToHide,
 .tool.buttonSelected {
   background: var(--bar-selected);
@@ -324,9 +334,11 @@
    The old layout used fixed pixel offsets (staff lines, labels, the highlight columns). Here the
    lanes are flex rows, the staff line is the bottom border of each lane, and the labels have the
    lane height. groove_writer.js renderNoteGrid() sets --notes and --groups on #measureContainer. */
+/* Nothing follows the grid, so it has no line below it, and it ends at the add-measure button. */
 #musicalInput {
   container: note-grid / inline-size;
   text-align: left;
+  border-bottom: 0;
 }
 
 /* A container query cannot style its own container, so the sizes live on #measureContainer. */
@@ -354,8 +366,8 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--bar-min)), 1fr));
   column-gap: var(--bar-gap);
   align-items: start;
-  /* room for the add-measure button below the last bar */
-  padding: 0 12px 48px;
+  /* room for the add-measure button below the last bar: its 2 px gap and its 44 px */
+  padding: 0 12px 46px;
   /* A symbol in the last cell of a narrow bar may reach past the bar. It must not make the
      grid scroll sideways. */
   overflow-x: clip;
@@ -519,6 +531,13 @@
 #musicalInput .snare .note_part,
 #musicalInput .kick .note_part {
   margin-top: 7px;
+}
+
+/* A note that is off has a smaller symbol than a note that is on, so the state shows without
+   colour too: for colour-blind people and in poor light. groove_writer.js writes data-on in
+   each note setter. transform adds to the scale of narrow cells below. */
+#musicalInput :is(.hi-hat, .tom, .snare, .kick):not([data-on]) .note_part {
+  transform: scale(0.75);
 }
 
 /* Smaller symbols in narrow cells, so that neighbours do not touch. */
@@ -801,7 +820,7 @@
 }
 
 .metronomeButton {
-  height: 40px;
+  height: var(--touch-size);
   min-width: var(--touch-size);
   margin: 0;
   padding: 0 8px;
@@ -891,6 +910,13 @@
 
 .tool-popover .tool-danger {
   color: var(--bar-danger);
+}
+
+/* Keeps Clear all notes apart from the other actions. */
+.tool-popover-sep {
+  height: 1px;
+  margin: 6px 0;
+  background: #d5dbdf;
 }
 
 #sheetMusicTextFields {
@@ -1028,6 +1054,22 @@
   color: #14191c;
 }
 
+/* Landscape tablets. Undo and Redo show only their icons, so every tool fits in the bar. */
+@media (max-width: 1100px) {
+  #ToolBar .tool-label {
+    display: none;
+  }
+}
+
+/* The tempo slider shows only where it is long enough to set a tempo. Narrower screens have the
+   slower and faster buttons, which a finger can hit, and a slider that is too short covers the
+   CLICK label. */
+@media (max-width: 1199px) {
+  #midiPlayer .tempoInput {
+    display: none;
+  }
+}
+
 /* Portrait tablets. */
 @media (max-width: 1000px) {
   .tool-label,
@@ -1049,11 +1091,6 @@
     font-size: 18px;
   }
 
-  /* Portrait has no room for the tempo slider next to the click buttons. */
-  #midiPlayer .tempoInput {
-    display: none;
-  }
-
   #midiPlayer .tempoAndProgress {
     flex: none;
   }
@@ -1062,20 +1099,24 @@
     flex: none;
   }
 
+  /* The items spread out over the bar, so the gaps between them part the groups. */
   #PlaybackBar {
     justify-content: space-between;
     gap: 6px;
+    padding: 0 6px;
   }
 
-  #PlaybackBar .tool-sep {
-    margin: 0 2px;
+  #midiPlayer .playerControlsRow {
+    gap: 4px;
   }
 
+  #PlaybackBar .tool-sep,
   #ToolBar .tool-sep {
     display: none;
   }
 
   #ToolBar {
+    gap: 0;
     padding: 0 6px;
     font-size: 14px;
   }

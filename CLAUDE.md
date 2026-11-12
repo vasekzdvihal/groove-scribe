@@ -80,8 +80,8 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 `registerServiceWorker.js` (decides whether this page uses the service worker, and registers it),
 `cloud/pendingSync.js` (the library's queued-write tracking: the flag, the sync wait, the slow timer
 and the leave warning),
-`discardDialog.js` (the "Discard your changes?" question; the page owns it, so it works without
-the panel),
+`discardDialog.js` (the in-page questions "Discard your changes?" and "Clear all notes?"; the
+page owns them, so they work without the panel),
 `cloud/dirtyState.js` (the clean groove: `createDirtyState`, `watchDirty`, and the per-tab baseline
 that survives a reload),
 `cloud/currentGroove.js` (the saved groove open in the editor: `createCurrentGroove` for one
