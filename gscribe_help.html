@@ -1,87 +1,130 @@
-<style>
-body {
-	margin: 30px 30px 30px 30px;
-}
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="theme-color" content="#243640">
+		<title>Help - Groove Scribe</title>
+		<link rel="icon" sizes="96x96" href="images/gscribe-icon-96.png">
+		<link rel="stylesheet" href="css/fonts.css">
+		<link rel="stylesheet" href="css/pages.css">
+	</head>
+	<body>
+		<header class="page-bar">
+			<img src="images/GScribe_Logo_word_stack.svg" alt="Groove Scribe">
+			<span class="page-bar-title">Help</span>
+			<a class="back" href="index.html">Back to the editor</a>
+		</header>
 
-</style>
+		<main>
+			<h1>Help</h1>
+			<p class="lead">Groove Scribe is a drum notation editor. You tap notes into a grid. The page writes the sheet music and plays it.</p>
+			<ul class="contents">
+				<li><a href="#notes">Add notes</a></li>
+				<li><a href="#play">Play</a></li>
+				<li><a href="#save">Save and share</a></li>
+				<li><a href="#library">Library</a></li>
+				<li><a href="#offline">Offline and install</a></li>
+				<li><a href="#keys">Keys</a></li>
+				<li><a href="#metronome">Metronome</a></li>
+				<li><a href="#swing">Swing</a></li>
+			</ul>
 
-<h1>Help!</h2>
+			<h2 id="notes">Add notes</h2>
+			<ul>
+				<li>Tap a cell in the grid to turn a note on. Tap it again to turn it off.</li>
+				<li>The sheet music above the grid changes at once.</li>
+				<li>On a touch screen, turn on <b>Note types</b> in the toolbar. Then a tap on a cell opens a menu of note types, such as accent, ghost or flam.</li>
+				<li>On a computer, right-click a note to choose its type, such as Snare Accent, Ghost Note or Flam.</li>
+				<li>Right-click a row name, such as Snare, for row actions. Examples are "all Snares Off", "all Ghosts" and "mute snare sound". The Hi-hat row has "downbeats" and "upbeats". The Kick row has "HH foot #'s On".</li>
+				<li>Use <b>Toms</b> to show the tom rows.</li>
+				<li><b>Stickings</b> opens a menu. It can show or hide the stickings row, or reverse R and L.</li>
+				<li>The time and the note division are the first two buttons in the toolbar.</li>
+				<li><b>Undo</b> and <b>Redo</b> step through your changes.</li>
+				<li><b>Grooves</b> in the toolbar has ready-made grooves to start from.</li>
+			</ul>
 
-Keyboard shortcuts:
-<ul>
-<li><b>Spacebar</b> - Start/Stop midi playback
-<li><b>Ctrl-Z</b> - Undo
-<li><b>Ctrl-Y</b> - Redo
-<li><b>Left Arrow</b> - Tempo Down
-<li><b>Right Arrow</b> - Tempo Up
-<li><b>CTRL and mouse over</b> - turn on notes
-<li><b>ALT and mouse over</b> - turn off notes 
-</ul>
+			<h2 id="play">Play</h2>
+			<ul>
+				<li>Tap the round play button at the bottom left. Tap it again to stop.</li>
+				<li>Use <b>&minus;</b> and <b>+</b> next to BPM to change the tempo.</li>
+				<li>Tap the BPM number to type a tempo.</li>
+				<li>Hold <b>&minus;</b> or <b>+</b> to change the tempo fast.</li>
+				<li>On most browsers, the screen stays on while the groove plays. It stays on for 10 minutes after you stop.</li>
+			</ul>
 
-<h3>Saving a groove</h3>
+			<h2 id="save">Save and share</h2>
+			<ul>
+				<li><b>Share</b> gives you a link to the groove. Send the link to anyone. They see the same groove in their browser.</li>
+				<li><b>Save</b> is next to Share. It keeps the groove in your library. You must sign in with Google to use it.</li>
+				<li>When you open a saved groove and change it, Save offers <b>Update groove</b>. This replaces the saved groove. <b>Save as new</b> makes a copy instead.</li>
+				<li>The button shows <b>Saved</b> when the groove in the editor has no unsaved changes.</li>
+				<li>The <b>More actions</b> button (three dots) has Print, Download and Clear all notes.</li>
+			</ul>
 
-You can save a groove by bookmarking the page at any time.   You can also "copy and paste", email, or post to social media sites from the share menu.   
+			<h2 id="library">Library</h2>
+			<ul>
+				<li>Tap <b>Library</b> at the top left to open the library.</li>
+				<li>Sign in with Google. Then your lessons and grooves are on every device that you sign in on.</li>
+				<li>A lesson holds grooves. You can rename and delete lessons and grooves. You can move a groove to another lesson.</li>
+				<li>Tap a groove to open it in the editor.</li>
+				<li>If the groove in the editor has unsaved changes, the page asks first. Choose <b>Keep editing</b> to stay on your groove. Choose <b>Discard changes</b> to open the other groove.</li>
+				<li>On a wide screen the library stays open next to the music. On a narrow screen it slides over the editor.</li>
+				<li>Without a sign-in the editor still works. Only the library needs it.</li>
+			</ul>
 
-<br>
-<h3>Metronome</h3>
+			<h2 id="offline">Offline and install</h2>
+			<ul>
+				<li>Open Groove Scribe once with a network. After that, the editor works without a network.</li>
+				<li>Your saved library is on this device if you opened it signed in before. Changes you make offline are sent when the network comes back.</li>
+				<li>You can add Groove Scribe to your home screen. On an iPad, tap the Share button in Safari, then <b>Add to Home Screen</b>. In Chrome, use the install option in the menu.</li>
+				<li>The home screen icon opens the app in full screen.</li>
+			</ul>
 
-Options:
-<ul>
-<li><b>4ths</b> - adds a cowbell on the 1 and a click on the 2, 3, and 4;
-<li><b>8ths</b> - Adds a click on all the "ands"   (plays 8th note triplets in triplet subdivisions)
-<li><b>16ths</b> - Adds a softer click on every 16th note.  Plays a louder click on the 2, 3, and 4.  (plays 16th note triplets in triplet subdivisions)
-<li><b>Solo</b> - Plays the metronome, and mutes the groove when the play button is pressed.
-<li><b>Auto Speed Up</b> - Will increase the metronome BPM automatically after each loop through.
-<li><b>Offset click</b> - Allows the metronome to accent the "e", "&amp;", or "a", instead of the 1.
-</ul>
+			<h2 id="keys">Keys</h2>
+			<p>These keys work when you use a keyboard.</p>
+			<div class="table-wrap">
+				<table>
+					<tr><th>Key</th><th>Action</th></tr>
+					<tr><td><kbd>Space</kbd></td><td>Start or stop playback</td></tr>
+					<tr><td><kbd>Ctrl</kbd> + <kbd>Z</kbd> (<kbd>Cmd</kbd> + <kbd>Z</kbd> on a Mac)</td><td>Undo</td></tr>
+					<tr><td><kbd>Ctrl</kbd> + <kbd>Y</kbd> or <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></td><td>Redo</td></tr>
+					<tr><td><kbd>&larr;</kbd></td><td>Tempo down</td></tr>
+					<tr><td><kbd>&rarr;</kbd></td><td>Tempo up</td></tr>
+					<tr><td><kbd>Ctrl</kbd> and move the mouse over notes</td><td>Turn notes on</td></tr>
+					<tr><td><kbd>Alt</kbd> and move the mouse over notes</td><td>Turn notes off</td></tr>
+				</table>
+			</div>
 
-<h3>What swing is "correct" or "normal"?</h3>
-There is no "correct" value for swing.   The level of swing varies widely and generally left to the performer to determine.    <br>
-The classic triplet swing feel shows up at 33% on the swing meter. For a tighter swing feel (dotted 8th followed by 16th) move the meter to 50%, full swing. 
-Swing is a matter of personal taste so please feel free to practice your grooves with different amounts of swing until you find the feel that you are looking for.   <br>
-<a href="https://en.wikipedia.org/wiki/Swing_(jazz_performance_style)">Wikipedia has a good article on the types of swing.</a>  (Scroll down to the "Types" header)   <br>
-<br>
-<table>
-<tr><td>Groove Scribe&nbsp;&nbsp;&nbsp;&nbsp;<br>Swing</td><td></td><td></td><td>&nbsp;&nbsp;</td>
-<tr><td>20%</td>   <td>   </td>  <td>3:2 ratio&nbsp;&nbsp;&nbsp;&nbsp;</td>  <td>light </td>
-<tr><td>33%</td>   <td>Triplet quarter + triplet eighth&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>  <td>2:1 ratio</td>  <td>medium </td>
-<tr><td>50%</td>   <td>Dotted eighth + sixteenth</td>  <td>3:1 ratio</td>  <td>heavy </td>
-</table>
+			<h2 id="metronome">Metronome</h2>
+			<p>Use the <b>Click</b> buttons in the play bar: Off, 4th, 8th or 16th.</p>
+			<ul>
+				<li><b>4th</b> puts a cowbell on the 1 and a click on the 2, 3 and 4.</li>
+				<li><b>8th</b> puts a click on all the "ands". In triplets it plays 8th note triplets.</li>
+				<li><b>16th</b> puts a soft click on every 16th note and a louder click on the 2, 3 and 4. In triplets it plays 16th note triplets.</li>
+			</ul>
+			<p>The cog button next to them has more options.</p>
+			<ul>
+				<li><b>Solo</b> plays only the metronome. The groove is quiet.</li>
+				<li><b>Auto speed up</b> raises the tempo after each loop.</li>
+				<li><b>Count it in</b> plays one measure of clicks before the groove starts.</li>
+				<li><b>Offset click</b> puts the accent on the "e", the "&amp;" or the "a" instead of the 1.</li>
+			</ul>
 
-<!--
-<h3>Permutations</h3>
+			<h2 id="swing">Swing</h2>
+			<p>The <b>Swing</b> button in the play bar opens a slider. It changes the sound only. The sheet music stays the same.</p>
+			<p>There is no right amount of swing. Try different amounts. At 33% you hear the classic triplet feel. At 50% you hear a tight feel: a dotted 8th note and a 16th note. <a href="https://en.wikipedia.org/wiki/Swing_(jazz_performance_style)">Wikipedia has an article on swing</a>.</p>
+			<div class="table-wrap">
+				<table>
+					<tr><th>Swing</th><th>Feel</th><th>Ratio</th><th>Strength</th></tr>
+					<tr><td>20%</td><td></td><td>3:2</td><td>light</td></tr>
+					<tr><td>33%</td><td>Triplet quarter and triplet eighth</td><td>2:1</td><td>medium</td></tr>
+					<tr><td>50%</td><td>Dotted eighth and sixteenth</td><td>3:1</td><td>heavy</td></tr>
+				</table>
+			</div>
 
-A permutation for drumming is a method for playing all the possible combinations of given instrument for a note division.   
-The Groove Scribe can generate two types of permutations:  Kick drum and snare drum permutations in 1/16th notes.    
-<p>
-If there are multiple measures present, all but the first will be closed when a permutation is activated.   
-You can use the "Undo" action in the help menu to restore the measures that were closed if necessary.
-<p>
-<b>Permutation Options</b>
-<ul>
-	Count in 1 measure
-	<ul><li>Plays the metronome for 4 counts before starting the permutation
-	</ul>
-
-	Simplify multiple kicks
-	<ul><li>Causes the kick on the "1" and the "1e" to be skipped if it 
-	directly follows a kick on the "4a" from the previous measure.   This usually makes the flow better if you are playing the whole 
-	pattern all the way through.
-	</ul>
-
-	Use Accent Grid
-	<ul><li>Changes the permutation to use all the 16ths notes on the snare and to accent the permutation pattern.
-	</ul>
-
-	Ostinato, Singles, Doubles, Triples, etc...
-	<ul><li>Any Individual permutation section can be turned on and off.
-	</ul>
-</ul>
--->
-
-<h3>Editing tips</h3>
-<ul>
-<li>The "Hi-hat", "Snare", "Kick" and "Sticking" labels to the left of the editing grid have a menu when clicked.   You can quickly turn all the notes in a measure on or off using the menu.
-<li>Right click the notes to access special notes, like ghost notes, hi-hat open, flams and drags.    On a touch device, use the "Advanced Edit" button to access the special notes.
-<li>Use the Grooves menu to select a groove close to the one you want, or use it to clear the editing grid to start a new groove from scratch.
-<li>You can change the notes while playing the groove and hear what you are doing while editing.
+			<p class="page-links"><a href="gscribe_about.html">About Groove Scribe</a></p>
+		</main>
+		<script type="module" src="js/backToEditor.js"></script>
+	</body>
+</html>

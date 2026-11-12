@@ -160,8 +160,9 @@ test.describe('undo and redo', () => {
     await expectQuery(page, HH0);
     await page.click('#undoButton');
     await expectQuery(page, START);
-    // Nothing is left to undo: the URL stays at the start.
-    await page.click('#undoButton');
+    // Nothing is left to undo: Undo is off, and the URL stays at the start.
+    await expect(page.locator('#undoButton')).toHaveAttribute('aria-disabled', 'true');
+    await page.evaluate(() => window.myGrooveWriter.undoCommand());
     await expectQuery(page, START);
   });
 
@@ -259,8 +260,9 @@ test.describe('undo and redo', () => {
     await expectQuery(page, HH0);
     await page.click('#redoButton');
     await expectQuery(page, HH0_SN4);
-    // Nothing is left to redo.
-    await page.click('#redoButton');
+    // Nothing is left to redo: Redo is off.
+    await expect(page.locator('#redoButton')).toHaveAttribute('aria-disabled', 'true');
+    await page.evaluate(() => window.myGrooveWriter.redoCommand());
     await expectQuery(page, HH0_SN4);
   });
 
@@ -281,7 +283,8 @@ test.describe('undo and redo', () => {
     await page.click('#hi-hat0');
     await page.click('#undoButton');
     await page.click('#snare4');
-    await page.click('#redoButton');
+    await expect(page.locator('#redoButton')).toHaveAttribute('aria-disabled', 'true');
+    await page.evaluate(() => window.myGrooveWriter.redoCommand());
     await expectQuery(
       page,
       '?TimeSig=4/4&Div=16&Tempo=80&Measures=1&H=|----------------|&S=|----O-----------|&K=|----------------|'
@@ -404,8 +407,7 @@ test.describe('change division', () => {
     expect(await page.evaluate(() => window.myGrooveWriter.notesPerMeasure())).toBe(16);
 
     // The dismissed change added no undo step.
-    await page.click('#undoButton');
-    await expectQuery(page, HH0);
+    await expect(page.locator('#undoButton')).toHaveAttribute('aria-disabled', 'true');
   });
 
   test('an empty groove switches to triplets without a question', async ({ page }) => {
@@ -617,11 +619,10 @@ test.describe('change time signature', () => {
     await expect(page.locator('#timeSigPopupTimeSigBottom')).toHaveValue('8');
     await closeTimeSigPopup(page, '#timeSigPopupCancel');
 
-    // The refusal added no undo step: one undo takes back the note, a second does nothing.
+    // The refusal added no undo step: one undo takes back the note, and then Undo is off.
     await page.click('#undoButton');
     await expectQuery(page, triplets);
-    await page.click('#undoButton');
-    await expectQuery(page, triplets);
+    await expect(page.locator('#undoButton')).toHaveAttribute('aria-disabled', 'true');
   });
 
   test('1/8 triplets in 7/8 time are refused because of the triplets', async ({ page }) => {
@@ -844,6 +845,7 @@ test.describe('editor state regressions', () => {
     await expectQuery(page, withToms);
     await page.click('#moreButton');
     await page.click('#clearAllNotesButton');
+    await page.getByRole('dialog').getByRole('button', { name: 'Clear all notes' }).click();
     await expect.poll(() => query(page)).not.toContain('T2=');
     await expect.poll(() => query(page)).not.toContain('T3=');
     await page.click('#undoButton');

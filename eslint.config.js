@@ -115,7 +115,8 @@ export default [
       'js/wakeLock.js',
       'js/registerServiceWorker.js',
       'js/main.js',
-      'js/discardDialog.js',
+      'js/confirmDialog.js',
+      'js/backToEditor.js',
       'js/cloud/**/*.js',
     ],
     languageOptions: {

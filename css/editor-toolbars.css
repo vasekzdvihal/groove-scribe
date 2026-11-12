@@ -74,6 +74,34 @@
   margin: 0;
 }
 
+/* The Help link is its own button, so the account menu never hides it. */
+#upperRight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#helpLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-size);
+  height: var(--touch-size);
+  color: inherit;
+  font-size: 24px;
+  text-decoration: none;
+  border-radius: 22px;
+}
+
+#helpLink:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#helpLink:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+
 #grooveTitleDisplay {
   flex: 1;
   min-width: 0;
@@ -112,6 +140,16 @@
 
 .tool:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Undo or Redo with nothing to undo or redo. groove_writer.js sets aria-disabled. */
+.tool[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tool[aria-disabled='true']:hover {
+  background: none;
 }
 
 .tool:focus-visible,
@@ -172,7 +210,7 @@
   display: none;
 }
 
-/* A control that is on: toms shown, stickings shown, permutation active, advanced edit on. */
+/* A control that is on: toms shown, stickings shown, permutation active, note types on. */
 .tool.ClickToHide,
 .tool.buttonSelected {
   background: var(--bar-selected);
@@ -225,6 +263,21 @@
   cursor: pointer;
 }
 
+@media (max-width: 479px) {
+  #TopNav {
+    gap: 4px;
+  }
+
+  .signin-label {
+    display: none;
+  }
+
+  #helpAnchor:not(.signedIn) {
+    width: var(--touch-size);
+    padding: 0;
+  }
+}
+
 #helpAnchor:hover {
   background: rgba(255, 255, 255, 0.1);
 }
@@ -273,9 +326,348 @@
   margin-left: auto;
 }
 
-/* Bars that do not fit go to the next line, so that nobody scrolls sideways to reach them. */
-#RightHandContent #musicalInput {
+/* Note grid. Each cell is a finger-size target: at least 44 px tall, and as wide as the room
+   allows, up to --cell-max. Bars sit side by side in equal columns while their cells can be
+   44 px wide; after that a bar goes to the next row. The first bar of every row is in the first
+   column, so all rows start at the same left edge. The cells keep their colour rules:
+   gridState.js reads the note state back from those colours.
+   The old layout used fixed pixel offsets (staff lines, labels, the highlight columns). Here the
+   lanes are flex rows, the staff line is the bottom border of each lane, and the labels have the
+   lane height. groove_writer.js renderNoteGrid() sets --notes and --groups on #measureContainer. */
+/* Nothing follows the grid, so it has no line below it, and it ends at the add-measure button. */
+#musicalInput {
+  container: note-grid / inline-size;
+  text-align: left;
+  border-bottom: 0;
+}
+
+/* A container query cannot style its own container, so the sizes live on #measureContainer. */
+#musicalInput #measureContainer {
+  --notes: 16;
+  --groups: 4;
+  --cell-max: 56px;
+  --cell-min: 22px;
+  --cell-height: 44px;
+  --lane-line: 3px;
+  /* The kick lane is taller: the kick sits above its line, a hi-hat foot splash on it. */
+  --kick-height: 62px;
+  --kick-line-top: var(--cell-height);
+  /* The beat lines and the playback highlight stop at the kick line. */
+  --below-kick-line: calc(var(--kick-height) - var(--kick-line-top) - var(--lane-line));
+  --label-width: 80px;
+  --beat-gap: 16px;
+  --bar-gap: 24px;
+  /* The narrowest a bar may be before it goes to the next row: 44 px cells. */
+  --bar-min: calc(
+    var(--label-width) + var(--notes) * var(--touch-size) + (var(--groups) - 1) * var(--beat-gap)
+  );
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--bar-min)), 1fr));
+  column-gap: var(--bar-gap);
+  align-items: start;
+  /* room for the add-measure button below the last bar: its 2 px gap and its 44 px */
+  padding: 0 12px 46px;
+  /* A symbol in the last cell of a narrow bar may reach past the bar. It must not make the
+     grid scroll sideways. */
+  overflow-x: clip;
+}
+
+#musicalInput .staff-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  max-width: 100%;
+  margin: 28px auto 0;
   white-space: normal;
+}
+
+/* Room above each bar for its 44 px Remove button. */
+#musicalInput .staff-container:has(> .closeMeasureButton[id]) {
+  margin-top: 44px;
+}
+
+#musicalInput .stickings-row-container,
+#musicalInput .notes-row-container {
+  display: flex;
+}
+
+#musicalInput .line-labels {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: var(--label-width);
+}
+
+#musicalInput .music-line-container {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The lanes. A lane that is shown with display: block (stickings) is made a flex row too. */
+#musicalInput .stickings-container[style*='block'] {
+  display: flex !important;
+}
+
+#musicalInput .hi-hat-container,
+#musicalInput .toms-container,
+#musicalInput .snare-container,
+#musicalInput .kick-container,
+#musicalInput .background-highlight-container {
+  display: flex;
+}
+
+#musicalInput .stickings-container,
+#musicalInput .hi-hat-container,
+#musicalInput .toms-container,
+#musicalInput .snare-container,
+#musicalInput .kick-container {
+  position: relative;
+  box-sizing: border-box;
+  height: calc(var(--cell-height) + var(--lane-line));
+  border: 0;
+  border-bottom: var(--lane-line) solid #cacaca;
+}
+
+#musicalInput .stickings-container {
+  height: var(--cell-height);
+  border-bottom: 0;
+}
+
+#musicalInput .kick-container {
+  height: var(--kick-height);
+  border-bottom: 0;
+  background: linear-gradient(#cacaca, #cacaca) 0 var(--kick-line-top) / 100% var(--lane-line)
+    no-repeat;
+}
+
+/* Hidden toms take no room. groove_writer.js shows them with an inline visibility style. */
+#musicalInput .toms-container:not([style*='visible']),
+#musicalInput .tom-label:not([style*='visible']) {
+  display: none;
+}
+
+#musicalInput .staff-line-1,
+#musicalInput .staff-line-2,
+#musicalInput .staff-line-3,
+#musicalInput .staff-line-4,
+#musicalInput .staff-line-5 {
+  display: none;
+}
+
+/* The playback highlight columns line up with the cells, from the top lane to the kick line. */
+#musicalInput .background-highlight-container {
+  inset: 0;
+  height: auto;
+  border: 0;
+}
+
+#musicalInput .sticking,
+#musicalInput .hi-hat,
+#musicalInput .tom,
+#musicalInput .snare,
+#musicalInput .kick,
+#musicalInput .bg-highlight {
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  width: var(--cell-max);
+  min-width: var(--cell-min);
+  height: 100%;
+  margin: 0;
+}
+
+#musicalInput .bg-highlight {
+  height: calc(100% - var(--below-kick-line));
+}
+
+/* Each cell is a size container, so a narrow cell (1/32 notes) can draw smaller symbols. */
+#musicalInput .sticking,
+#musicalInput .hi-hat,
+#musicalInput .tom,
+#musicalInput .snare,
+#musicalInput .kick {
+  container: note-cell / inline-size;
+}
+
+#musicalInput .opening_note_space,
+#musicalInput .end_note_space {
+  flex: none;
+  width: 0;
+}
+
+#musicalInput .space_between_note_groups {
+  position: relative;
+  flex: none;
+  width: var(--beat-gap);
+  height: auto;
+}
+
+/* A thin beat line in the middle of the gap between note groups. It is drawn once, over all
+   the lanes, and stops at the kick line. */
+#musicalInput .background-highlight-container .space_between_note_groups::before {
+  position: absolute;
+  top: 0;
+  bottom: var(--below-kick-line);
+  left: calc(50% - 0.5px);
+  width: 1px;
+  background: #dde3e6;
+  content: '';
+}
+
+/* The note symbols were placed for a 29 px wide cell. Centre them in the wider cell, and move
+   them down in lanes that were shorter than 42 px, so every symbol has the same distance to
+   the line above it. */
+#musicalInput .note_part {
+  margin-left: calc((100% - 29px) / 2);
+}
+
+#musicalInput .sticking .note_part {
+  margin-top: 6px;
+}
+
+#musicalInput .tom .note_part,
+#musicalInput .snare .note_part,
+#musicalInput .kick .note_part {
+  margin-top: 7px;
+}
+
+/* A note that is off has a smaller symbol than a note that is on, so the state shows without
+   colour too: for colour-blind people and in poor light. groove_writer.js writes data-on in
+   each note setter. transform adds to the scale of narrow cells below. */
+#musicalInput :is(.hi-hat, .tom, .snare, .kick):not([data-on]) .note_part {
+  transform: scale(0.75);
+}
+
+/* Smaller symbols in narrow cells, so that neighbours do not touch. */
+@container note-cell (max-width: 31px) {
+  #musicalInput .note_part {
+    scale: 0.8;
+  }
+}
+
+@container note-cell (max-width: 25px) {
+  #musicalInput .note_part {
+    scale: 0.65;
+  }
+}
+
+/* The labels have the height of their lanes, and are centred on the cells above the line. */
+#musicalInput .line-labels > div {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  height: calc(var(--cell-height) + var(--lane-line));
+  margin: 0;
+  padding: 0 4px var(--lane-line) 8px;
+}
+
+#musicalInput .line-labels .stickings-label[style*='block'] {
+  display: flex !important;
+}
+
+#musicalInput .line-labels .stickings-label {
+  height: var(--cell-height);
+  padding-bottom: 0;
+  font-size: 12px;
+}
+
+/* The hi-hat symbols sit low in their lane. */
+#musicalInput .line-labels .hh-label {
+  padding-top: 8px;
+}
+
+#musicalInput .line-labels .kick-label {
+  height: var(--kick-height);
+  padding-bottom: calc(var(--kick-height) - var(--cell-height));
+}
+
+/* A muted lane shows its unmute button over its label. */
+#musicalInput .unmuteHHButton,
+#musicalInput .unmuteSnareButton,
+#musicalInput .unmuteKickButton,
+#musicalInput .unmuteTom1Button,
+#musicalInput .unmuteTom4Button {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  z-index: 5;
+  box-sizing: border-box;
+  width: var(--label-width);
+  height: 100%;
+  margin: 0;
+  background: #fff;
+}
+
+/* Remove sits above the right end of its bar. Add sits below the last bar, at the left. Both
+   are 44 px targets, and neither takes width from the cells. */
+#musicalInput .closeMeasureButton,
+#musicalInput #addMeasureButton {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-size);
+  height: var(--touch-size);
+  margin: 0;
+  padding: 0;
+}
+
+/* With one measure the Remove slot is an empty placeholder. */
+#musicalInput .closeMeasureButton:not([id]) {
+  display: none;
+}
+
+#musicalInput .closeMeasureButton {
+  bottom: 100%;
+  right: 0;
+  font-size: 22px;
+}
+
+#musicalInput #addMeasureButton {
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+}
+
+/* These come after the rules above, which they override.
+   Tablet landscape, and a desktop with the library docked next to the music. */
+@container note-grid (max-width: 1100px) {
+  #musicalInput #measureContainer {
+    --label-width: 72px;
+    --beat-gap: 8px;
+  }
+}
+
+/* Tablet portrait: an 8 px gutter on each side, then the labels and sixteen 44 px cells fill
+   768 px. The beat gap is 0, and the beat line is drawn on the edge between two cells. */
+@container note-grid (max-width: 860px) {
+  #musicalInput #measureContainer {
+    --label-width: 48px;
+    --beat-gap: 0px;
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  #musicalInput .line-labels > div {
+    padding-right: 2px;
+    padding-left: 2px;
+    font-size: 15px;
+  }
+
+  /* STICKINGS does not fit in 48 px at 12 px. Show a short label; the full word stays in the
+     page for screen readers. */
+  #musicalInput .line-labels .stickings-label {
+    font-size: 0;
+  }
+
+  #musicalInput .line-labels .stickings-label::after {
+    /* Safari before 17.4 drops the alt-text form, so it keeps the plain one. */
+    content: 'STICK';
+    content: 'STICK' / '';
+    font-size: 12px;
+  }
 }
 
 /* Playback bar. */
@@ -354,20 +746,43 @@
   text-transform: uppercase;
 }
 
+/* The tempo field looks like a field: a tap types a new tempo. */
 #midiPlayer .tempoTextField {
+  box-sizing: border-box;
   flex: none;
-  width: 44px;
+  width: 56px;
   height: var(--touch-size);
   margin: 0;
+  padding: 0;
   color: var(--bar-text);
-  background: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 0;
+  border-bottom: 2px solid var(--bar-dim);
+  border-radius: 6px 6px 0 0;
   font-size: 22px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+#midiPlayer .tempoTextField:focus {
+  background: rgba(255, 255, 255, 0.16);
+  border-bottom-color: var(--bar-selected);
+  outline: none;
+}
+
+#midiPlayer .tempoTextField:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
 }
 
 .tempoStep {
   flex: none;
+  /* A held button repeats. A long press must not select text or open a menu. */
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
   width: var(--touch-size);
   height: var(--touch-size);
   padding: 0;
@@ -428,7 +843,7 @@
 }
 
 .metronomeButton {
-  height: 40px;
+  height: var(--touch-size);
   min-width: var(--touch-size);
   margin: 0;
   padding: 0 8px;
@@ -518,6 +933,13 @@
 
 .tool-popover .tool-danger {
   color: var(--bar-danger);
+}
+
+/* Keeps Clear all notes apart from the other actions. */
+.tool-popover-sep {
+  height: 1px;
+  margin: 6px 0;
+  background: #d5dbdf;
 }
 
 #sheetMusicTextFields {
@@ -655,16 +1077,57 @@
   color: #14191c;
 }
 
-/* Portrait tablets. */
-@media (max-width: 1000px) {
-  .tool-label,
-  #metronomeLabel,
-  #midiPlayer .tempoLabel {
+/* Below 1200 px, including landscape tablets. Undo, Redo, Save and Share show only their icons
+   (their aria-labels stay), so every tool fits, and the tempo slider keeps room. The portrait
+   block below changes some of these values again. */
+@media (max-width: 1199px) {
+  .tool-label {
     display: none;
   }
 
-  .tool-sep {
+  #PlaybackBar {
+    gap: 4px;
+  }
+
+  #PlaybackBar .tool-sep {
+    margin: 0 3px;
+  }
+
+  #ToolBar .tool-sep {
     margin: 0 4px;
+  }
+
+  #midiPlayer .MIDIPlayTime {
+    width: 58px;
+  }
+}
+
+/* The tempo slider and the BPM label show only when the player has room for them, so the
+   slider is never shorter than 120 px and never covers CLICK. The player is a size container
+   only while it fills the free room of the bar; in portrait it has its content width. */
+@media (min-width: 1001px) {
+  #midiPlayer {
+    container: player / inline-size;
+  }
+}
+
+@container player (max-width: 465px) {
+  #midiPlayer .tempoLabel {
+    display: none;
+  }
+}
+
+@container player (max-width: 429px) {
+  #midiPlayer .tempoInput {
+    display: none;
+  }
+}
+
+/* Portrait tablets. The tool labels are hidden by the block above. */
+@media (max-width: 1000px) {
+  #metronomeLabel,
+  #midiPlayer .tempoLabel {
+    display: none;
   }
 
   .tool-in {
@@ -689,20 +1152,32 @@
     flex: none;
   }
 
+  /* The items spread out over the bar, so the gaps between them part the groups. */
   #PlaybackBar {
     justify-content: space-between;
-    gap: 6px;
+    padding: 0 6px;
+  }
+
+  #midiPlayer .tempoTextField {
+    width: 50px;
+  }
+
+  #midiPlayer .playerControlsRow {
+    gap: 4px;
   }
 
   #PlaybackBar .tool-sep {
-    margin: 0 2px;
-  }
-
-  #ToolBar .tool-sep {
     display: none;
   }
 
+  /* A short line between the groups of tools, so the groups do not run together. */
+  #ToolBar .tool-sep {
+    height: 20px;
+    margin: 0 2px;
+  }
+
   #ToolBar {
+    gap: 0;
     padding: 0 6px;
     font-size: 14px;
   }

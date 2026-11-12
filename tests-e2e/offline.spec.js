@@ -123,19 +123,24 @@ test('an offline reload shows the editor and Play works', async ({ page, context
   expect(failed, failed.join('\n')).toEqual([]);
 });
 
-test('the help page loads offline', async ({ page, context, site }) => {
-  await page.goto('/index.html?sw=1');
-  await page.waitForSelector('#svgTarget svg');
-  await waitForWorker(page);
-  await goOffline(context, site);
+for (const [name, path, heading] of [
+  ['help', '/gscribe_help.html', 'Help'],
+  ['about', '/gscribe_about.html', 'About'],
+]) {
+  test(`the ${name} page loads offline`, async ({ page, context, site }) => {
+    await page.goto('/index.html?sw=1');
+    await page.waitForSelector('#svgTarget svg');
+    await waitForWorker(page);
+    await goOffline(context, site);
 
-  const failed = [];
-  page.on('requestfailed', (request) => failed.push(request.url()));
-  const response = await page.goto('/gscribe_help.html');
-  expect(response?.ok()).toBe(true);
-  await expect(page.locator('h1')).toContainText('Help!');
-  expect(failed, failed.join('\n')).toEqual([]);
-});
+    const failed = [];
+    page.on('requestfailed', (request) => failed.push(request.url()));
+    const response = await page.goto(path);
+    expect(response?.ok()).toBe(true);
+    await expect(page.locator('h1')).toContainText(heading);
+    expect(failed, failed.join('\n')).toEqual([]);
+  });
+}
 
 test('after a rebuild the new version takes over and the old cache is gone', async ({
   page,

@@ -18,7 +18,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm test`             | Vitest unit suite — **1065 pass**                                                                                                                                                                                                                       |
-| `npm run test:e2e`     | Playwright golden-master and UI — **213 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
+| `npm run test:e2e`     | Playwright golden-master and UI — **288 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~85 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
@@ -26,7 +26,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                  |
 | `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                          |
 | `npm run test:rules`   | Firestore security rules against the emulator — **22 pass** (needs Java)                                                                                                                                                                                |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **101 pass** (needs Java)                                                                                                                                                            |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **102 pass** (needs Java)                                                                                                                                                            |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -80,8 +80,8 @@ Entry/support: `main.js` (index.html bootstrap, wires `window.myGrooveWriter` et
 `registerServiceWorker.js` (decides whether this page uses the service worker, and registers it),
 `cloud/pendingSync.js` (the library's queued-write tracking: the flag, the sync wait, the slow timer
 and the leave warning),
-`discardDialog.js` (the "Discard your changes?" question; the page owns it, so it works without
-the panel),
+`confirmDialog.js` (the in-page questions "Discard your changes?" and "Clear all notes?"; the
+page owns them, so they work without the panel),
 `cloud/dirtyState.js` (the clean groove: `createDirtyState`, `watchDirty`, and the per-tab baseline
 that survives a reload),
 `cloud/currentGroove.js` (the saved groove open in the editor: `createCurrentGroove` for one
@@ -104,8 +104,8 @@ signed-in session, and its per-tab record),
 - Firebase project `groove-scribe-zdvihal`. Firestore is in `eur3`.
 - A push to `master` that passes the tests deploys through `.github/workflows/ci-deploy.yml`.
   There is no stored secret: `scripts/setup-deploy.sh` lets only this repo's `master` deploy.
-  `npm run deploy` still works by hand. Keep the Playwright image version in the workflow equal to
-  `@playwright/test` in `package-lock.json`, or the golden master runs on a different browser.
+  `npm run deploy` still works by hand. Two jobs run in the Playwright image. Keep its version equal
+  to `@playwright/test` in `package-lock.json`, or the golden master runs on a different browser.
 - The library is a slide-in panel in the editor (`libraryPanel.js`, `css/library-panel.css`).
   `main.js` passes it a small `editor` object, so the panel never touches editor internals.
   `profile.html` only redirects to `index.html#library`.
@@ -226,6 +226,12 @@ signed-in session, and its per-tab record),
   paint a cell, the `gridState` readers compare its color against the shared
   `constant_*_on_color_rgb` values in `constants.js` (setters paint the hex form; the browser
   normalizes it to rgb on readback).
+- Every `set_*_state` note setter must call `markNoteOn`. It writes `data-on` on the cell, and
+  the CSS draws off notes smaller: the on cue that is not colour.
+- `renderNoteGrid()` owns the `--notes` and `--groups` custom properties on `#measureContainer`.
+  The grid CSS sizes the cells and the bars from them.
+- Help and About open in the same tab, so the editor address keeps the groove.
+  `js/backToEditor.js` makes "Back to the editor" go back in the history.
 - Vendored globals (don't redefine): `Midi`, `MIDI`, `Abc`, `Share`, `ShareButton`, `Pablo`.
 
 ## Refactor status (strangler-fig, ES-module migration)

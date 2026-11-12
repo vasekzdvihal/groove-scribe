@@ -43,18 +43,17 @@ jobs:
   cloud:
     name: Security rules and library panel
     runs-on: ubuntu-latest
+    # The Playwright image already has Chromium and its system packages. Installing them with
+    # apt on the runner failed once when the Ubuntu mirror could not be reached, and that
+    # blocked a deploy. Keep the version equal to the e2e job.
+    container: mcr.microsoft.com/playwright:v1.61.1-noble
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
-        with:
-          node-version: 22
-          cache: npm
       - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
           java-version: '21'
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
       - run: npm run test:rules
       - run: npm run test:cloud
 

@@ -112,3 +112,29 @@ test('abc2svg ignores %%beginjs, %%beginml and the %%beginsvg style copy', async
   expect(result.out).not.toContain('onerror');
   expect(result.out).toContain('<svg');
 });
+
+test('the embed play and expand buttons are finger size, in the small and the large player', async ({
+  page,
+}) => {
+  await page.goto('/GrooveEmbed.html' + GROOVE);
+  await page.waitForSelector('svg', { timeout: 15000 });
+  const sizes = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.midiPlayImage, .midiExpandImage')].map((node) => {
+        const box = node.getBoundingClientRect();
+        // inside the player box, so the small player does not cut a button
+        const player = node.closest('.playerControl').getBoundingClientRect();
+        return {
+          name: node.className,
+          big: box.width >= 44 && box.height >= 44,
+          inside: box.left >= player.left && box.right <= player.right,
+        };
+      })
+    );
+  const small = await sizes();
+  expect(small.filter((button) => !button.big || !button.inside)).toEqual([]);
+  await page.locator('.midiExpandImage').click();
+  await expect(page.locator('.playerControl')).toHaveClass(/large/);
+  const large = await sizes();
+  expect(large.filter((button) => !button.big || !button.inside)).toEqual([]);
+});

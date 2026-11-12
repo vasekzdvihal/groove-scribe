@@ -13,7 +13,7 @@ import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
-import { askToDiscard } from './discardDialog.js';
+import { askToClearNotes, askToDiscard } from './confirmDialog.js';
 import { createWakeLock } from './wakeLock.js';
 import { registerServiceWorker, shouldRegister } from './registerServiceWorker.js';
 
@@ -109,20 +109,16 @@ if (!utils.grooveDBAuthoring) {
 if (utils.is_touch_device()) {
   replaceSlot(
     'advancedEditSlot',
-    '<button type="button" class="tool edit-block" id="advancedEditAnchor" ' +
+    '<button type="button" class="tool edit-block" id="advancedEditAnchor" aria-pressed="false" ' +
       'onclick="event.preventDefault(); myGrooveWriter.toggleAdvancedEdit()">' +
-      '<span class="tool-in">Advanced</span></button>'
+      '<span class="tool-in">Note types</span></button>'
   );
 }
 
 // Dynamic content regions previously built with document.write.
 fillContainer('PermutationOptions', myGrooveWriter.HTMLforPermutationOptions());
 
-let gridHTML = '';
-for (let m = 1; m <= myGrooveWriter.numberOfMeasures(); m++) {
-  gridHTML += myGrooveWriter.HTMLforStaffContainer(m, (m - 1) * myGrooveWriter.notesPerMeasure());
-}
-fillContainer('measureContainer', gridHTML);
+myGrooveWriter.renderNoteGrid();
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
 
@@ -171,9 +167,18 @@ document.getElementById('grooveListWrapper')?.addEventListener('click', async (e
   if (!item) return;
   // Close the menu now, so it does not stay open behind the question.
   if (utils.visible_context_menu) utils.hideContextMenu(utils.visible_context_menu);
-  if (dirtyState.isDirty(editor.currentQuery()) && !(await askToDiscard())) return;
+  if (
+    dirtyState.isDirty(editor.currentQuery()) &&
+    !(await askToDiscard(document.getElementById('groovesAnchor')))
+  )
+    return;
   myGrooveWriter.loadNewGroove(item.getAttribute('data-groove'));
   dirtyState.markClean(editor.currentQuery());
+});
+
+// Clear all notes asks first, so a wrong tap in the More menu does not lose the groove.
+document.getElementById('clearAllNotesButton')?.addEventListener('click', async () => {
+  if (await askToClearNotes(document.getElementById('moreButton'))) myGrooveWriter.clearAllNotes();
 });
 
 // The library panel needs a Google sign-in popup, which the native app shell does not
