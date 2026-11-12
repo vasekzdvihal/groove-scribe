@@ -1077,8 +1077,9 @@
   color: #14191c;
 }
 
-/* Below 1200 px, including landscape tablets. Undo, Redo, Save and Share show only their icons (their aria-labels stay),
-   so every tool fits, and the tempo slider keeps room. */
+/* Below 1200 px, including landscape tablets. Undo, Redo, Save and Share show only their icons
+   (their aria-labels stay), so every tool fits, and the tempo slider keeps room. The portrait
+   block below changes some of these values again. */
 @media (max-width: 1199px) {
   .tool-label {
     display: none;
@@ -1122,16 +1123,11 @@
   }
 }
 
-/* Portrait tablets. */
+/* Portrait tablets. The tool labels are hidden by the block above. */
 @media (max-width: 1000px) {
-  .tool-label,
   #metronomeLabel,
   #midiPlayer .tempoLabel {
     display: none;
-  }
-
-  .tool-sep {
-    margin: 0 4px;
   }
 
   .tool-in {
@@ -1159,7 +1155,6 @@
   /* The items spread out over the bar, so the gaps between them part the groups. */
   #PlaybackBar {
     justify-content: space-between;
-    gap: 4px;
     padding: 0 6px;
   }
 

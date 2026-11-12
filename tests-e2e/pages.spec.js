@@ -113,3 +113,68 @@ test('the built site serves both pages and their stylesheet', async ({ request, 
     expect(response.ok(), path).toBe(true);
   }
 });
+
+// Help opens in the same tab, so the editor's address keeps the groove, and the home-screen app
+// does not jump out to Safari. "Back to the editor" goes back to that address.
+const GROOVE =
+  '?TimeSig=4/4&Div=16&Title=Back&Tempo=97&Measures=1&H=|x-x-x-x-x-x-x-x-|&S=|----O-------O---|&K=|o-------o-------|';
+
+test('Help opens in the same tab, and Back returns the same groove', async ({ page }) => {
+  await loadGroove(page, '/index.html' + GROOVE);
+  const editorUrl = page.url();
+  await expect(page.locator('#helpLink')).not.toHaveAttribute('target', /.+/);
+  await page.click('#helpLink');
+  await expect(page).toHaveURL(/gscribe_help\.html$/);
+  await page.getByRole('link', { name: 'Back to the editor' }).first().click();
+  await page.waitForSelector('#svgTarget svg');
+  expect(page.url()).toBe(editorUrl);
+  await expect(page.locator('#tuneTitle')).toHaveValue('Back');
+});
+
+test('the Help item in the account menu opens in the same tab too', async ({ page }) => {
+  await loadGroove(page, '/index.html' + GROOVE);
+  await page.click('#helpAnchor');
+  await page.locator('#helpContextMenu li', { hasText: 'Help' }).click();
+  await expect(page).toHaveURL(/gscribe_help\.html$/);
+  expect(page.context().pages()).toHaveLength(1);
+});
+
+test('Help with unsaved edits asks before the editor leaves', async ({ page }) => {
+  await loadGroove(page, '/index.html' + GROOVE);
+  await page.click('#snare1');
+  const edited = page.url();
+  const asked = new Promise((resolve) =>
+    page.once('dialog', (dialog) => {
+      resolve(dialog.type());
+      dialog.dismiss();
+    })
+  );
+  await page.click('#helpLink', { noWaitAfter: true });
+  expect(await asked).toBe('beforeunload');
+  expect(page.url()).toBe(edited);
+});
+
+test('Back to the editor on a Help page opened by itself goes to the editor', async ({ page }) => {
+  await page.goto('/gscribe_help.html');
+  await page.getByRole('link', { name: 'Back to the editor' }).first().click();
+  // The editor writes the default groove into the address.
+  await expect(page).toHaveURL(/\/index\.html(\?|$)/);
+});
+
+test('the account button has its own icon when the library does not start', async ({ page }) => {
+  // GrooveDB authoring has no library panel, so the button keeps the icon from the page.
+  await loadGroove(page, '/index.html?GDB_Author=1');
+  const icon = (id) => page.locator(`#${id} .fa`).getAttribute('class');
+  expect(await icon('helpAnchor')).not.toBe(await icon('helpLink'));
+});
+
+test('Back after a step from Help to About still returns the same groove', async ({ page }) => {
+  await loadGroove(page, '/index.html' + GROOVE);
+  const editorUrl = page.url();
+  await page.click('#helpLink');
+  await page.locator('.page-links a', { hasText: 'About' }).click();
+  await expect(page).toHaveURL(/gscribe_about\.html$/);
+  await page.getByRole('link', { name: 'Back to the editor' }).first().click();
+  await page.waitForSelector('#svgTarget svg');
+  expect(page.url()).toBe(editorUrl);
+});

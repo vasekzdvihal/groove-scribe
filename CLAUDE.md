@@ -18,7 +18,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `npm test`             | Vitest unit suite — **1065 pass**                                                                                                                                                                                                                       |
-| `npm run test:e2e`     | Playwright golden-master and UI — **282 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
+| `npm run test:e2e`     | Playwright golden-master and UI — **288 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~85 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
@@ -226,6 +226,12 @@ signed-in session, and its per-tab record),
   paint a cell, the `gridState` readers compare its color against the shared
   `constant_*_on_color_rgb` values in `constants.js` (setters paint the hex form; the browser
   normalizes it to rgb on readback).
+- Every `set_*_state` note setter must call `markNoteOn`. It writes `data-on` on the cell, and
+  the CSS draws off notes smaller: the on cue that is not colour.
+- `renderNoteGrid()` owns the `--notes` and `--groups` custom properties on `#measureContainer`.
+  The grid CSS sizes the cells and the bars from them.
+- Help and About open in the same tab, so the editor address keeps the groove.
+  `js/backToEditor.js` makes "Back to the editor" go back in the history.
 - Vendored globals (don't redefine): `Midi`, `MIDI`, `Abc`, `Share`, `ShareButton`, `Pablo`.
 
 ## Refactor status (strangler-fig, ES-module migration)

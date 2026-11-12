@@ -1072,18 +1072,20 @@ function GrooveWriter() {
     else return false;
   }
 
-  root.helpMenuPopupClick = function (help_type) {
-    var win;
+  // Help and About open in the same tab. The address keeps the groove, so Back on those pages
+  // returns to it, and the app on the home screen does not jump out to Safari.
+  root.openPage = function (url) {
+    window.location.href = url;
+  };
 
+  root.helpMenuPopupClick = function (help_type) {
     switch (help_type) {
       case 'help':
-        win = window.open('./gscribe_help.html', '_blank');
-        win.focus();
+        root.openPage('./gscribe_help.html');
         break;
 
       case 'about':
-        win = window.open('./gscribe_about.html', '_blank');
-        win.focus();
+        root.openPage('./gscribe_about.html');
         break;
 
       default:

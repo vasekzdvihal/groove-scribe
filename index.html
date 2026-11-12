@@ -138,8 +138,9 @@
 				<span id="upperLeft"></span>
 				<span id="grooveTitleDisplay"></span>
 				<span id="upperRight">
-					<a id="helpLink" href="gscribe_help.html" target="_blank" rel="noopener" aria-label="Help"><i class="fa fa-question-circle" aria-hidden="true"></i></a>
-					<button type="button" id="helpAnchor" aria-label="Help menu" onclick="myGrooveWriter.helpAnchorClick(event);"><i class="fa fa-question-circle"></i></button>
+					<a id="helpLink" href="gscribe_help.html" aria-label="Help"><i class="fa fa-question-circle" aria-hidden="true"></i></a>
+					<!-- The library panel turns this into the account button. Without the panel it is a menu with Help and About. -->
+					<button type="button" id="helpAnchor" aria-label="Help menu" onclick="myGrooveWriter.helpAnchorClick(event);"><i class="fa fa-ellipsis-v" aria-hidden="true"></i></button>
 				</span>
 			</div>
 

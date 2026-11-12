@@ -415,7 +415,7 @@ input[type='range']:active::-webkit-slider-thumb {
   outline-offset: 2px;
   box-shadow: 0 0 0 5px #2484c0;
 }
-/* The small player is only 90 px wide, so the button goes beside it on one line. */
+/* The small player is only 96 px wide, so the button goes beside it on one line. */
 .playerControl.small {
   position: relative;
 }

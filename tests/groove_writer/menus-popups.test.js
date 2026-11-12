@@ -419,26 +419,29 @@ describe('permutation menu', () => {
 });
 
 describe('help menu', () => {
-  it('helpMenuPopupClick("help") opens gscribe_help.html in a new tab and focuses it', () => {
-    const win = { focus: vi.fn() };
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue(win);
+  // Help and About open in the same tab, so the editor address keeps the groove.
+  it('helpMenuPopupClick("help") opens gscribe_help.html in the same tab', () => {
+    const openSpy = vi.spyOn(window, 'open');
+    const pageSpy = vi.spyOn(gw, 'openPage').mockImplementation(() => {});
 
     gw.helpMenuPopupClick('help');
 
-    expect(openSpy).toHaveBeenCalledWith('./gscribe_help.html', '_blank');
-    expect(win.focus).toHaveBeenCalledTimes(1);
+    expect(pageSpy).toHaveBeenCalledWith('./gscribe_help.html');
+    expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
+    pageSpy.mockRestore();
   });
 
-  it('helpMenuPopupClick("about") opens gscribe_about.html in a new tab and focuses it', () => {
-    const win = { focus: vi.fn() };
-    const openSpy = vi.spyOn(window, 'open').mockReturnValue(win);
+  it('helpMenuPopupClick("about") opens gscribe_about.html in the same tab', () => {
+    const openSpy = vi.spyOn(window, 'open');
+    const pageSpy = vi.spyOn(gw, 'openPage').mockImplementation(() => {});
 
     gw.helpMenuPopupClick('about');
 
-    expect(openSpy).toHaveBeenCalledWith('./gscribe_about.html', '_blank');
-    expect(win.focus).toHaveBeenCalledTimes(1);
+    expect(pageSpy).toHaveBeenCalledWith('./gscribe_about.html');
+    expect(openSpy).not.toHaveBeenCalled();
     openSpy.mockRestore();
+    pageSpy.mockRestore();
   });
 
   it('helpMenuPopupClick with an unrecognized type logs and does not throw', () => {
