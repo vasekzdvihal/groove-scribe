@@ -47,10 +47,22 @@ function createDialog({ id, title, text, yes, no }) {
   return node;
 }
 
-// The dialog gives focus back to the control that opened it. A control in a menu is hidden by
-// then, so focus would fall to the page. Give it to the button that opens that menu instead.
+// How the question was answered: a key, or a tap or click. Capture, so the dialog's own key
+// handler cannot hide a key from it.
+let answeredByKey = false;
+document.addEventListener('keydown', () => (answeredByKey = true), true);
+document.addEventListener('pointerdown', () => (answeredByKey = false), true);
+
+// After a keyboard answer, the dialog gives focus back to the control that opened it. A control
+// in a menu is hidden by then, so focus would fall to the page: give it to the button that opens
+// that menu instead. After a tap or click, no button keeps focus. A focused button would show a
+// focus ring, and space (play) would press it.
 function restoreFocus(returnFocus) {
-  const active = document.activeElement;
+  const active = /** @type {HTMLElement | null} */ (document.activeElement);
+  if (!answeredByKey) {
+    if (active && active !== document.body) active.blur();
+    return;
+  }
   const lost = !active || active === document.body || active.getClientRects().length === 0;
   if (lost && returnFocus) returnFocus.focus();
 }

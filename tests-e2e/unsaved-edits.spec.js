@@ -137,15 +137,24 @@ test('the leave warning is listening only while the groove has edits', async ({ 
   await expect.poll(listeners).toBe(0);
 });
 
-test('after Keep editing, focus goes back to the Grooves button', async ({ page }) => {
+test('after Escape focus goes back to the Grooves button, and a tap leaves no focus ring', async ({
+  page,
+}) => {
   await loadGroove(page, '/index.html');
   await page.click('#snare4');
-  for (const answer of ['Escape', 'button']) {
+  const grooves = page.locator('#groovesAnchor');
+  const dialog = discardDialog(page);
+  await pickBuiltIn(page, 'Train Beat');
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(grooves).toBeFocused();
+
+  for (const name of ['Keep editing', 'Discard changes']) {
+    await page.click('#snare8');
     await pickBuiltIn(page, 'Train Beat');
-    const dialog = discardDialog(page);
-    if (answer === 'Escape') await page.keyboard.press('Escape');
-    else await dialog.getByRole('button', { name: 'Keep editing' }).click();
+    await dialog.getByRole('button', { name }).click();
     await expect(dialog).toBeHidden();
-    await expect(page.locator('#groovesAnchor')).toBeFocused();
+    expect(await grooves.evaluate((node) => node.matches(':focus-visible')), name).toBe(false);
+    await expect(grooves).not.toBeFocused();
   }
 });

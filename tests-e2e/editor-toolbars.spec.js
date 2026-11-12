@@ -753,17 +753,26 @@ for (const [width, height] of [
 test.describe('controls, fix round 1', () => {
   test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
 
-  test('after Escape or Keep the notes, focus goes back to the More button', async ({ page }) => {
+  test('after Escape focus goes back to the More button, and a tap leaves no focus ring', async ({
+    page,
+  }) => {
     await openEditor(page);
     const dialog = page.getByRole('dialog', { name: 'Clear all notes?' });
-    for (const answer of ['Escape', 'button']) {
+    const more = page.locator('#moreButton');
+    const ringed = () => more.evaluate((node) => node.matches(':focus-visible'));
+    await page.click('#moreButton');
+    await page.click('#clearAllNotesButton');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(more).toBeFocused();
+
+    for (const name of ['Keep the notes', 'Clear all notes']) {
       await page.click('#moreButton');
       await page.click('#clearAllNotesButton');
-      await expect(dialog).toBeVisible();
-      if (answer === 'Escape') await page.keyboard.press('Escape');
-      else await dialog.getByRole('button', { name: 'Keep the notes' }).click();
+      await dialog.getByRole('button', { name }).click();
       await expect(dialog).toBeHidden();
-      await expect(page.locator('#moreButton')).toBeFocused();
+      expect(await ringed(), name).toBe(false);
+      await expect(more).not.toBeFocused();
     }
   });
 });
@@ -822,6 +831,58 @@ for (const [width, height] of [
       expect(Number(await field.inputValue())).toBe(held);
       await expect(page).toHaveURL(new RegExp('Tempo=' + held));
     });
+
+    test('a held + stops at 300', async ({ page }) => {
+      await openEditor(page, GROOVE.replace('Tempo=80', 'Tempo=296'));
+      const field = page.locator('[id^="tempoTextField"]');
+      const box = await page.getByRole('button', { name: 'Faster' }).boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await expect(field).toHaveValue('300');
+      // The repeat has stopped: no more tempo changes while the button is still held.
+      const steps = await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            let count = 0;
+            const utils = window.myGrooveWriter.myGrooveUtils;
+            const setTempo = utils.setTempo;
+            utils.setTempo = (tempo) => {
+              count++;
+              setTempo(tempo);
+            };
+            setTimeout(() => resolve(count), 400);
+          })
+      );
+      await page.mouse.up();
+      expect(steps).toBe(0);
+    });
+
+    test('a tap after keyboard focus can place the caret', async ({ page }) => {
+      await openEditor(page);
+      const field = page.locator('[id^="tempoTextField"]');
+      await field.focus();
+      await page.waitForTimeout(50);
+      // A second tap in a focused field puts the caret where it lands, not a selection.
+      const box = await field.boundingBox();
+      await page.mouse.click(box.x + box.width - 4, box.y + box.height / 2);
+      const selection = await field.evaluate((node) => [node.selectionStart, node.selectionEnd]);
+      expect(selection[0]).toBe(selection[1]);
+    });
+
+    test('focus selects the whole tempo, also after the focus handler', async ({ page }) => {
+      await openEditor(page);
+      const field = page.locator('[id^="tempoTextField"]');
+      // Safari can collapse a selection made inside the focus handler. The field selects again
+      // after it, so a collapse in between does not last.
+      await field.evaluate((node) => {
+        node.addEventListener('focus', () => node.setSelectionRange(0, 0), { once: true });
+      });
+      await field.focus();
+      await page.waitForTimeout(50);
+      expect(await field.evaluate((node) => [node.selectionStart, node.selectionEnd])).toEqual([
+        0, 2,
+      ]);
+    });
   });
 }
 
@@ -864,3 +925,62 @@ test.describe('tool bar groups at 768x1024 with touch', () => {
     expect(separators).toBeGreaterThanOrEqual(3);
   });
 });
+
+// The slider shows only when it is at least 120 px wide, at every width where the player is a
+// size container, and nothing in the playback bar overlaps or leaves the bar.
+for (const hasTouch of [true, false]) {
+  test.describe(`playback bar sweep 1001-1199 px${hasTouch ? ' with touch' : ''}`, () => {
+    test.use({ viewport: { width: 1001, height: 768 }, hasTouch });
+
+    test('the slider is hidden or at least 120 px, and no item overlaps', async ({ page }) => {
+      await openEditor(page);
+      const problems = [];
+      for (let width = 1001; width <= 1199; width += 8) {
+        await page.setViewportSize({ width, height: 768 });
+        const report = await page.evaluate(() => {
+          const bar = document.getElementById('PlaybackBar');
+          const edge = bar.getBoundingClientRect();
+          const slider = document.querySelector('#midiPlayer .tempoInput');
+          const sliderWidth = slider.getClientRects().length
+            ? slider.getBoundingClientRect().width
+            : 0;
+          const items = [
+            ...bar.querySelectorAll(
+              'button, input, .tempoLabel, #metronomeLabel, .MIDIPlayTime, .midiPlayImage'
+            ),
+          ]
+            .filter((node) => node.getClientRects().length && !node.closest('.swingRow'))
+            .map((node) => ({ name: node.id || node.className, box: node.getBoundingClientRect() }))
+            .filter(({ box }) => box.width > 0);
+          const overlaps = items.flatMap((a, i) =>
+            items
+              .slice(i + 1)
+              .filter(
+                (b) =>
+                  a.box.left < b.box.right - 0.5 &&
+                  b.box.left < a.box.right - 0.5 &&
+                  a.box.top < b.box.bottom - 0.5 &&
+                  b.box.top < a.box.bottom - 0.5
+              )
+              .map((b) => `${a.name} / ${b.name}`)
+          );
+          const outside = items
+            .filter(({ box }) => box.left < edge.left || box.right > edge.right + 0.5)
+            .map(({ name }) => name);
+          return {
+            sliderWidth,
+            overlaps,
+            outside,
+            scroll: bar.scrollWidth - bar.clientWidth,
+          };
+        });
+        if (report.sliderWidth > 0 && report.sliderWidth < 120)
+          problems.push(`${width}: slider ${report.sliderWidth}`);
+        if (report.overlaps.length) problems.push(`${width}: ${report.overlaps.join(', ')}`);
+        if (report.outside.length) problems.push(`${width}: outside ${report.outside.join(', ')}`);
+        if (report.scroll > 0) problems.push(`${width}: scroll ${report.scroll}`);
+      }
+      expect(problems).toEqual([]);
+    });
+  });
+}

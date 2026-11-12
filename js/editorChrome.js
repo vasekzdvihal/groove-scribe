@@ -75,7 +75,8 @@ const HOLD_FAST_AFTER = 1000; // ms of holding, after which each repeat is 5 BPM
  *
  * @param {string} label
  * @param {string} ariaLabel
- * @param {function(number): void} step  changes the tempo by this many steps
+ * @param {function(number): boolean} step  changes the tempo by this many steps, and returns
+ *   false at the end of the tempo range
  */
 function tempoButton(label, ariaLabel, step) {
   const button = document.createElement('button');
@@ -100,7 +101,7 @@ function tempoButton(label, ariaLabel, step) {
     delay = window.setTimeout(() => {
       repeat = window.setInterval(() => {
         held = true;
-        step(Date.now() - start > HOLD_FAST_AFTER ? 5 : 1);
+        if (!step(Date.now() - start > HOLD_FAST_AFTER ? 5 : 1)) stop();
       }, HOLD_REPEAT);
     }, HOLD_DELAY);
   });
@@ -128,17 +129,34 @@ function initTempoField(utils, player, tempoField) {
   tempoField.setAttribute('enterkeyhint', 'done');
   tempoField.setAttribute('autocomplete', 'off');
 
+  // A tap selects the whole tempo, so typing replaces it. iOS Safari can ignore a selection made
+  // in the focus handler, so the field selects again just after it.
+  const selectAll = () => tempoField.setSelectionRange(0, tempoField.value.length);
+  // true from a focus until the mouseup of the tap that focused the field. That mouseup would
+  // undo the selection.
   let justFocused = false;
+  // The second selection waits one tick. A key in between cancels it, so it never selects
+  // what the user has started to type.
+  let reselect = 0;
   tempoField.addEventListener('focus', () => {
-    tempoField.select();
+    selectAll();
+    reselect = window.setTimeout(() => {
+      if (document.activeElement === tempoField) selectAll();
+    }, 0);
     justFocused = true;
   });
-  // The mouseup of the tap that focused the field would undo the selection.
+  // A tap in a field that already has focus (from a key or a script) places the caret.
+  tempoField.addEventListener('pointerdown', () => {
+    if (document.activeElement === tempoField) justFocused = false;
+  });
   tempoField.addEventListener('mouseup', (event) => {
     if (justFocused) event.preventDefault();
     justFocused = false;
   });
+  tempoField.addEventListener('blur', () => (justFocused = false));
   tempoField.addEventListener('keydown', (event) => {
+    clearTimeout(reselect);
+    justFocused = false;
     if (event.key === 'Enter') tempoField.blur();
   });
   // Runs before the change handler of groove_utils.js, which is on the field itself.
@@ -153,7 +171,12 @@ function initTempoField(utils, player, tempoField) {
     },
     true
   );
-  return (delta) => utils.setTempo(Math.min(max, Math.max(min, utils.getTempo() + delta)));
+  // Changes the tempo, and says whether it can go further in that direction.
+  return (delta) => {
+    const tempo = Math.min(max, Math.max(min, utils.getTempo() + delta));
+    utils.setTempo(tempo);
+    return tempo > min && tempo < max;
+  };
 }
 
 // The embeds share the player markup, so these changes apply to the editor's player only.
