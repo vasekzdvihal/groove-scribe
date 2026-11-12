@@ -601,6 +601,8 @@
   }
 
   #musicalInput .line-labels .stickings-label::after {
+    /* Safari before 17.4 drops the alt-text form, so it keeps the plain one. */
+    content: 'STICK';
     content: 'STICK' / '';
     font-size: 12px;
   }
