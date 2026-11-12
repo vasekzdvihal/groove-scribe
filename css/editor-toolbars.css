@@ -274,12 +274,13 @@
 }
 
 /* Note grid. Each cell is a finger-size target: at least 44 px tall, and as wide as the room
-   allows, from 44 px on a portrait tablet up to --cell-max. Each bar is one row, and every row
-   has the same width, so all rows start at the same left edge. The cells keep their colour rules:
+   allows, up to --cell-max. Bars sit side by side in equal columns while their cells can be
+   44 px wide; after that a bar goes to the next row. The first bar of every row is in the first
+   column, so all rows start at the same left edge. The cells keep their colour rules:
    gridState.js reads the note state back from those colours.
    The old layout used fixed pixel offsets (staff lines, labels, the highlight columns). Here the
    lanes are flex rows, the staff line is the bottom border of each lane, and the labels have the
-   lane height. */
+   lane height. groove_writer.js renderNoteGrid() sets --notes and --groups on #measureContainer. */
 #musicalInput {
   container: note-grid / inline-size;
   text-align: left;
@@ -287,40 +288,34 @@
 
 /* A container query cannot style its own container, so the sizes live on #measureContainer. */
 #musicalInput #measureContainer {
+  --notes: 16;
+  --groups: 4;
   --cell-max: 56px;
   --cell-min: 22px;
   --cell-height: 44px;
   --lane-line: 3px;
-  --kick-height: 58px;
+  /* The kick lane is taller: the kick sits above its line, a hi-hat foot splash on it. */
+  --kick-height: 62px;
+  --kick-line-top: var(--cell-height);
+  /* The beat lines and the playback highlight stop at the kick line. */
+  --below-kick-line: calc(var(--kick-height) - var(--kick-line-top) - var(--lane-line));
   --label-width: 80px;
   --beat-gap: 16px;
+  --bar-gap: 24px;
+  /* The narrowest a bar may be before it goes to the next row: 44 px cells. */
+  --bar-min: calc(
+    var(--label-width) + var(--notes) * var(--touch-size) + (var(--groups) - 1) * var(--beat-gap)
+  );
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--bar-min)), 1fr));
+  column-gap: var(--bar-gap);
+  align-items: start;
   /* room for the add-measure button below the last bar */
   padding: 0 12px 48px;
   /* A symbol in the last cell of a narrow bar may reach past the bar. It must not make the
      grid scroll sideways. */
   overflow-x: clip;
-}
-
-/* Tablet landscape, and a desktop with the library docked next to the music. */
-@container note-grid (max-width: 1100px) {
-  #musicalInput #measureContainer {
-    --label-width: 64px;
-    --beat-gap: 8px;
-  }
-
-  #musicalInput .line-labels .stickings-label {
-    font-size: 10px;
-  }
-}
-
-/* Tablet portrait: sixteen 44 px cells and the labels fill 768 px. */
-@container note-grid (max-width: 860px) {
-  #musicalInput #measureContainer {
-    --label-width: 52px;
-    --beat-gap: 3px;
-    padding-right: 0;
-    padding-left: 0;
-  }
 }
 
 #musicalInput .staff-container {
@@ -331,6 +326,11 @@
   max-width: 100%;
   margin: 28px auto 0;
   white-space: normal;
+}
+
+/* Room above each bar for its 44 px Remove button. */
+#musicalInput .staff-container:has(> .closeMeasureButton[id]) {
+  margin-top: 44px;
 }
 
 #musicalInput .stickings-row-container,
@@ -381,11 +381,11 @@
   border-bottom: 0;
 }
 
-/* The kick lane keeps its old height: the kick sits above the line, a hi-hat foot splash on it. */
 #musicalInput .kick-container {
   height: var(--kick-height);
   border-bottom: 0;
-  background: linear-gradient(#cacaca, #cacaca) 0 28px / 100% var(--lane-line) no-repeat;
+  background: linear-gradient(#cacaca, #cacaca) 0 var(--kick-line-top) / 100% var(--lane-line)
+    no-repeat;
 }
 
 /* Hidden toms take no room. groove_writer.js shows them with an inline visibility style. */
@@ -402,7 +402,7 @@
   display: none;
 }
 
-/* The playback highlight columns line up with the cells, over the full height of the lanes. */
+/* The playback highlight columns line up with the cells, from the top lane to the kick line. */
 #musicalInput .background-highlight-container {
   inset: 0;
   height: auto;
@@ -423,6 +423,10 @@
   margin: 0;
 }
 
+#musicalInput .bg-highlight {
+  height: calc(100% - var(--below-kick-line));
+}
+
 /* Each cell is a size container, so a narrow cell (1/32 notes) can draw smaller symbols. */
 #musicalInput .sticking,
 #musicalInput .hi-hat,
@@ -438,21 +442,28 @@
   width: 0;
 }
 
-/* A thin beat line in the gap between note groups. It is drawn once, over all the lanes. */
 #musicalInput .space_between_note_groups {
+  position: relative;
   flex: none;
   width: var(--beat-gap);
   height: auto;
 }
 
-/* The beat line stops at the kick line. */
-#musicalInput .background-highlight-container .space_between_note_groups {
-  background: linear-gradient(#dde3e6, #dde3e6) center top / 1px
-    calc(100% - var(--kick-height) + 31px) no-repeat;
+/* A thin beat line in the middle of the gap between note groups. It is drawn once, over all
+   the lanes, and stops at the kick line. */
+#musicalInput .background-highlight-container .space_between_note_groups::before {
+  position: absolute;
+  top: 0;
+  bottom: var(--below-kick-line);
+  left: calc(50% - 0.5px);
+  width: 1px;
+  background: #dde3e6;
+  content: '';
 }
 
 /* The note symbols were placed for a 29 px wide cell. Centre them in the wider cell, and move
-   them down in lanes that were shorter than 42 px. */
+   them down in lanes that were shorter than 42 px, so every symbol has the same distance to
+   the line above it. */
 #musicalInput .note_part {
   margin-left: calc((100% - 29px) / 2);
 }
@@ -462,17 +473,25 @@
 }
 
 #musicalInput .tom .note_part,
-#musicalInput .snare .note_part {
+#musicalInput .snare .note_part,
+#musicalInput .kick .note_part {
   margin-top: 7px;
 }
 
-@container note-cell (max-width: 27px) {
+/* Smaller symbols in narrow cells, so that neighbours do not touch. */
+@container note-cell (max-width: 31px) {
   #musicalInput .note_part {
     scale: 0.8;
   }
 }
 
-/* The labels have the height of their lanes. */
+@container note-cell (max-width: 25px) {
+  #musicalInput .note_part {
+    scale: 0.65;
+  }
+}
+
+/* The labels have the height of their lanes, and are centred on the cells above the line. */
 #musicalInput .line-labels > div {
   box-sizing: border-box;
   display: flex;
@@ -482,24 +501,24 @@
   padding: 0 4px var(--lane-line) 8px;
 }
 
-/* The hi-hat symbols sit low in their lane. */
-#musicalInput .line-labels .hh-label {
-  padding-top: 8px;
-}
-
 #musicalInput .line-labels .stickings-label[style*='block'] {
   display: flex !important;
 }
 
 #musicalInput .line-labels .stickings-label {
   height: var(--cell-height);
+  padding-bottom: 0;
+  font-size: 12px;
+}
+
+/* The hi-hat symbols sit low in their lane. */
+#musicalInput .line-labels .hh-label {
+  padding-top: 8px;
 }
 
 #musicalInput .line-labels .kick-label {
-  /* level with the kick, above the line */
-  align-items: flex-start;
   height: var(--kick-height);
-  padding-top: 2px;
+  padding-bottom: calc(var(--kick-height) - var(--cell-height));
 }
 
 /* A muted lane shows its unmute button over its label. */
@@ -519,38 +538,71 @@
   background: #fff;
 }
 
-/* Remove sits above the right end of its bar. Add sits below the last bar, at the left. Neither
-   takes width from the cells. */
-#musicalInput .closeMeasureButton {
-  position: absolute;
-  top: -26px;
-  right: 0;
-  margin: 0;
-  font-size: 22px;
-}
-
+/* Remove sits above the right end of its bar. Add sits below the last bar, at the left. Both
+   are 44 px targets, and neither takes width from the cells. */
+#musicalInput .closeMeasureButton,
 #musicalInput #addMeasureButton {
   position: absolute;
-  top: 100%;
-  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   width: var(--touch-size);
   height: var(--touch-size);
-  margin: 2px 0 0;
+  margin: 0;
   padding: 0;
 }
 
+/* With one measure the Remove slot is an empty placeholder. */
+#musicalInput .closeMeasureButton:not([id]) {
+  display: none;
+}
+
+#musicalInput .closeMeasureButton {
+  bottom: 100%;
+  right: 0;
+  font-size: 22px;
+}
+
+#musicalInput #addMeasureButton {
+  top: 100%;
+  left: 0;
+  margin-top: 2px;
+}
+
+/* These come after the rules above, which they override.
+   Tablet landscape, and a desktop with the library docked next to the music. */
+@container note-grid (max-width: 1100px) {
+  #musicalInput #measureContainer {
+    --label-width: 72px;
+    --beat-gap: 8px;
+  }
+}
+
+/* Tablet portrait: an 8 px gutter on each side, then the labels and sixteen 44 px cells fill
+   768 px. The beat gap is 0, and the beat line is drawn on the edge between two cells. */
 @container note-grid (max-width: 860px) {
-  #musicalInput .line-labels > div {
-    padding-right: 2px;
-    padding-left: 4px;
-    font-size: 16px;
+  #musicalInput #measureContainer {
+    --label-width: 48px;
+    --beat-gap: 0px;
+    padding-right: 8px;
+    padding-left: 8px;
   }
 
+  #musicalInput .line-labels > div {
+    padding-right: 2px;
+    padding-left: 2px;
+    font-size: 15px;
+  }
+
+  /* STICKINGS does not fit in 48 px at 12 px. Show a short label; the full word stays in the
+     page for screen readers. */
   #musicalInput .line-labels .stickings-label {
-    font-size: 9px;
+    font-size: 0;
+  }
+
+  #musicalInput .line-labels .stickings-label::after {
+    content: 'STICK' / '';
+    font-size: 12px;
   }
 }
 

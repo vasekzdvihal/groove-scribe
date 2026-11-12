@@ -315,13 +315,17 @@ function measureCells(page) {
     [...document.querySelectorAll('#musicalInput :is(.hi-hat, .tom, .snare, .kick)')]
       .map((cell) => ({ cell, box: cell.getBoundingClientRect() }))
       .filter(({ box }) => box.width > 0 && box.height > 0)
-      .map(({ cell, box }) => {
+      .map(({ cell }) => {
+        // The bars at the top and bottom of the screen cover cells that are scrolled out of view.
+        cell.scrollIntoView({ block: 'center' });
+        const box = cell.getBoundingClientRect();
         const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
         return {
           id: cell.id,
           width: box.width,
           height: box.height,
-          top: Math.round(box.top),
+          // relative to the bar, because the page scrolls between cells
+          top: Math.round(box.top - cell.closest('.staff-container').getBoundingClientRect().top),
           bar: cell.closest('.staff-container').id,
           hitsItself: !!hit && cell.contains(hit),
         };
@@ -334,13 +338,17 @@ const small = (cells, isSmall) =>
   cells.filter(isSmall).map((c) => `${c.id} ${c.width.toFixed(1)}x${c.height.toFixed(1)}`);
 const missed = (cells) => cells.filter((c) => !c.hitsItself).map((c) => c.id);
 
-// The left edge of the first cell of each bar.
-function barLefts(page) {
-  return page.evaluate(() =>
-    [...document.querySelectorAll('#musicalInput .staff-container')].map((bar) =>
-      Math.round(bar.querySelector('.hi-hat').getBoundingClientRect().left)
-    )
-  );
+// The left edge of the first cell of the first bar in each row of bars.
+function rowStarts(page) {
+  return page.evaluate(() => {
+    const starts = new Map();
+    for (const bar of document.querySelectorAll('#musicalInput .staff-container')) {
+      const top = Math.round(bar.getBoundingClientRect().top);
+      const left = Math.round(bar.querySelector('.hi-hat').getBoundingClientRect().left);
+      starts.set(top, Math.min(starts.get(top) ?? Infinity, left));
+    }
+    return [...starts.values()];
+  });
 }
 
 // Nothing makes the page scroll sideways, and the bars fit inside the note grid.
@@ -396,21 +404,128 @@ for (const [name, width, height] of [
 
     test('the rows of a wrapped grid all start at the same left edge', async ({ page }) => {
       await openEditor(page, grid(16, 3));
-      const lefts = await barLefts(page);
-      expect(lefts).toHaveLength(3);
-      expect(new Set(lefts).size).toBe(1);
+      const starts = await rowStarts(page);
+      expect(starts).toHaveLength(3);
+      expect(new Set(starts).size).toBe(1);
+      // A bar that is cut off at the right edge does not count as a row that fits.
+      expect(await horizontalOverflow(page)).toEqual({ page: 0, grid: 0 });
+    });
+
+    test('shown stickings line up with the note columns', async ({ page }) => {
+      await openEditor(page, grid(16, 1));
+      await page.click('#stickingsButton');
+      await page.locator('#stickingsContextMenu li').filter({ hasText: 'Show or Hide' }).click();
+      const columns = await page.evaluate(() =>
+        [...document.querySelectorAll('#musicalInput .sticking')].map((cell, i) => {
+          const box = cell.getBoundingClientRect();
+          const note = document.getElementById('hi-hat' + i).getBoundingClientRect();
+          return {
+            id: cell.id,
+            left: Math.round(box.left - note.left),
+            width: Math.round(box.width - note.width),
+            tall: box.height >= 44,
+          };
+        })
+      );
+      expect(columns).toHaveLength(16);
+      expect(columns.filter((c) => c.left !== 0 || c.width !== 0 || !c.tall)).toEqual([]);
     });
   });
 }
+
+test.describe('finger-size notes, 1/8 notes on a landscape tablet', () => {
+  test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
+
+  for (const bars of [2, 4]) {
+    test(`${bars} bars sit two to a row, with 44 px cells`, async ({ page }) => {
+      await openEditor(page, grid(8, bars));
+      const rows = await page.evaluate(() => {
+        const tops = [...document.querySelectorAll('#musicalInput .staff-container')].map((bar) =>
+          Math.round(bar.getBoundingClientRect().top)
+        );
+        return [...new Set(tops)].map((top) => tops.filter((t) => t === top).length);
+      });
+      expect(rows).toEqual(Array(bars / 2).fill(2));
+      const cells = await measureCells(page);
+      expect(cells).toHaveLength(8 * bars * 3);
+      expect(small(cells, (c) => c.width < 44 || c.height < 44)).toEqual([]);
+      expect(missed(cells)).toEqual([]);
+      expect(new Set(await rowStarts(page)).size).toBe(1);
+    });
+  }
+
+  test('Remove measure is a 44 px target that covers no cell', async ({ page }) => {
+    await openEditor(page, grid(8, 2));
+    const remove = await page.evaluate(() =>
+      [...document.querySelectorAll('#musicalInput .closeMeasureButton[id]')].map((button) => {
+        const box = button.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        const cells = [...document.querySelectorAll('#musicalInput :is(.hi-hat, .snare, .kick)')];
+        return {
+          big: box.width >= 44 && box.height >= 44,
+          hitsItself: button.contains(hit),
+          overlaps: cells.some((cell) => {
+            const c = cell.getBoundingClientRect();
+            return (
+              box.left < c.right && c.left < box.right && box.top < c.bottom && c.top < box.bottom
+            );
+          }),
+        };
+      })
+    );
+    expect(remove).toEqual(Array(2).fill({ big: true, hitsItself: true, overlaps: false }));
+  });
+});
+
+test.describe('finger-size notes, the symbols in the grid', () => {
+  test.use({ viewport: { width: 768, height: 1024 }, hasTouch: true });
+
+  test('1/32 circles keep a gap to their neighbours', async ({ page }) => {
+    await openEditor(page, grid(32, 1));
+    const gaps = await page.evaluate(() =>
+      [0, 1, 2].map((i) => {
+        const a = document.getElementById('snare_circle' + i).getBoundingClientRect();
+        const b = document.getElementById('snare_circle' + (i + 1)).getBoundingClientRect();
+        return Math.round(b.left - a.right);
+      })
+    );
+    expect(gaps.filter((gap) => gap < 3)).toEqual([]);
+  });
+
+  test('snare and kick sit the same distance under the line above, and the highlight stops at the kick line', async ({
+    page,
+  }) => {
+    await openEditor(page, grid(16, 1));
+    const layout = await page.evaluate(() => {
+      const box = (id) => document.getElementById(id).getBoundingClientRect();
+      const lineBottom = (lane) => lane.getBoundingClientRect().bottom; // the line is the lane's bottom border
+      const hh = document.querySelector('#musicalInput .hi-hat-container');
+      const snare = document.querySelector('#musicalInput .snare-container');
+      const kick = document.querySelector('#musicalInput .kick-container');
+      const kickLine =
+        kick.getBoundingClientRect().top +
+        parseFloat(getComputedStyle(kick).backgroundPositionY) +
+        3;
+      return {
+        snare: Math.round(box('snare_circle0').top - lineBottom(hh)),
+        kick: Math.round(box('kick_circle0').top - lineBottom(snare)),
+        highlightEnd: Math.round(box('bg-highlight0').bottom - kickLine),
+      };
+    });
+    expect(layout.kick).toBe(layout.snare);
+    expect(layout.highlightEnd).toBe(0);
+  });
+});
 
 test.describe('finger-size notes, desktop with 1/8 notes', () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test('the rows of a wrapped grid all start at the same left edge', async ({ page }) => {
     await openEditor(page, grid(8, 3));
-    const lefts = await barLefts(page);
-    expect(lefts).toHaveLength(3);
-    expect(new Set(lefts).size).toBe(1);
+    // 3 bars of 1/8 notes: two in the first row, one in the second.
+    const starts = await rowStarts(page);
+    expect(starts).toHaveLength(2);
+    expect(new Set(starts).size).toBe(1);
   });
 });
 

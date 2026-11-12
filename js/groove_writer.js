@@ -3848,19 +3848,11 @@ function GrooveWriter() {
       class_note_value_per_measure
     );
 
-    var newHTML = '';
-    for (var cur_measure = 1; cur_measure <= class_number_of_measures; cur_measure++) {
-      newHTML += root.HTMLforStaffContainer(
-        cur_measure,
-        (cur_measure - 1) * class_notes_per_measure
-      );
-    }
-
     // rewrite the HTML for the HTML note grid
-    document.getElementById('measureContainer').innerHTML = newHTML;
+    root.renderNoteGrid();
 
     // change the Permutation options too
-    newHTML = root.HTMLforPermutationOptions();
+    var newHTML = root.HTMLforPermutationOptions();
     document.getElementById('PermutationOptions').innerHTML = newHTML;
 
     if (wasStickingsVisable) root.stickingsShowHide(true, true, true);
@@ -4048,6 +4040,26 @@ function GrooveWriter() {
         class_note_value_per_measure
       ),
     });
+  };
+
+  // Builds the note grid of every measure into #measureContainer. The CSS needs the number of
+  // notes and of note groups in a measure to size the bars before they wrap, so they are set
+  // here as custom properties on the container.
+  root.renderNoteGrid = function () {
+    var html = '';
+    for (var measure = 1; measure <= class_number_of_measures; measure++) {
+      html += root.HTMLforStaffContainer(measure, (measure - 1) * class_notes_per_measure);
+    }
+    var container = document.getElementById('measureContainer');
+    if (!container) return;
+    container.innerHTML = html;
+    var grouping = root.myGrooveUtils.noteGroupingSize(
+      class_notes_per_measure,
+      class_num_beats_per_measure,
+      class_note_value_per_measure
+    );
+    container.style.setProperty('--notes', String(class_notes_per_measure));
+    container.style.setProperty('--groups', String(Math.ceil(class_notes_per_measure / grouping)));
   };
 
   // a click on a permutation option checkbox

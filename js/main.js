@@ -118,11 +118,7 @@ if (utils.is_touch_device()) {
 // Dynamic content regions previously built with document.write.
 fillContainer('PermutationOptions', myGrooveWriter.HTMLforPermutationOptions());
 
-let gridHTML = '';
-for (let m = 1; m <= myGrooveWriter.numberOfMeasures(); m++) {
-  gridHTML += myGrooveWriter.HTMLforStaffContainer(m, (m - 1) * myGrooveWriter.notesPerMeasure());
-}
-fillContainer('measureContainer', gridHTML);
+myGrooveWriter.renderNoteGrid();
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
 
