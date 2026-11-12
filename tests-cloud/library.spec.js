@@ -802,6 +802,24 @@ test.describe('updating a saved groove', () => {
     await pickSaved(page, 'Single paradiddle');
   });
 
+  // The list draws again when an answer arrives or the editor turns clean or dirty. A tap that
+  // started on a groove before that must still open it.
+  test('a redraw while a finger is on a groove does not lose the pick', async ({ page }) => {
+    const other = '?TimeSig=4/4&Div=16&Title=Other&Tempo=95&Measures=1&H=|xxxx|&S=|--O-|&K=|o---|';
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await addLink(page, other, 'Other');
+    await synced(page);
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await grooveButton(page, 'Other').hover();
+    await page.mouse.down();
+    // An Undo makes the editor clean again, and the list draws while the finger is down.
+    await page.evaluate(() => document.getElementById('undoButton').click());
+    await page.mouse.up();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Other');
+  });
+
   test('renaming an open groove without a title changes only the top bar', async ({ page }) => {
     const untitled = '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
     await signedInPanel(page);
@@ -1055,6 +1073,9 @@ test.describe('without a network', () => {
     );
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
+    // A reload before the page has the answer to the write leaves it to the next page, and
+    // that page can lose the row from its cache. This test is about a list that fails.
+    await synced(page);
 
     // Only the next page load has the failing list.
     await page.addInitScript(() => {
@@ -1900,7 +1921,15 @@ test.describe('without a network', () => {
           dialogs.push(dialog.type());
           dialog.accept();
         });
-        await page.waitForFunction(() => !window.document.querySelector('.lp-sync'));
+        // The server has the groove a moment before the page has its answer, and the page warns
+        // until then. Ask the page, without leaving it, until it no longer warns.
+        const wouldWarn = () =>
+          page.evaluate(() => {
+            const event = new Event('beforeunload', { cancelable: true });
+            window.dispatchEvent(event);
+            return event.defaultPrevented;
+          });
+        await expect.poll(wouldWarn).toBe(false);
         await openEditor(page, OFFLINE_EDITOR);
         expect(dialogs).toEqual([]);
       });

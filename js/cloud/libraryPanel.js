@@ -46,6 +46,8 @@ const CHANGED_ELSEWHERE =
 const STILL_LOADING = 'The editor is still loading…';
 const NOT_STARTED = 'The editor did not finish loading. Reload the page and try again.';
 const START_WAIT_MS = 15_000;
+// The longest time a redraw of the list waits for a pointer that is down on it.
+const POINTER_WAIT_MAX_MS = 1000;
 
 const PANEL_HTML = `
   <header class="lp-head">
@@ -414,9 +416,41 @@ function startLibrary({
   document.addEventListener('visibilitychange', refresh);
   window.addEventListener('online', refresh);
 
+  // A redraw replaces every row of the list. A click that started on a row before a redraw ends
+  // on a new button, so the browser sends no click and the pick is lost. A redraw comes when a
+  // server answer arrives or the editor turns clean or dirty, at any moment. While the pointer
+  // is down on the list, the redraw waits until the click has run.
+  let pointerDown = false;
+  let renderWaits = false;
+  let pointerTimer = 0;
+  function onPointerDown() {
+    pointerDown = true;
+    clearTimeout(pointerTimer);
+    // A pointerup that never arrives must not stop the list from drawing.
+    pointerTimer = setTimeout(onPointerEnd, POINTER_WAIT_MAX_MS);
+  }
+  function onPointerEnd() {
+    if (!pointerDown) return;
+    pointerDown = false;
+    clearTimeout(pointerTimer);
+    // The click comes after the pointerup, in the same task. Draw after it.
+    if (renderWaits) {
+      setTimeout(() => {
+        if (renderWaits && isActive()) render();
+      }, 0);
+    }
+  }
+  byId('lpLessons').addEventListener('pointerdown', onPointerDown);
+  document.addEventListener('pointerup', onPointerEnd, true);
+  document.addEventListener('pointercancel', onPointerEnd, true);
+
   // The session is over: nothing may keep running for it.
   function stop() {
     stopped = true;
+    clearTimeout(pointerTimer);
+    byId('lpLessons').removeEventListener('pointerdown', onPointerDown);
+    document.removeEventListener('pointerup', onPointerEnd, true);
+    document.removeEventListener('pointercancel', onPointerEnd, true);
     sync.stop();
     currentGroove.stop();
     stopDirty();
@@ -729,6 +763,12 @@ function startLibrary({
   }
 
   function render() {
+    // See onPointerDown: a click on the list is in progress.
+    if (pointerDown) {
+      renderWaits = true;
+      return;
+    }
+    renderWaits = false;
     for (const id of ['lpSaveLesson', 'lpLinkLesson']) {
       const select = byId(id);
       const known = lessons.some((lesson) => lesson.id === openLesson);
