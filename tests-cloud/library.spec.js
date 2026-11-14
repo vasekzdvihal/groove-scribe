@@ -370,6 +370,46 @@ test('the top bar shows the library name of a groove without a title', async ({ 
   await expect(page.locator('#tuneTitle')).toHaveValue('');
 });
 
+const UNTITLED_QUERY = '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
+
+// The top bar names the open library groove, also when its address has no Title.
+test.describe('the top bar names the open library groove', () => {
+  test('after a pick', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, UNTITLED_QUERY, 'Rock beat');
+    await page.getByRole('button', { name: 'Rock beat', exact: true }).click();
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Rock beat');
+    await expect(page.locator('#tuneTitle')).toHaveValue('');
+  });
+
+  test('after a save', async ({ page }) => {
+    await openEditor(page, EDITOR + '&' + UNTITLED_QUERY.slice(1));
+    await openPanel(page);
+    await signIn(page, 'ana@example.com');
+    await page.locator('summary', { hasText: 'Save current groove' }).click();
+    await page.locator('#lpSaveTitle').fill('Rock beat');
+    await page.getByRole('button', { name: 'Save groove' }).click();
+    await expect(page.getByRole('button', { name: 'Rock beat', exact: true })).toHaveAttribute(
+      'aria-current',
+      'true'
+    );
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Rock beat');
+    await expect(page.locator('#tuneTitle')).toHaveValue('');
+  });
+
+  test('after a reload', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, UNTITLED_QUERY, 'Rock beat');
+    await page.getByRole('button', { name: 'Rock beat', exact: true }).click();
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Rock beat');
+    await synced(page);
+    await page.reload();
+    await page.waitForSelector('#svgTarget svg');
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Rock beat');
+    await expect(page.locator('#tuneTitle')).toHaveValue('');
+  });
+});
+
 test.describe('unsaved edits', () => {
   const OTHER =
     '?TimeSig=4/4&Div=8&Title=Rock&Tempo=100&Measures=1&H=|xxxxxxxx|&S=|--O---O-|&K=|o---o---|';

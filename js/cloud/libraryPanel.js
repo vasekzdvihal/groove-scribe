@@ -9,7 +9,8 @@
 // precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { askToDiscard, isAskingToDiscard } from '../confirmDialog.js';
-import { createCurrentGroove } from './currentGroove.js';
+import { createCurrentGroove, readRecord } from './currentGroove.js';
+import { restoredBaseline, sameGroove } from './dirtyState.js';
 import { parseGrooveLink } from './grooveLink.js';
 import { createLibrary } from './library.js';
 import {
@@ -234,6 +235,17 @@ function rememberUser(user) {
     else localStorage.removeItem(USER_KEY);
   } catch {
     // Without storage the avatar appears only after the panel has opened.
+  }
+}
+
+// A reload shows the name of the open groove before the Firebase SDK loads: the tab kept it
+// with the record of the open groove. The name shows only when the page has the clean groove
+// of that record. The library decides later, and a groove that is not open any more loses it.
+function nameGrooveOfLastVisit(uid, search, editor) {
+  const record = uid ? readRecord(uid) : null;
+  const clean = restoredBaseline(search);
+  if (record?.name && typeof clean === 'string' && sameGroove(record.editorQuery, clean)) {
+    editor.setNameWhenUntitled(record.name);
   }
 }
 
@@ -532,8 +544,8 @@ function startLibrary({
   }
 
   // Call after markClean: the groove in the editor is now this saved groove.
-  function setCurrentGroove(id, savedQuery) {
-    currentGroove.set(id, savedQuery);
+  function setCurrentGroove(id, savedQuery, name) {
+    currentGroove.set(id, savedQuery, name);
     showCurrentGroove();
   }
 
@@ -665,7 +677,7 @@ function startLibrary({
         editor.openGroove(groove.query, name);
         // The editor writes the groove its own way, so its query is the clean one.
         dirtyState.markClean(editor.currentQuery());
-        setCurrentGroove(groove.id, groove.query);
+        setCurrentGroove(groove.id, groove.query, name);
         afterPick();
       },
       { className: 'lp-open' }
@@ -783,6 +795,10 @@ function startLibrary({
     }
     const openGroove = openSavedGroove();
     openGrooveId = openGroove?.id ?? null;
+    // The top bar names the open groove while its address has no title. Until the library has
+    // decided about the groove of the last visit, the name from that visit stays.
+    if (openGroove) editor.setNameWhenUntitled(grooveName(openGroove));
+    else if (!currentGroove.isRestoring()) editor.setNameWhenUntitled('');
     // Without a persistent cache, a write that waits is lost when the tab closes: not saved yet.
     showGrooveSaved(Boolean(openGroove) && (persistent || !isPending(openGroove)));
     const known = new Set(lessons.map((lesson) => lesson.id));
@@ -898,7 +914,7 @@ function startLibrary({
     dirtyState.markClean(clean);
     // A save that the server refuses later did not save the edits.
     written.committed.catch(() => dirtyState.forget(clean));
-    setCurrentGroove(written.id, written.query);
+    setCurrentGroove(written.id, written.query, written.title);
     byId('lpSaveTool').open = false;
   }
 
@@ -1026,6 +1042,7 @@ async function startCloud(search, editor, dirtyState, hooks) {
     const shownUser = user && {
       name: user.displayName || user.email || 'Signed in',
       photoURL: user.photoURL,
+      uid: user.uid,
     };
     rememberUser(shownUser);
     renderUserMenu(shownUser);
@@ -1101,6 +1118,7 @@ async function startCloud(search, editor, dirtyState, hooks) {
  *        by itself waits for it before it starts Firebase.
  * @param {{openGroove: function(string, string): void, currentQuery: function(): string,
  *          currentTitle: function(): string, rename: function(string): void,
+ *          setNameWhenUntitled: function(string): void,
  *          onDirtyChange: function(function(boolean): void): function(): void}} options.editor
  * @param {ReturnType<typeof import('./dirtyState.js').createDirtyState>} options.dirtyState  Knows the groove that was last loaded or saved. The caller marks
  *        the groove that the page starts with, with markStart.
@@ -1241,7 +1259,9 @@ export function initLibraryPanel({
     }
   }
 
-  renderUserMenu(readRememberedUser());
+  const remembered = readRememberedUser();
+  renderUserMenu(remembered);
+  nameGrooveOfLastVisit(remembered?.uid, search, editor);
   byId('userMenuSignIn').addEventListener('click', openPanel);
   byId('userMenuSignOut').addEventListener('click', signOut);
   toggle.addEventListener('click', () => {

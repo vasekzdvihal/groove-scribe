@@ -343,6 +343,7 @@ describe('the library panel', () => {
         query = query.replace(/Title=[^&]*/, 'Title=' + encodeURIComponent(name));
         watch.changed();
       }),
+      setNameWhenUntitled: vi.fn(),
       onDirtyChange: (listener) => watch.onDirtyChange(listener),
     };
   }

@@ -140,6 +140,8 @@ const editor = {
     title.value = name;
     myGrooveWriter.refresh_ABC();
   },
+  // The top bar names the open library groove while its address has no title.
+  setNameWhenUntitled: (name) => myGrooveWriter.setNameWhenUntitled(name),
   // Calls the listener with true when the groove gets unsaved edits, and with false when it
   // is clean again. Returns the call that stops listening.
   onDirtyChange: (listener) => dirtyWatch.onDirtyChange(listener),
