@@ -9,6 +9,8 @@ async function openEditor(page, query = GROOVE) {
   await page.waitForSelector('#svgTarget svg');
 }
 
+const tempoKnob = (page) => page.getByRole('slider', { name: 'Tempo', exact: true });
+
 // Save is the button just before Share, with the same size, shape and colours.
 async function expectSaveLikeShare(page) {
   const save = page.locator('#saveButton');
@@ -58,7 +60,7 @@ for (const [name, width, height] of [
           document.querySelector(id)
         );
         const buttons = bars
-          .flatMap((bar) => [...bar.querySelectorAll('button, .midiPlayImage')])
+          .flatMap((bar) => [...bar.querySelectorAll('button, .midiPlayImage, .tempoKnob')])
           .map((el) => ({ id: el.id || el.className, box: el.getBoundingClientRect() }))
           .filter(({ box }) => box.width > 0);
         return {
@@ -87,16 +89,11 @@ for (const [name, width, height] of [
       await expectSaveLikeShare(page);
     });
 
-    test('the tempo controls do not overlap the click buttons', async ({ page }) => {
+    test('the tempo knob does not overlap the click buttons', async ({ page }) => {
       await openEditor(page);
-      const faster = await page.getByRole('button', { name: 'Faster' }).boundingBox();
+      const knob = await tempoKnob(page).boundingBox();
       const off = await page.locator('#metronomeOff').boundingBox();
-      expect(faster.x + faster.width).toBeLessThanOrEqual(off.x);
-      const slider = page.locator('input[id^="tempoInput"]');
-      if (await slider.isVisible()) {
-        const box = await slider.boundingBox();
-        expect(box.x + box.width).toBeLessThanOrEqual(off.x);
-      }
+      expect(knob.x + knob.width).toBeLessThanOrEqual(off.x);
     });
 
     test('menus opened from the bars stay on screen', async ({ page }) => {
@@ -163,18 +160,6 @@ test('a second tap on the button closes its popover', async ({ page }) => {
   await expect(page.locator('#swingPopover')).toBeVisible();
   await page.click('#swingButton');
   await expect(page.locator('#swingPopover')).toBeHidden();
-});
-
-test('the BPM buttons change the tempo by one', async ({ page }) => {
-  await openEditor(page);
-  const field = page.locator('[id^="tempoTextField"]');
-  await expect(field).toHaveValue('80');
-  await page.getByRole('button', { name: 'Faster' }).click();
-  await expect(field).toHaveValue('81');
-  await page.getByRole('button', { name: 'Slower' }).click();
-  await page.getByRole('button', { name: 'Slower' }).click();
-  await expect(field).toHaveValue('79');
-  await expect(page).toHaveURL(/Tempo=79/);
 });
 
 test('the swing button shows the swing amount', async ({ page }) => {
@@ -709,7 +694,7 @@ for (const [width, height] of [
             const edge = bar.getBoundingClientRect();
             const items = [
               ...bar.querySelectorAll(
-                'button, input, .tempoLabel, #metronomeLabel, .MIDIPlayTime, .midiPlayImage'
+                'button, input, .tempoKnob, .tempoLabel, #metronomeLabel, .MIDIPlayTime, .midiPlayImage'
               ),
             ]
               .filter(
@@ -777,138 +762,287 @@ test.describe('controls, fix round 1', () => {
   });
 });
 
-// The tempo can be typed, and a held - or + repeats, so a big tempo change takes no 40 taps.
+// The tempo is a round knob. A finger turns it like a wheel: 6 degrees is 1 BPM. A tap on it
+// opens the number for typing.
+const tempoField = (page) => page.locator('[id^="tempoTextField"]');
+
+async function knobCentre(page) {
+  const box = await tempoKnob(page).boundingBox();
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+// A point on a circle round the knob centre. 0 degrees is at the top, and the angle goes
+// clockwise.
+const onRing = (centre, degrees, radius = 22) => ({
+  x: centre.x + radius * Math.sin((degrees * Math.PI) / 180),
+  y: centre.y - radius * Math.cos((degrees * Math.PI) / 180),
+});
+
+// Drags with the mouse round the knob from the top, by this many degrees (negative is
+// counter-clockwise), in 5 degree moves.
+async function turnKnob(page, degrees, from = 0) {
+  const centre = await knobCentre(page);
+  const start = onRing(centre, from);
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  const sign = Math.sign(degrees);
+  for (let turned = 5; turned <= Math.abs(degrees); turned += 5) {
+    const point = onRing(centre, from + sign * turned);
+    await page.mouse.move(point.x, point.y);
+  }
+  await page.mouse.up();
+}
+
+// The same with a finger, through the Chrome touch events.
+async function turnKnobByTouch(page, degrees) {
+  const centre = await knobCentre(page);
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type, point) =>
+    cdp.send('Input.dispatchTouchEvent', { type, touchPoints: point ? [point] : [] });
+  await touch('touchStart', onRing(centre, 0));
+  const sign = Math.sign(degrees);
+  for (let turned = 5; turned <= Math.abs(degrees); turned += 5) {
+    await touch('touchMove', onRing(centre, sign * turned));
+  }
+  await touch('touchEnd');
+}
+
+async function expectTempo(page, tempo) {
+  const knob = tempoKnob(page);
+  await expect(knob).toHaveAttribute('aria-valuenow', String(tempo));
+  await expect(knob).toHaveAttribute('aria-valuetext', `${tempo} BPM`);
+  await expect(knob).toContainText(String(tempo));
+  expect(await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.getTempo())).toBe(tempo);
+}
+
 for (const [width, height] of [
   [768, 1024],
   [1024, 768],
+  [1440, 900],
 ]) {
-  test.describe(`tempo entry at ${width}x${height}`, () => {
+  test.describe(`tempo knob at ${width}x${height}`, () => {
     test.use({ viewport: { width, height }, hasTouch: true });
 
-    test('a typed tempo applies on Enter and on blur, inside the tempo range', async ({ page }) => {
+    test('the knob is a slider, and replaces the - and + buttons and the range', async ({
+      page,
+    }) => {
       await openEditor(page);
-      const field = page.locator('[id^="tempoTextField"]');
-      await expect(field).toBeVisible();
-      await expect(field).toHaveAttribute('inputmode', 'numeric');
-      await expect(field).toHaveAttribute('enterkeyhint', 'done');
-      await expect(field).toHaveAccessibleName('Beats per minute');
-      await field.click();
-      // Select all on focus: the typed number replaces the old one.
-      await page.keyboard.type('120');
-      await page.keyboard.press('Enter');
-      await expect(field).toHaveValue('120');
-      await expect(page).toHaveURL(/Tempo=120/);
-      await expect(field).not.toBeFocused();
-
-      await field.click();
-      await page.keyboard.type('999');
-      await page.locator('#svgTarget').click({ position: { x: 5, y: 5 } });
-      await expect(field).toHaveValue('300');
-      await expect(page).toHaveURL(/Tempo=300/);
-
-      await field.click();
-      await page.keyboard.type('abc');
-      await page.keyboard.press('Enter');
-      await expect(field).toHaveValue('300');
+      const knob = tempoKnob(page);
+      await expect(knob).toBeVisible();
+      await expect(knob).toHaveAttribute('aria-valuemin', '30');
+      await expect(knob).toHaveAttribute('aria-valuemax', '300');
+      await expectTempo(page, 80);
+      const box = await knob.boundingBox();
+      expect(box.width).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      const bar = page.locator('#PlaybackBar');
+      await expect(bar.getByRole('button', { name: /Faster|Slower/ })).toHaveCount(0);
+      await expect(bar.locator('input[type="range"]:visible')).toHaveCount(0);
+      // The knob keeps the bar at its height.
+      expect((await bar.boundingBox()).height).toBe(76);
     });
 
-    test('a click on + steps by one, and holding + repeats', async ({ page }) => {
+    test('a turn of the knob changes the tempo by 1 BPM for each 6 degrees', async ({ page }) => {
       await openEditor(page);
-      const field = page.locator('[id^="tempoTextField"]');
-      const faster = page.getByRole('button', { name: 'Faster' });
-      await faster.click();
-      await expect(field).toHaveValue('81');
-
-      const box = await faster.boundingBox();
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.waitForTimeout(1500);
-      await page.mouse.up();
-      const held = Number(await field.inputValue());
-      expect(held).toBeGreaterThan(81 + 10);
-      // The click that ends the hold adds no extra step.
-      await page.waitForTimeout(200);
-      expect(Number(await field.inputValue())).toBe(held);
-      await expect(page).toHaveURL(new RegExp('Tempo=' + held));
+      await turnKnob(page, 90);
+      await expectTempo(page, 95);
+      await expect(page).toHaveURL(/Tempo=95/);
+      await turnKnob(page, -180);
+      await expectTempo(page, 65);
     });
 
-    test('a held + stops at 300', async ({ page }) => {
-      await openEditor(page, GROOVE.replace('Tempo=80', 'Tempo=296'));
-      const field = page.locator('[id^="tempoTextField"]');
-      const box = await page.getByRole('button', { name: 'Faster' }).boundingBox();
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await expect(field).toHaveValue('300');
-      // The repeat has stopped: no more tempo changes while the button is still held.
-      const steps = await page.evaluate(
-        () =>
-          new Promise((resolve) => {
-            let count = 0;
-            const utils = window.myGrooveWriter.myGrooveUtils;
-            const setTempo = utils.setTempo;
-            utils.setTempo = (tempo) => {
-              count++;
-              setTempo(tempo);
-            };
-            setTimeout(() => resolve(count), 400);
-          })
-      );
-      await page.mouse.up();
-      expect(steps).toBe(0);
-    });
-
-    test('a tap after keyboard focus can place the caret', async ({ page }) => {
+    test('a finger turns the knob, and the page does not scroll', async ({ page }) => {
       await openEditor(page);
-      const field = page.locator('[id^="tempoTextField"]');
-      await field.focus();
-      await page.waitForTimeout(50);
-      // A second tap in a focused field puts the caret where it lands, not a selection.
-      const box = await field.boundingBox();
-      await page.mouse.click(box.x + box.width - 4, box.y + box.height / 2);
-      const selection = await field.evaluate((node) => [node.selectionStart, node.selectionEnd]);
-      expect(selection[0]).toBe(selection[1]);
-    });
-
-    test('focus selects the whole tempo, also after the focus handler', async ({ page }) => {
-      await openEditor(page);
-      const field = page.locator('[id^="tempoTextField"]');
-      // Safari can collapse a selection made inside the focus handler. The field selects again
-      // after it, so a collapse in between does not last.
-      await field.evaluate((node) => {
-        node.addEventListener('focus', () => node.setSelectionRange(0, 0), { once: true });
-      });
-      await field.focus();
-      await page.waitForTimeout(50);
-      expect(await field.evaluate((node) => [node.selectionStart, node.selectionEnd])).toEqual([
-        0, 2,
-      ]);
+      await turnKnobByTouch(page, 90);
+      await expectTempo(page, 95);
+      await expect(tempoField(page)).toBeHidden();
     });
   });
 }
 
-for (const hasTouch of [true, false]) {
-  test.describe(`tempo slider at 1024x768${hasTouch ? ' with touch' : ''}`, () => {
-    test.use({ viewport: { width: 1024, height: 768 }, hasTouch });
+test.describe('tempo knob', () => {
+  test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
 
-    test('the slider is back and at least 120 px wide', async ({ page }) => {
-      await openEditor(page);
-      const slider = page.locator('input[id^="tempoInput"]');
-      await expect(slider).toBeVisible();
-      expect((await slider.boundingBox()).width).toBeGreaterThanOrEqual(120);
-      await expect(page.locator('#saveButton')).toHaveAccessibleName('Save');
-      await expect(page.locator('#shareSaveButton')).toHaveAccessibleName('Share');
-    });
+  test('the knob stops at 300, and turns back at once', async ({ page }) => {
+    await openEditor(page, GROOVE.replace('Tempo=80', 'Tempo=290'));
+    await turnKnob(page, 360);
+    await expectTempo(page, 300);
+    await turnKnob(page, -30);
+    await expectTempo(page, 295);
   });
-}
 
-test.describe('tempo slider at 1150x800', () => {
-  test.use({ viewport: { width: 1150, height: 800 } });
-
-  test('the slider shows between 1100 and 1199 px too', async ({ page }) => {
+  test('a finger that starts near the centre or goes round it does not make the tempo jump', async ({
+    page,
+  }) => {
     await openEditor(page);
-    const slider = page.locator('input[id^="tempoInput"]');
-    await expect(slider).toBeVisible();
-    expect((await slider.boundingBox()).width).toBeGreaterThanOrEqual(120);
+    const centre = await knobCentre(page);
+    // Down on the number, out to the ring at the right, then a quarter turn down.
+    await page.mouse.move(centre.x + 1, centre.y + 1);
+    await page.mouse.down();
+    await page.mouse.move(centre.x + 22, centre.y);
+    await expectTempo(page, 80);
+    for (let turned = 95; turned <= 180; turned += 5) {
+      const point = onRing(centre, turned);
+      await page.mouse.move(point.x, point.y);
+    }
+    await page.mouse.up();
+    await expectTempo(page, 95);
+  });
+
+  test('the arc shows the tempo in its range', async ({ page }) => {
+    await openEditor(page);
+    const arc = page.locator('.tempoKnob .tempoKnobValueArc');
+    // 30 to 300 BPM fills 270 degrees, so each BPM is one degree of arc.
+    await expect(arc).toHaveAttribute('stroke-dasharray', '50 360');
+    await page.evaluate(() =>
+      window.myGrooveWriter.loadNewGroove('?TimeSig=4/4&Div=8&Tempo=150&Measures=1&H=|x-x-x-x-|')
+    );
+    await expectTempo(page, 150);
+    await expect(arc).toHaveAttribute('stroke-dasharray', '120 360');
+  });
+
+  test('the mouse wheel changes the tempo by one for each notch, and does not scroll', async ({
+    page,
+  }) => {
+    await openEditor(page);
+    const centre = await knobCentre(page);
+    await page.mouse.move(centre.x, centre.y);
+    await page.evaluate(() => {
+      window.wheelScrolls = 0;
+      window.addEventListener('wheel', (event) => {
+        if (!event.defaultPrevented) window.wheelScrolls++;
+      });
+    });
+    for (let notch = 0; notch < 3; notch++) await page.mouse.wheel(0, -100);
+    await expectTempo(page, 83);
+    await page.mouse.wheel(0, 100);
+    await expectTempo(page, 82);
+    expect(await page.evaluate(() => window.wheelScrolls)).toBe(0);
+  });
+
+  test('the keys change the tempo, and the arrow keys do it once', async ({ page }) => {
+    await openEditor(page);
+    const knob = tempoKnob(page);
+    const groove = await grooveData(page);
+    await knob.focus();
+    expect(await knob.evaluate((node) => node.matches(':focus-visible'))).toBe(true);
+    await page.keyboard.press('ArrowUp');
+    await expectTempo(page, 81);
+    await page.keyboard.press('ArrowRight');
+    await expectTempo(page, 82);
+    await page.keyboard.press('ArrowLeft');
+    await page.keyboard.press('ArrowDown');
+    await expectTempo(page, 80);
+    await page.keyboard.press('PageDown');
+    await expectTempo(page, 70);
+    await page.keyboard.press('PageUp');
+    await expectTempo(page, 80);
+    await page.keyboard.press('Home');
+    await expectTempo(page, 30);
+    await page.keyboard.press('End');
+    await expectTempo(page, 300);
+    // The editor's own Left and Right keys did not act too. The notes are the same.
+    expect({ ...(await grooveData(page)), tempo: 0 }).toEqual({ ...groove, tempo: 0 });
+  });
+
+  test('a tap opens the number for typing; Enter applies it inside the range', async ({ page }) => {
+    await openEditor(page);
+    const knob = tempoKnob(page);
+    const field = tempoField(page);
+    await expect(field).toBeHidden();
+    await knob.tap();
+    await expect(field).toBeVisible();
+    await expect(field).toBeFocused();
+    await expect(field).toHaveAttribute('inputmode', 'numeric');
+    await expect(field).toHaveAttribute('enterkeyhint', 'done');
+    await expect(field).toHaveAccessibleName('Beats per minute');
+    // Select all on focus: the typed number replaces the old one.
+    await page.keyboard.type('132');
+    await page.keyboard.press('Enter');
+    await expect(field).toBeHidden();
+    await expectTempo(page, 132);
+    await expect(page).toHaveURL(/Tempo=132/);
+
+    await knob.tap();
+    await page.keyboard.type('500');
+    await page.keyboard.press('Enter');
+    await expectTempo(page, 300);
+
+    await knob.tap();
+    await page.keyboard.type('77');
+    await page.keyboard.press('Escape');
+    await expect(field).toBeHidden();
+    await expectTempo(page, 300);
+
+    // A tap elsewhere applies the typed number too.
+    await knob.tap();
+    await page.keyboard.type('99');
+    await page.locator('#svgTarget').click({ position: { x: 5, y: 5 } });
+    await expect(field).toBeHidden();
+    await expectTempo(page, 99);
+
+    await knob.tap();
+    await page.keyboard.type('abc');
+    await page.keyboard.press('Enter');
+    await expectTempo(page, 99);
+  });
+
+  test('a turn does not open the number for typing', async ({ page }) => {
+    await openEditor(page);
+    await turnKnob(page, 15);
+    await expectTempo(page, 82);
+    await expect(tempoField(page)).toBeHidden();
+  });
+
+  test('Enter on the knob opens typing, and focus comes back to the knob', async ({ page }) => {
+    await openEditor(page);
+    const knob = tempoKnob(page);
+    await knob.focus();
+    await page.keyboard.press('Enter');
+    await expect(tempoField(page)).toBeFocused();
+    await page.keyboard.type('120');
+    await page.keyboard.press('Enter');
+    await expectTempo(page, 120);
+    await expect(knob).toBeFocused();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await expect(knob).toBeFocused();
+    await expectTempo(page, 120);
+  });
+
+  test('a tap after the number opened can place the caret', async ({ page }) => {
+    await openEditor(page);
+    await tempoKnob(page).tap();
+    const field = tempoField(page);
+    await page.waitForTimeout(50);
+    // A second tap in the open field puts the caret where it lands, not a selection.
+    const box = await field.boundingBox();
+    await page.mouse.click(box.x + box.width / 2 + 10, box.y + box.height / 2);
+    const selection = await field.evaluate((node) => [node.selectionStart, node.selectionEnd]);
+    expect(selection[0]).toBe(selection[1]);
+  });
+
+  test('focus selects the whole tempo, also after the focus handler', async ({ page }) => {
+    await openEditor(page);
+    const field = tempoField(page);
+    // Safari can collapse a selection made inside the focus handler. The field selects again
+    // after it, so a collapse in between does not last.
+    await field.evaluate((node) => {
+      node.addEventListener('focus', () => node.setSelectionRange(0, 0), { once: true });
+    });
+    await tempoKnob(page).tap();
+    await page.waitForTimeout(50);
+    expect(await field.evaluate((node) => [node.selectionStart, node.selectionEnd])).toEqual([
+      0, 2,
+    ]);
+  });
+
+  test('the embed player keeps its tempo slider', async ({ page }) => {
+    await page.goto(
+      '/GrooveEmbed.html?TimeSig=4/4&Div=16&Tempo=80&Measures=1&H=|xxxxxxxxxxxxxxxx|&S=|----O-------O---|&K=|o-------o-------|'
+    );
+    await expect(page.locator('input[id^="tempoInput"]').first()).toBeAttached();
+    await expect(page.locator('.tempoKnob')).toHaveCount(0);
   });
 });
 
@@ -926,27 +1060,23 @@ test.describe('tool bar groups at 768x1024 with touch', () => {
   });
 });
 
-// The slider shows only when it is at least 120 px wide, at every width where the player is a
-// size container, and nothing in the playback bar overlaps or leaves the bar.
+// Nothing in the playback bar overlaps or leaves the bar, at any width from a narrow tablet
+// window up to a wide desktop. Below 680 px the bar scrolls sideways by design.
 for (const hasTouch of [true, false]) {
-  test.describe(`playback bar sweep 1001-1199 px${hasTouch ? ' with touch' : ''}`, () => {
+  test.describe(`playback bar sweep 680-1440 px${hasTouch ? ' with touch' : ''}`, () => {
     test.use({ viewport: { width: 1001, height: 768 }, hasTouch });
 
-    test('the slider is hidden or at least 120 px, and no item overlaps', async ({ page }) => {
+    test('no item overlaps or leaves the bar', async ({ page }) => {
       await openEditor(page);
       const problems = [];
-      for (let width = 1001; width <= 1199; width += 8) {
+      for (let width = 680; width <= 1440; width += 12) {
         await page.setViewportSize({ width, height: 768 });
         const report = await page.evaluate(() => {
           const bar = document.getElementById('PlaybackBar');
           const edge = bar.getBoundingClientRect();
-          const slider = document.querySelector('#midiPlayer .tempoInput');
-          const sliderWidth = slider.getClientRects().length
-            ? slider.getBoundingClientRect().width
-            : 0;
           const items = [
             ...bar.querySelectorAll(
-              'button, input, .tempoLabel, #metronomeLabel, .MIDIPlayTime, .midiPlayImage'
+              'button, input, .tempoKnob, .tempoLabel, #metronomeLabel, .MIDIPlayTime, .midiPlayImage'
             ),
           ]
             .filter((node) => node.getClientRects().length && !node.closest('.swingRow'))
@@ -967,15 +1097,8 @@ for (const hasTouch of [true, false]) {
           const outside = items
             .filter(({ box }) => box.left < edge.left || box.right > edge.right + 0.5)
             .map(({ name }) => name);
-          return {
-            sliderWidth,
-            overlaps,
-            outside,
-            scroll: bar.scrollWidth - bar.clientWidth,
-          };
+          return { overlaps, outside, scroll: bar.scrollWidth - bar.clientWidth };
         });
-        if (report.sliderWidth > 0 && report.sliderWidth < 120)
-          problems.push(`${width}: slider ${report.sliderWidth}`);
         if (report.overlaps.length) problems.push(`${width}: ${report.overlaps.join(', ')}`);
         if (report.outside.length) problems.push(`${width}: outside ${report.outside.join(', ')}`);
         if (report.scroll > 0) problems.push(`${width}: scroll ${report.scroll}`);
