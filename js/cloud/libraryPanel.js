@@ -538,9 +538,9 @@ function startLibrary({
   document.addEventListener('visibilitychange', refresh);
   window.addEventListener('online', refresh);
 
-  // A redraw replaces every row of the list, and the buttons of the save form and the options of
-  // the Lesson selects. A click that started on a row before a redraw ends on a new button, so
-  // the browser sends no click and the pick is lost. A redraw comes when a server answer arrives
+  // A redraw replaces every row of the list and the options of the Lesson selects, and the save
+  // form can lose its Update button. A click that started on a button that a redraw replaced or
+  // removed gets no click from the browser, so the pick or the press is lost. A redraw comes when a server answer arrives
   // or the editor turns clean or dirty, at any moment. While the pointer is down on the list or
   // on a tool form, the redraw waits until the click has run.
   const pressAreas = ['lpLessons', ...TOOL_IDS].map(byId);
