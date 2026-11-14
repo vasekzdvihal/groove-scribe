@@ -64,9 +64,21 @@ const PANEL_HTML = `
       <button id="lpSignIn" class="lp-primary" type="button">Sign in with Google</button>
     </section>
     <section id="lpLibrary" hidden>
-      <div id="lpLessons"></div>
-      <details id="lpSaveTool" class="lp-tool">
-        <summary>Save current groove</summary>
+      <div class="lp-tools">
+        <button id="lpSaveToolButton" class="lp-tool-button" type="button"
+            aria-label="Save current groove" aria-expanded="false" aria-controls="lpSaveTool">
+          <i class="fa fa-floppy-o" aria-hidden="true"></i><span>Save</span>
+        </button>
+        <button id="lpLinkToolButton" class="lp-tool-button" type="button"
+            aria-label="Add a groove link" aria-expanded="false" aria-controls="lpLinkTool">
+          <i class="fa fa-link" aria-hidden="true"></i><span>Add link</span>
+        </button>
+        <button id="lpLessonToolButton" class="lp-tool-button" type="button"
+            aria-label="New lesson" aria-expanded="false" aria-controls="lpLessonTool">
+          <i class="fa fa-plus" aria-hidden="true"></i><span>New lesson</span>
+        </button>
+      </div>
+      <div id="lpSaveTool" class="lp-tool" hidden>
         <form id="lpSaveForm">
           <label for="lpSaveTitle">Title</label>
           <input id="lpSaveTitle" type="text" maxlength="200">
@@ -77,9 +89,8 @@ const PANEL_HTML = `
             <button id="lpSaveNew" class="lp-primary" type="submit">Save groove</button>
           </div>
         </form>
-      </details>
-      <details class="lp-tool">
-        <summary>Add a groove link</summary>
+      </div>
+      <div id="lpLinkTool" class="lp-tool" hidden>
         <form id="lpLinkForm">
           <label for="lpLinkUrl">Groove link</label>
           <input id="lpLinkUrl" type="text" autocomplete="off" required>
@@ -89,15 +100,15 @@ const PANEL_HTML = `
           <select id="lpLinkLesson"></select>
           <button class="lp-primary" type="submit">Add groove</button>
         </form>
-      </details>
-      <details class="lp-tool">
-        <summary>New lesson</summary>
+      </div>
+      <div id="lpLessonTool" class="lp-tool" hidden>
         <form id="lpLessonForm">
           <label for="lpLessonName">Lesson name</label>
           <input id="lpLessonName" type="text" maxlength="200" required>
           <button class="lp-primary" type="submit">Create lesson</button>
         </form>
-      </details>
+      </div>
+      <div id="lpLessons"></div>
     </section>
   </div>
 `;
@@ -117,6 +128,34 @@ function button(textContent, onClick, properties = {}) {
   const node = element('button', { type: 'button', textContent, ...properties });
   node.addEventListener('click', onClick);
   return node;
+}
+
+// The tool buttons at the top of the library each show one form below them.
+const TOOL_IDS = ['lpSaveTool', 'lpLinkTool', 'lpLessonTool'];
+// The event that a tool form gets when it opens. The save form fills itself on it.
+const TOOL_OPENED = 'lp-tool-opened';
+const toolButton = (toolId) => byId(`${toolId}Button`);
+const isToolOpen = (toolId) => !byId(toolId).hidden;
+
+// Show one tool form, or none with null. Only one form is open at a time.
+function showTool(openId) {
+  for (const id of TOOL_IDS) {
+    const wasOpen = isToolOpen(id);
+    const isOpen = id === openId;
+    byId(id).hidden = !isOpen;
+    toolButton(id).setAttribute('aria-expanded', String(isOpen));
+    if (isOpen && !wasOpen) byId(id).dispatchEvent(new Event(TOOL_OPENED));
+  }
+}
+
+// Escape in an open tool form closes it, and focus goes back to its button. Returns true when
+// it closed a form.
+function closeToolOf(target) {
+  const toolId = TOOL_IDS.find((id) => isToolOpen(id) && byId(id).contains(target));
+  if (!toolId) return false;
+  showTool(null);
+  toolButton(toolId).focus();
+  return true;
 }
 
 // Browser storage can throw in private windows. The panel works without it.
@@ -193,6 +232,8 @@ function submitOnce(form, handler) {
     if (running) return;
     running = true;
     const pressed = event.submitter;
+    const tool = form.closest('.lp-tool');
+    const toolWasOpen = Boolean(tool && !tool.hidden);
     const buttons = [...form.querySelectorAll('button')];
     for (const node of buttons) node.disabled = true;
     try {
@@ -201,7 +242,9 @@ function submitOnce(form, handler) {
       running = false;
       for (const node of buttons) node.disabled = false;
       const focusLost = !document.activeElement || document.activeElement === document.body;
-      if (pressed?.isConnected && focusLost) pressed.focus();
+      // A save closes its form. Focus then goes to the button that opens the form.
+      const target = toolWasOpen && tool.hidden ? toolButton(tool.id) : pressed;
+      if (target?.isConnected && focusLost) target.focus();
     }
   };
 }
@@ -323,8 +366,11 @@ function startLibrary({
   let grooves = [];
   // The id that render highlights.
   let openGrooveId = null;
-  let menuGrooveId = null;
+  // The one ⋯ menu that is open, as a menuKey of a lesson or a groove, or null.
+  let openMenu = null;
   let openLesson = readLastLesson();
+  // The lesson that the user closed. A redraw keeps it closed until a lesson opens.
+  let closedLesson = null;
   // The user picked the lesson of the link form. It stays until the groove is added.
   let linkLessonPicked = false;
   // The user typed a title into the save form since it was filled.
@@ -400,7 +446,7 @@ function startLibrary({
     // user typed.
     onStart() {
       render();
-      if (byId('lpSaveTool').open && !saveTitleTyped) prefillSaveForm();
+      if (isToolOpen('lpSaveTool') && !saveTitleTyped) prefillSaveForm();
     },
     // Another groove, from the Grooves menu for example, closes the open saved groove.
     onCleanChange() {
@@ -466,6 +512,7 @@ function startLibrary({
     byId('lpLessons').removeEventListener('pointerdown', onPointerDown);
     document.removeEventListener('pointerup', onPointerEnd, true);
     document.removeEventListener('pointercancel', onPointerEnd, true);
+    byId('lpSaveTool').removeEventListener(TOOL_OPENED, prefillSaveForm);
     sync.stop();
     currentGroove.stop();
     stopDirty();
@@ -543,7 +590,7 @@ function startLibrary({
   // Draw a new open groove. A docked panel can have the save form open: it is now about it.
   function showCurrentGroove() {
     render();
-    if (byId('lpSaveTool').open) prefillSaveForm();
+    if (isToolOpen('lpSaveTool')) prefillSaveForm();
   }
 
   // Call after markClean: the groove in the editor is now this saved groove.
@@ -596,7 +643,7 @@ function startLibrary({
         // A slow response must not draw into another user's session.
         if (!isActive()) return { ok: false };
         // Only a change closes a menu. A load that finishes must not close one the user opened.
-        menuGrooveId = null;
+        openMenu = null;
         const kept = (item) => !refusedIds.has(item.id);
         const next = written.patch({
           lessons: lessons.filter(kept),
@@ -632,6 +679,7 @@ function startLibrary({
 
   function selectLesson(id) {
     openLesson = id;
+    closedLesson = null;
     writeLastLesson(id);
   }
 
@@ -667,9 +715,31 @@ function startLibrary({
     return element('div', { className: 'lp-actions' }, [move, rename, remove]);
   }
 
+  // A ⋯ button opens its menu and closes any other one. The redraw replaces the button, so
+  // focus goes to the new one: a keyboard user can press it again.
+  function moreButton(key, label) {
+    const isMenuOpen = openMenu === key;
+    const more = button(
+      '⋯',
+      () => {
+        openMenu = isMenuOpen ? null : key;
+        render();
+        const next = [...byId('lpLessons').querySelectorAll('.lp-more')].find(
+          (node) => node.dataset.menu === key
+        );
+        const focusLost = !document.activeElement || document.activeElement === document.body;
+        if (next && focusLost) next.focus();
+      },
+      { className: 'lp-more', ariaLabel: `Options for ${label}` }
+    );
+    more.dataset.menu = key;
+    more.setAttribute('aria-expanded', String(isMenuOpen));
+    return more;
+  }
+
   function grooveRow(groove, lessonKey) {
     const name = grooveName(groove);
-    const isMenuOpen = menuGrooveId === groove.id;
+    const menuKey = `groove:${groove.id}`;
     const open = button(
       name,
       async () => {
@@ -686,24 +756,15 @@ function startLibrary({
       { className: 'lp-open' }
     );
     if (openGrooveId === groove.id) open.setAttribute('aria-current', 'true');
-    const more = button(
-      '⋯',
-      () => {
-        menuGrooveId = isMenuOpen ? null : groove.id;
-        render();
-      },
-      { className: 'lp-more', ariaLabel: `Options for ${name}` }
-    );
-    more.setAttribute('aria-expanded', String(isMenuOpen));
     return element('li', { className: 'lp-groove' }, [
       open,
       ...syncLabel(groove),
-      more,
-      ...(isMenuOpen ? [grooveActions(groove)] : []),
+      moreButton(menuKey, name),
+      ...(openMenu === menuKey ? [grooveActions(groove)] : []),
     ]);
   }
 
-  function lessonControls(lesson) {
+  function lessonActions(lesson) {
     return element('div', { className: 'lp-actions' }, [
       button('Rename lesson', () => {
         const name = prompt('Lesson name', lesson.name)?.trim();
@@ -721,14 +782,30 @@ function startLibrary({
     ]);
   }
 
+  // Open or close a lesson. Keep one lesson open, so that a long library stays short.
+  function setLessonOpen(section, isOpen) {
+    section.querySelector('.lp-lesson-toggle').setAttribute('aria-expanded', String(isOpen));
+    section.querySelector('.lp-lesson-body').hidden = !isOpen;
+  }
+
+  // The heading of a lesson: the name opens and closes it, and ⋯ opens its menu. ⋯ is not
+  // inside the name button, so it does not open or close the lesson.
   function lessonSection(lesson, lessonGrooves, isOpen) {
     const key = lesson?.id ?? UNFILED;
-    const section = element('details', { className: 'lp-lesson', open: isOpen }, [
-      element('summary', {}, [
-        element('span', { textContent: lesson?.name ?? 'No lesson' }),
-        ...(lesson ? syncLabel(lesson) : []),
-        element('small', { textContent: String(lessonGrooves.length) }),
-      ]),
+    const name = lesson?.name ?? 'No lesson';
+    const menuKey = `lesson:${key}`;
+    const bodyId = `lpLessonBody-${key}`;
+    const toggle = element('button', { type: 'button', className: 'lp-lesson-toggle' }, [
+      element('span', { textContent: name }),
+    ]);
+    toggle.setAttribute('aria-controls', bodyId);
+    const head = element('div', { className: 'lp-lesson-head' }, [
+      toggle,
+      ...(lesson ? syncLabel(lesson) : []),
+      ...(lesson ? [moreButton(menuKey, name)] : []),
+      element('small', { className: 'lp-count', textContent: String(lessonGrooves.length) }),
+    ]);
+    const body = element('div', { id: bodyId, className: 'lp-lesson-body' }, [
       lessonGrooves.length
         ? element(
             'ul',
@@ -736,15 +813,25 @@ function startLibrary({
             lessonGrooves.map((groove) => grooveRow(groove, key))
           )
         : element('p', { className: 'lp-empty', textContent: 'No grooves yet.' }),
-      ...(lesson ? [lessonControls(lesson)] : []),
     ]);
-    // Keep one lesson open, so that a long library stays short. The event comes after the
-    // task: a section that a newer render has replaced must not close the new ones.
-    section.addEventListener('toggle', () => {
-      if (!section.open || !section.isConnected) return;
+    const section = element('section', { className: 'lp-lesson' }, [
+      head,
+      ...(lesson && openMenu === menuKey ? [lessonActions(lesson)] : []),
+      body,
+    ]);
+    setLessonOpen(section, isOpen);
+    // A tap anywhere on the heading but ⋯ opens or closes the lesson, as the name does.
+    head.addEventListener('click', (event) => {
+      if (event.target.closest('.lp-more')) return;
+      const opens = toggle.getAttribute('aria-expanded') !== 'true';
+      setLessonOpen(section, opens);
+      if (!opens) {
+        closedLesson = key;
+        return;
+      }
       selectLesson(key);
       for (const other of byId('lpLessons').querySelectorAll('.lp-lesson')) {
-        if (other !== section) other.open = false;
+        if (other !== section) setLessonOpen(other, false);
       }
     });
     return section;
@@ -792,7 +879,7 @@ function startLibrary({
       // the open lesson until the user picks one.
       const keep =
         select.options.length > 0 &&
-        (id === 'lpSaveLesson' ? byId('lpSaveTool').open : linkLessonPicked);
+        (id === 'lpSaveLesson' ? isToolOpen('lpSaveTool') : linkLessonPicked);
       const selected = keep ? select.value : select.value || (known && openLesson);
       select.replaceChildren(...lessonOptions(lessons, selected));
     }
@@ -820,7 +907,9 @@ function startLibrary({
     refreshSaveForm();
     byId('lpLessons').replaceChildren(
       ...(entries.length
-        ? entries.map(({ lesson, key, items }) => lessonSection(lesson, items, key === openKey))
+        ? entries.map(({ lesson, key, items }) =>
+            lessonSection(lesson, items, key === openKey && key !== closedLesson)
+          )
         : [
             element('p', {
               className: 'lp-empty',
@@ -847,18 +936,9 @@ function startLibrary({
     byId('lpSaveLesson').value = known ? groove.lessonId : '';
   }
 
-  // Fill the form in the click, before it opens. The toggle event comes later, so filling there
-  // could overwrite what the user has typed by then. A form opened from code fills on toggle.
-  let prefilled = false;
-  byId('lpSaveTool').querySelector('summary').onclick = () => {
-    if (byId('lpSaveTool').open) return;
-    prefillSaveForm();
-    prefilled = true;
-  };
-  byId('lpSaveTool').ontoggle = () => {
-    if (byId('lpSaveTool').open && !prefilled) prefillSaveForm();
-    prefilled = false;
-  };
+  // The save form fills itself when it opens, from its button or from code. The event comes
+  // in the same task, so the user cannot have typed yet.
+  byId('lpSaveTool').addEventListener(TOOL_OPENED, prefillSaveForm);
 
   submitOnce(byId('lpLessonForm'), async () => {
     const name = byId('lpLessonName').value.trim();
@@ -918,7 +998,7 @@ function startLibrary({
     // A save that the server refuses later did not save the edits.
     written.committed.catch(() => dirtyState.forget(clean));
     setCurrentGroove(written.id, written.query, written.title);
-    byId('lpSaveTool').open = false;
+    if (isToolOpen('lpSaveTool')) showTool(null);
   }
 
   async function updateCurrent(groove, query) {
@@ -1195,13 +1275,11 @@ export function initLibraryPanel({
   function showSaveForm() {
     if (!wantsSaveForm || byId('lpLibrary').hidden) return;
     wantsSaveForm = false;
-    const tool = byId('lpSaveTool');
-    // A form opened from code fills itself on toggle.
-    tool.open = true;
-    const summary = tool.querySelector('summary');
+    // The form fills itself when it opens.
+    showTool('lpSaveTool');
     // A docked panel is not a dialog: focus stays on the page, so space still plays.
-    if (!docked.matches) summary.focus();
-    summary.scrollIntoView({ block: 'nearest' });
+    if (!docked.matches) toolButton('lpSaveTool').focus();
+    byId('lpSaveTool').scrollIntoView({ block: 'nearest' });
   }
 
   // Signed out, the Save button leads to the sign-in. The form follows after the sign-in.
@@ -1274,6 +1352,12 @@ export function initLibraryPanel({
     else openPanel();
   });
   byId('lpClose').addEventListener('click', closePanel);
+  for (const id of TOOL_IDS) {
+    toolButton(id).addEventListener('click', () => {
+      showTool(isToolOpen(id) ? null : id);
+      if (isToolOpen(id)) byId(id).scrollIntoView({ block: 'nearest' });
+    });
+  }
   backdrop.addEventListener('click', closePanel);
   // The editor has document-wide hotkeys, such as space for play. Keep them out of the panel.
   panel.addEventListener('keydown', (event) => event.stopPropagation());
@@ -1283,6 +1367,8 @@ export function initLibraryPanel({
     (event) => {
       // Escape in the dialog means Keep editing. It must not also close the panel.
       if (isAskingToDiscard()) return;
+      // Escape in a tool form closes the form only.
+      if (event.key === 'Escape' && closeToolOf(event.target)) return;
       if (event.key === 'Escape' && panel.classList.contains('open') && !docked.matches) {
         closePanel();
       }

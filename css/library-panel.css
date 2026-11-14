@@ -57,11 +57,6 @@
   display: block;
 }
 
-/* The summary marker is drawn by ::before. */
-#libraryPanel summary::-webkit-details-marker {
-  display: none;
-}
-
 #libraryPanel *,
 #libraryPanel *::before,
 #libraryPanel *::after {
@@ -155,42 +150,102 @@
   color: var(--lp-muted);
 }
 
-#libraryPanel summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+/* The tool buttons stay at the top while the list scrolls. */
+.lp-tools {
+  position: sticky;
+  top: -12px;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  min-height: 44px;
-  padding: 8px 0;
-  font-weight: 600;
-  cursor: pointer;
+  margin: -12px -16px 0;
+  padding: 12px 16px;
+  background: var(--lp-bg);
+  border-bottom: 1px solid var(--lp-border);
+}
+
+#libraryPanel .lp-tool-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 4px;
+  font-size: 14px;
+  line-height: 1.2;
   overflow-wrap: anywhere;
 }
 
-#libraryPanel summary::before {
+#libraryPanel .lp-tool-button .fa {
+  font-size: 18px;
+}
+
+#libraryPanel .lp-tool-button[aria-expanded='true'] {
+  color: var(--lp-accent-text);
+  background: var(--lp-accent);
+  border-color: var(--lp-accent);
+}
+
+/* A form opens below the buttons. The margin keeps it clear of them when it scrolls in. */
+.lp-tool {
+  scroll-margin-top: 80px;
+  padding-top: 12px;
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.lp-lesson {
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.lp-lesson-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+#libraryPanel .lp-lesson-toggle {
+  display: flex;
+  flex: 1 1 0;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 0;
+  font-weight: 600;
+  text-align: left;
+  background: none;
+  border-color: transparent;
+  overflow-wrap: anywhere;
+}
+
+#libraryPanel .lp-lesson-toggle::before {
   flex: none;
   color: var(--lp-muted);
   font-size: 12px;
   content: '\25B8';
 }
 
-#libraryPanel details[open] > summary::before {
+#libraryPanel .lp-lesson-toggle[aria-expanded='true']::before {
   content: '\25BE';
 }
 
-#libraryPanel summary > span {
+.lp-lesson-toggle > span {
   flex: 1;
   min-width: 0;
 }
 
-#libraryPanel summary small {
+.lp-count {
+  flex: none;
+  min-width: 20px;
   color: var(--lp-muted);
-  font-weight: 400;
+  font-size: 14px;
+  text-align: right;
 }
 
-.lp-lesson,
-.lp-tool {
-  border-bottom: 1px solid var(--lp-border);
+.lp-lesson > .lp-actions {
+  padding-left: 15px;
 }
 
 .lp-lesson ul {
