@@ -348,8 +348,11 @@ function startLibrary({
     const next = JSON.stringify([nextLessons, nextGrooves]);
     lessons = nextLessons;
     grooves = nextGrooves;
+    const wasRestoring = currentGroove.isRestoring();
     const restored = currentGroove.restore(fromServer);
-    if (redraw || restored || next !== drawn) render();
+    // A dropped record needs a draw too: it takes the name of the last visit off the top bar.
+    const decided = wasRestoring && !currentGroove.isRestoring();
+    if (redraw || restored || decided || next !== drawn) render();
     drawn = next;
     sync.update([...lessons, ...grooves]);
   }
@@ -1050,6 +1053,8 @@ async function startCloud(search, editor, dirtyState, hooks) {
     byId('lpSignedOut').hidden = Boolean(user);
     if (!user) {
       setLoading(false);
+      // No user: no library groove is open, and the name of the last visit is not true.
+      editor.setNameWhenUntitled('');
       // Queued writes wait for the next sign-in of their user, and that loads the SDK anyway.
       writePendingWritesFlag(false);
       hooks.signedOut();

@@ -3,6 +3,7 @@ import { createLibrary } from '../../js/cloud/library.js';
 import { connectCloud } from '../../js/cloud/firebaseClient.js';
 import { initLibraryPanel } from '../../js/cloud/libraryPanel.js';
 import { createDirtyState, watchDirty } from '../../js/cloud/dirtyState.js';
+import { readRecord, writeRecord } from '../../js/cloud/currentGroove.js';
 
 vi.mock('../../js/cloud/firebaseClient.js', () => ({
   resolveCloudConfig: () => ({ useEmulator: false, config: {} }),
@@ -666,6 +667,35 @@ describe('the library panel', () => {
       await renameBeat();
       expect(editor.rename).not.toHaveBeenCalled();
       expect(editor.currentQuery()).toBe(START);
+    });
+  });
+
+  describe('the name in the top bar', () => {
+    const named = () => editor.setNameWhenUntitled.mock.lastCall?.[0];
+
+    it('is cleared when the user signs out with a saved groove open', async () => {
+      fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
+      await openPanel();
+      await loaded();
+      grooveButton('Beat').click();
+      await vi.waitFor(() => expect(named()).toBe('Beat'));
+      fake.signIn(null);
+      await vi.waitFor(() => expect(named()).toBe(''));
+    });
+
+    it('is cleared when a remembered user turns out to be signed out', async () => {
+      await openPanel({ user: null });
+      expect(named()).toBe('');
+    });
+
+    it('is cleared when the server drops the groove of the last visit, with no other change', async () => {
+      // The cache and the server have the same list, and neither has the groove of the record.
+      fake.add('grooves', 'g2', { lessonId: null, title: 'Other', query: BEAT, createdAt: 1 });
+      writeRecord(UID, { id: 'gone', savedQuery: BEAT, editorQuery: START, name: 'Gone' });
+      await openPanel();
+      await loaded();
+      await vi.waitFor(() => expect(readRecord(UID)).toBeNull());
+      expect(named()).toBe('');
     });
   });
 
