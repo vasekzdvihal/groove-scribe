@@ -171,6 +171,18 @@ describe('createCurrentGroove', () => {
     expect(tracker.open()).toBeNull();
   });
 
+  it('keeps the name of the open groove in the record, and waits while it restores', () => {
+    const { dirtyState, tracker } = setUp();
+    dirtyState.markStart(QUERY);
+    dirtyState.markClean(QUERY);
+    tracker.set('g1', QUERY, 'Rock beat');
+    expect(readRecord('ana')).toEqual({ ...record, name: 'Rock beat' });
+    expect(tracker.isRestoring()).toBe(false);
+
+    writeRecord('ana', record);
+    expect(setUp().tracker.isRestoring()).toBe(true);
+  });
+
   it('restores the groove of the last visit when the page started with it', () => {
     writeRecord('ana', record);
     const dirtyState = createDirtyState(null);

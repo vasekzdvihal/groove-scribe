@@ -1,4 +1,4 @@
-// Behavior for the editor's bars: small popover menus, the BPM + and - buttons, and swing.
+// Behavior for the editor's bars: small popover menus, the tempo knob, and swing.
 // The other menus are the older context menus, opened by GrooveWriter.
 
 // The bars are fixed to the screen, so a popover uses screen coordinates. A toolbar that
@@ -65,62 +65,234 @@ export function initPopovers() {
   });
 }
 
-const HOLD_DELAY = 400; // ms before a held - or + starts to repeat
-const HOLD_REPEAT = 80; // ms between repeats
-const HOLD_FAST_AFTER = 1000; // ms of holding, after which each repeat is 5 BPM
+const KNOB_DEGREES_PER_BPM = 6; // so a full turn is 60 BPM
+const KNOB_DEAD_RADIUS = 8; // px round the centre where the pointer angle jumps, so it is ignored
+const KNOB_TAP_SLOP = 4; // px of movement that a tap can have
+const KNOB_SETTLE_MS = 150; // the time the grip takes to settle on the arc end after a drag
+const KNOB_WHEEL_NOTCH = 50; // px of wheel movement for 1 BPM, for a trackpad that sends small steps
+const KNOB_KEY_STEPS = {
+  ArrowUp: 1,
+  ArrowRight: 1,
+  ArrowDown: -1,
+  ArrowLeft: -1,
+  PageUp: 10,
+  PageDown: -10,
+};
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+function svgElement(name, attributes) {
+  const element = document.createElementNS(SVG_NS, name);
+  for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
+  return element;
+}
+
+// The angle of the pointer round the centre, in degrees: 0 at the top, clockwise. Near the
+// centre a small move makes a large change of angle, so there it is null.
+function pointerAngle(event, centre) {
+  const x = event.clientX - centre.x;
+  const y = event.clientY - centre.y;
+  if (Math.hypot(x, y) < KNOB_DEAD_RADIUS) return null;
+  return (Math.atan2(x, -y) * 180) / Math.PI;
+}
 
 /**
- * A - or + button. A click steps by one. Held down, it repeats, and after a second it steps
- * by 5, so a big tempo change needs no long row of taps.
+ * The tempo knob. A finger or the mouse turns it like an endless wheel: clockwise is faster,
+ * 6 degrees is 1 BPM. The grip mark turns with the finger. The arc shows where the tempo is in
+ * its range. A tap, or Enter, opens the number for typing in the tempo field.
  *
- * @param {string} label
- * @param {string} ariaLabel
- * @param {function(number): boolean} step  changes the tempo by this many steps, and returns
- *   false at the end of the tempo range
+ * @param {object} options
+ * @param {number} options.min
+ * @param {number} options.max
+ * @param {function(): number} options.getTempo
+ * @param {function(number): void} options.changeTempo  changes the tempo by this many BPM
+ * @param {function(number): void} options.setTempo
+ * @param {function(boolean): void} options.openTyping  true when the keyboard opened it
  */
-function tempoButton(label, ariaLabel, step) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'tempoStep';
-  button.textContent = label;
-  button.setAttribute('aria-label', ariaLabel);
+function tempoKnob({ min, max, getTempo, changeTempo, setTempo, openTyping }) {
+  const knob = document.createElement('div');
+  knob.className = 'tempoKnob';
+  knob.tabIndex = 0;
+  knob.setAttribute('role', 'slider');
+  knob.setAttribute('aria-label', 'Tempo');
+  knob.setAttribute('aria-valuemin', String(min));
+  knob.setAttribute('aria-valuemax', String(max));
 
-  let delay = 0;
-  let repeat = 0;
-  // true after a hold, so the click at the end of the hold adds no step
-  let held = false;
-  const stop = () => {
-    clearTimeout(delay);
-    clearInterval(repeat);
+  // pathLength 360 makes one unit of dash one degree. The rotation puts the start of the circle
+  // at the lower left, so the 270 degree range has its gap at the bottom.
+  const range = max - min;
+  const ring = { cx: 28, cy: 28, r: 24, pathLength: 360, transform: 'rotate(135 28 28)' };
+  const svg = svgElement('svg', {
+    class: 'tempoKnobRing',
+    viewBox: '0 0 56 56',
+    'aria-hidden': 'true',
+  });
+  svg.append(
+    svgElement('circle', { ...ring, class: 'tempoKnobTrack', 'stroke-dasharray': `${range} 360` }),
+    svgElement('circle', { ...ring, class: 'tempoKnobValueArc' })
+  );
+  const valueArc = svg.lastChild;
+  const grip = svgElement('g', { class: 'tempoKnobGrip' });
+  grip.append(svgElement('circle', { cx: 28, cy: 4, r: 3 }));
+  svg.append(grip);
+
+  const number = document.createElement('span');
+  number.className = 'tempoKnobNumber';
+  const caption = document.createElement('span');
+  caption.className = 'tempoKnobCaption';
+  caption.textContent = 'BPM';
+  const face = document.createElement('span');
+  face.className = 'tempoKnobFace';
+  face.setAttribute('aria-hidden', 'true');
+  face.append(number, caption);
+  knob.append(svg, face);
+
+  // At rest the grip sits at the end of the value arc, so the knob shows one value. While a
+  // finger turns the knob, the grip turns with the finger; when it lifts, the grip settles back.
+  const arcEnd = (tempo) => -135 + ((tempo - min) * 270) / range;
+  let gripNow = 0;
+  const showGrip = (angle) => {
+    gripNow = angle;
+    grip.style.transform = `rotate(${angle}deg)`;
   };
-  button.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return;
-    stop();
-    held = false;
-    const start = Date.now();
-    delay = window.setTimeout(() => {
-      repeat = window.setInterval(() => {
-        held = true;
-        if (!step(Date.now() - start > HOLD_FAST_AFTER ? 5 : 1)) stop();
-      }, HOLD_REPEAT);
-    }, HOLD_DELAY);
-  });
-  for (const type of ['pointerup', 'pointercancel', 'pointerleave']) {
-    button.addEventListener(type, stop);
+  let settleTimer = 0;
+  const stopSettling = () => {
+    clearTimeout(settleTimer);
+    knob.classList.remove('is-settling');
+  };
+  // The grip goes back to the arc end the short way, however many turns the finger made.
+  const settleGrip = () => {
+    const target = arcEnd(getTempo());
+    const offset = ((((gripNow - target) % 360) + 540) % 360) - 180;
+    if (Math.abs(offset) < 0.5) return showGrip(target);
+    showGrip(target + offset);
+    grip.getBoundingClientRect(); // applies the start angle before the transition starts
+    knob.classList.add('is-settling');
+    showGrip(target);
+    settleTimer = window.setTimeout(stopSettling, KNOB_SETTLE_MS);
+  };
+
+  let drag = null;
+  function show() {
+    const tempo = getTempo();
+    knob.setAttribute('aria-valuenow', String(tempo));
+    knob.setAttribute('aria-valuetext', `${tempo} BPM`);
+    number.textContent = String(tempo);
+    valueArc.setAttribute('stroke-dasharray', `${tempo - min} 360`);
+    if (!drag) showGrip(arcEnd(tempo));
   }
-  // A long press on a touch screen must not open a menu.
-  button.addEventListener('contextmenu', (event) => event.preventDefault());
-  button.addEventListener('click', (event) => {
-    // A click from the keyboard (detail 0) always steps.
-    const endsHold = held && event.detail !== 0;
-    held = false;
-    if (!endsHold) step(1);
+
+  // A drag. The tempo changes only after the pointer has moved round the centre, so a finger
+  // that lands on the ring causes no jump, and a tap causes no change.
+  // true from the pointer up of a tap until its click. iOS opens the keyboard only for a focus
+  // inside a click, so the click opens typing.
+  let tapPending = false;
+  knob.addEventListener('pointerdown', (event) => {
+    if (drag || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    // No mouse events follow, so the tap does not move focus or select text.
+    event.preventDefault();
+    knob.setPointerCapture(event.pointerId);
+    stopSettling();
+    tapPending = false;
+    const box = knob.getBoundingClientRect();
+    const centre = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    drag = {
+      id: event.pointerId,
+      centre,
+      start: { x: event.clientX, y: event.clientY },
+      angle: pointerAngle(event, centre),
+      turned: 0,
+      moved: false,
+      tempo: getTempo(),
+      grip: gripNow,
+      // The part of the turn that is not yet a whole BPM. The grip shows it.
+      part: 0,
+    };
+    knob.classList.add('is-turning');
   });
-  return button;
+  knob.addEventListener('pointermove', (event) => {
+    if (event.pointerId !== drag?.id) return;
+    const { centre, start } = drag;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > KNOB_TAP_SLOP)
+      drag.moved = true;
+    const angle = pointerAngle(event, centre);
+    if (angle === null) {
+      drag.angle = null;
+      return;
+    }
+    if (drag.angle !== null) {
+      // The shortest way from the last angle, so a turn past the top does not jump 360 degrees.
+      const delta = ((angle - drag.angle + 540) % 360) - 180;
+      drag.turned += delta;
+      drag.part += delta;
+      // A small margin, so 90 degrees made of many small moves is 15 BPM, not 14.
+      const steps = Math.trunc((drag.part + Math.sign(drag.part) * 1e-6) / KNOB_DEGREES_PER_BPM);
+      if (steps) {
+        changeTempo(steps);
+        drag.part -= steps * KNOB_DEGREES_PER_BPM;
+      }
+      // At the end of the range the grip stops, and a turn back changes the tempo at once.
+      const tempo = getTempo();
+      if ((tempo >= max && drag.part > 0) || (tempo <= min && drag.part < 0)) drag.part = 0;
+      showGrip(drag.grip + (tempo - drag.tempo) * KNOB_DEGREES_PER_BPM + drag.part);
+    }
+    drag.angle = angle;
+  });
+  const endDrag = (event) => {
+    if (event.pointerId !== drag?.id) return;
+    drag = null;
+    knob.classList.remove('is-turning');
+    settleGrip();
+  };
+  knob.addEventListener('pointerup', (event) => {
+    tapPending = !!drag && !drag.moved && Math.abs(drag.turned) < KNOB_DEGREES_PER_BPM;
+    endDrag(event);
+  });
+  knob.addEventListener('pointercancel', endDrag);
+  knob.addEventListener('lostpointercapture', endDrag);
+  knob.addEventListener('click', () => {
+    if (tapPending) openTyping(false);
+    tapPending = false;
+  });
+  // A long press on a touch screen must not open a menu.
+  knob.addEventListener('contextmenu', (event) => event.preventDefault());
+
+  // One BPM for each notch of a mouse wheel. A trackpad sends many small steps; they add up.
+  let wheel = 0;
+  knob.addEventListener(
+    'wheel',
+    (event) => {
+      // A sideways or Shift wheel has no deltaY. It must not change the tempo.
+      if (event.deltaY === 0) return;
+      event.preventDefault();
+      const notch = event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL;
+      wheel =
+        notch || Math.abs(event.deltaY) >= KNOB_WHEEL_NOTCH ? event.deltaY : wheel + event.deltaY;
+      if (notch || Math.abs(wheel) >= KNOB_WHEEL_NOTCH) {
+        changeTempo(wheel < 0 ? 1 : -1);
+        wheel = 0;
+      }
+    },
+    { passive: false }
+  );
+
+  knob.addEventListener('keydown', (event) => {
+    const step = KNOB_KEY_STEPS[event.key];
+    if (step) changeTempo(step);
+    else if (event.key === 'Home') setTempo(min);
+    else if (event.key === 'End') setTempo(max);
+    else if (event.key === 'Enter') openTyping(true);
+    else return;
+    event.preventDefault();
+    // The editor's own Left and Right keys change the tempo too. They must not add a step.
+    event.stopPropagation();
+  });
+
+  return { knob, show };
 }
 
 // The tempo field takes a typed number. A tap selects the old number, so typing replaces it.
-// Enter or a tap elsewhere applies it. groove_utils.js reads the field on change.
+// Enter or a tap elsewhere applies it, and Escape keeps the old tempo. groove_utils.js reads the
+// field on change.
 function initTempoField(utils, player, tempoField) {
   const slider = /** @type {HTMLInputElement} */ (player.querySelector('.tempoInput'));
   const min = Number(slider.min);
@@ -157,7 +329,13 @@ function initTempoField(utils, player, tempoField) {
   tempoField.addEventListener('keydown', (event) => {
     clearTimeout(reselect);
     justFocused = false;
-    if (event.key === 'Enter') tempoField.blur();
+    if (event.key === 'Escape') {
+      // The old value back, so the blur causes no change.
+      tempoField.value = String(utils.getTempo());
+      // An open popover must not also close on this key.
+      event.stopPropagation();
+    }
+    if (event.key === 'Enter' || event.key === 'Escape') tempoField.blur();
   });
   // Runs before the change handler of groove_utils.js, which is on the field itself.
   player.addEventListener(
@@ -171,22 +349,49 @@ function initTempoField(utils, player, tempoField) {
     },
     true
   );
-  // Changes the tempo, and says whether it can go further in that direction.
-  return (delta) => {
-    const tempo = Math.min(max, Math.max(min, utils.getTempo() + delta));
-    utils.setTempo(tempo);
-    return tempo > min && tempo < max;
-  };
+  const setTempo = (tempo) => utils.setTempo(Math.min(max, Math.max(min, tempo)));
+  return { min, max, setTempo, changeTempo: (delta) => setTempo(utils.getTempo() + delta) };
 }
 
 // The embeds share the player markup, so these changes apply to the editor's player only.
+// The knob replaces the - and + buttons and the range slider. The slider stays in the page,
+// hidden, because groove_utils.js keeps the tempo in it.
 export function initPlaybackControls(utils) {
   const player = document.getElementById('midiPlayer');
   const tempoField = player.querySelector('.tempoTextField');
   tempoField.setAttribute('aria-label', 'Beats per minute');
-  const changeTempo = initTempoField(utils, player, tempoField);
-  tempoField.before(tempoButton('−', 'Slower', (steps) => changeTempo(-steps)));
-  tempoField.after(tempoButton('+', 'Faster', (steps) => changeTempo(steps)));
+  const tempo = initTempoField(utils, player, tempoField);
+
+  const holder = document.createElement('span');
+  holder.className = 'tempoKnobHolder';
+  let typingFromKeys = false;
+  const { knob, show } = tempoKnob({
+    ...tempo,
+    getTempo: () => utils.getTempo(),
+    openTyping(fromKeys) {
+      typingFromKeys = fromKeys;
+      holder.classList.add('is-typing');
+      tempoField.value = String(utils.getTempo());
+      tempoField.focus();
+    },
+  });
+  tempoField.addEventListener('blur', () => {
+    holder.classList.remove('is-typing');
+    if (typingFromKeys) knob.focus();
+    typingFromKeys = false;
+  });
+  tempoField.before(holder);
+  holder.append(knob, tempoField);
+  player.classList.add('has-tempo-knob');
+
+  // Every tempo change goes through tempoUpdate: the knob, a typed tempo, a loaded groove, undo
+  // and the metronome speed-up. It also writes the tempo field.
+  const tempoUpdate = utils.tempoUpdate;
+  utils.tempoUpdate = function (newTempo) {
+    tempoUpdate.call(utils, newTempo);
+    show();
+  };
+  show();
 
   const swingRow = player.querySelector('.swingRow');
   document.getElementById('swingPopover').append(swingRow);

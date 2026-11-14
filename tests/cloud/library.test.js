@@ -3,6 +3,12 @@ import { createLibrary } from '../../js/cloud/library.js';
 import { connectCloud } from '../../js/cloud/firebaseClient.js';
 import { initLibraryPanel } from '../../js/cloud/libraryPanel.js';
 import { createDirtyState, watchDirty } from '../../js/cloud/dirtyState.js';
+import { readRecord, writeRecord } from '../../js/cloud/currentGroove.js';
+
+// jsdom does not implement scrollIntoView. The panel calls it when a tool form opens.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}
 
 vi.mock('../../js/cloud/firebaseClient.js', () => ({
   resolveCloudConfig: () => ({ useEmulator: false, config: {} }),
@@ -314,7 +320,7 @@ describe('the library panel', () => {
   const grooveButton = (title) =>
     [...document.querySelectorAll('.lp-open')].find((node) => node.textContent === title);
   const lessonNames = () =>
-    [...document.querySelectorAll('.lp-lesson summary span')].map((node) => node.textContent);
+    [...document.querySelectorAll('.lp-lesson-toggle span')].map((node) => node.textContent);
 
   // The editor: the groove in it is a query. It starts with the default groove until the page
   // has loaded, and it cannot take another groove before that, as the real one.
@@ -343,6 +349,7 @@ describe('the library panel', () => {
         query = query.replace(/Title=[^&]*/, 'Title=' + encodeURIComponent(name));
         watch.changed();
       }),
+      setNameWhenUntitled: vi.fn(),
       onDirtyChange: (listener) => watch.onDirtyChange(listener),
     };
   }
@@ -396,7 +403,7 @@ describe('the library panel', () => {
   it('saves one groove on a double tap of Save', async () => {
     await openPanel();
     await loaded();
-    byId('lpSaveTool').querySelector('summary').click();
+    byId('lpSaveToolButton').click();
     byId('lpSaveNew').click();
     byId('lpSaveNew').click();
     byId('lpSaveForm').dispatchEvent(new Event('submit', { cancelable: true }));
@@ -450,12 +457,10 @@ describe('the library panel', () => {
     localStorage.setItem('grooveScribe.lastLesson', 'l-a');
     await openPanel();
     await loaded();
-    const linkTool = byId('lpLinkLesson').closest('details');
-    linkTool.open = true;
+    byId('lpLinkToolButton').click();
     byId('lpLinkLesson').value = '';
     byId('lpLinkLesson').dispatchEvent(new Event('change'));
-    byId('lpSaveTool').querySelector('summary').click();
-    byId('lpSaveTool').open = true;
+    byId('lpSaveToolButton').click();
     byId('lpSaveLesson').value = '';
     // A new lesson redraws the lists and becomes the open lesson.
     byId('lpLessonName').value = 'Bossa';
@@ -480,7 +485,7 @@ describe('the library panel', () => {
     }
 
     async function renameBeat({ wait = true } = {}) {
-      document.querySelector('.lp-more').click();
+      document.querySelector('.lp-groove .lp-more').click();
       [...document.querySelectorAll('.lp-actions button')]
         .find((node) => node.textContent === 'Rename')
         .click();
@@ -532,8 +537,7 @@ describe('the library panel', () => {
 
     async function pressUpdate() {
       byId('libraryToggle').click();
-      byId('lpSaveTool').querySelector('summary').click();
-      byId('lpSaveTool').open = true;
+      byId('lpSaveToolButton').click();
       await settle();
       expect(byId('lpUpdate')).not.toBeNull();
       byId('lpUpdate').click();
@@ -583,8 +587,7 @@ describe('the library panel', () => {
       await pickBeat();
       editor.edit(EDITED);
       byId('libraryToggle').click();
-      byId('lpSaveTool').querySelector('summary').click();
-      byId('lpSaveTool').open = true;
+      byId('lpSaveToolButton').click();
       byId('lpSaveTitle').value = 'Another name';
       byId('lpSaveNew').click();
       await vi.waitFor(() => expect(grooveButton('Another name')).toBeDefined());
@@ -603,8 +606,7 @@ describe('the library panel', () => {
       await pickBeat();
       editor.edit(EDITED);
       byId('libraryToggle').click();
-      byId('lpSaveTool').querySelector('summary').click();
-      byId('lpSaveTool').open = true;
+      byId('lpSaveToolButton').click();
       byId('lpSaveTitle').value = '';
       byId('lpSaveNew').click();
       await vi.waitFor(() => expect(savedGrooves()).toHaveLength(2));
@@ -615,8 +617,7 @@ describe('the library panel', () => {
     it('says why a clean open groove has only the plain save', async () => {
       await pickBeat();
       byId('libraryToggle').click();
-      byId('lpSaveTool').querySelector('summary').click();
-      byId('lpSaveTool').open = true;
+      byId('lpSaveToolButton').click();
       expect(byId('lpUpdateHint').hidden).toBe(false);
       expect(byId('lpUpdateHint').textContent).toBe('No changes. Save groove makes a copy.');
       expect(byId('lpSaveNew').textContent).toBe('Save groove');
@@ -668,6 +669,35 @@ describe('the library panel', () => {
     });
   });
 
+  describe('the name in the top bar', () => {
+    const named = () => editor.setNameWhenUntitled.mock.lastCall?.[0];
+
+    it('is cleared when the user signs out with a saved groove open', async () => {
+      fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
+      await openPanel();
+      await loaded();
+      grooveButton('Beat').click();
+      await vi.waitFor(() => expect(named()).toBe('Beat'));
+      fake.signIn(null);
+      await vi.waitFor(() => expect(named()).toBe(''));
+    });
+
+    it('is cleared when a remembered user turns out to be signed out', async () => {
+      await openPanel({ user: null });
+      expect(named()).toBe('');
+    });
+
+    it('is cleared when the server drops the groove of the last visit, with no other change', async () => {
+      // The cache and the server have the same list, and neither has the groove of the record.
+      fake.add('grooves', 'g2', { lessonId: null, title: 'Other', query: BEAT, createdAt: 1 });
+      writeRecord(UID, { id: 'gone', savedQuery: BEAT, editorQuery: START, name: 'Gone' });
+      await openPanel();
+      await loaded();
+      await vi.waitFor(() => expect(readRecord(UID)).toBeNull());
+      expect(named()).toBe('');
+    });
+  });
+
   it('reads the library again when the tab comes back and when the network returns', async () => {
     await openPanel();
     await loaded();
@@ -709,12 +739,12 @@ describe('the library panel', () => {
     byId('lpLessonForm').querySelector('button').click();
     await vi.waitFor(() => expect(lessonNames()).toEqual(['Afro', 'Bossa']));
     const actions = () => [...document.querySelectorAll('.lp-actions button')];
-    document.querySelector('.lp-more').click();
+    document.querySelector('.lp-groove .lp-more').click();
     actions()
       .find((node) => node.textContent === 'Rename')
       .click();
     await vi.waitFor(() => expect(grooveButton('Fresh')).toBeDefined());
-    document.querySelector('.lp-more').click();
+    document.querySelector('.lp-groove .lp-more').click();
     actions()
       .find((node) => node.textContent === 'Delete')
       .click();
@@ -740,7 +770,92 @@ describe('the library panel', () => {
     dirtyState.markStart(START);
     dirtyState.markStart(START);
     await settle();
-    expect(document.querySelector('.lp-lesson').open).toBe(true);
+    expect(document.querySelector('.lp-lesson-toggle').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('lists lessons in natural order, also in the Lesson selects', async () => {
+    for (const [id, name] of [
+      ['l-10', 'Week 10'],
+      ['l-2', 'Week 2'],
+      ['l-1', 'week 1'],
+      ['l-b', 'Bossa'],
+    ]) {
+      fake.add('lessons', id, { name });
+    }
+    await openPanel();
+    await loaded();
+    const order = ['Bossa', 'week 1', 'Week 2', 'Week 10'];
+    expect(lessonNames()).toEqual(order);
+    for (const id of ['lpSaveLesson', 'lpLinkLesson']) {
+      expect([...byId(id).options].map((option) => option.textContent)).toEqual([
+        'No lesson',
+        ...order,
+      ]);
+    }
+    // A new lesson takes its place in the same order.
+    byId('lpLessonName').value = 'Week 3';
+    byId('lpLessonForm').querySelector('button').click();
+    await vi.waitFor(() =>
+      expect(lessonNames()).toEqual(['Bossa', 'week 1', 'Week 2', 'Week 3', 'Week 10'])
+    );
+  });
+
+  it('files a link in the open lesson until the user picks one', async () => {
+    fake.add('lessons', 'l-a', { name: 'Afro' });
+    await openPanel();
+    await loaded();
+    byId('lpLinkToolButton').click();
+    // A new lesson becomes the open lesson, and the link form follows it.
+    for (const name of ['Bossa', 'Cumbia']) {
+      byId('lpLessonName').value = name;
+      byId('lpLessonForm').querySelector('button').click();
+      await vi.waitFor(() => expect(lessonNames()).toContain(name));
+    }
+    const idOf = (name) =>
+      [...byId('lpLinkLesson').options].find((o) => o.textContent === name).value;
+    expect(byId('lpLinkLesson').value).toBe(idOf('Cumbia'));
+    // Opening a lesson in the list moves the link form to it at once.
+    [...document.querySelectorAll('.lp-lesson-toggle')]
+      .find((node) => node.textContent === 'Afro')
+      .click();
+    expect(byId('lpLinkLesson').value).toBe(idOf('Afro'));
+    // A lesson that the user picked stays.
+    byId('lpLinkLesson').value = idOf('Bossa');
+    byId('lpLinkLesson').dispatchEvent(new Event('change'));
+    [...document.querySelectorAll('.lp-lesson-toggle')]
+      .find((node) => node.textContent === 'Cumbia')
+      .click();
+    dirtyState.markStart(START);
+    await settle();
+    expect(byId('lpLinkLesson').value).toBe(idOf('Bossa'));
+  });
+
+  it('keeps focus on a groove button when the list redraws', async () => {
+    fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
+    await openPanel();
+    await loaded();
+    await settle();
+    grooveButton('Beat').focus();
+    dirtyState.markStart(START);
+    await settle();
+    expect(document.activeElement).toBe(grooveButton('Beat'));
+  });
+
+  it('keeps a lesson that the user closed closed after a redraw', async () => {
+    fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
+    await openPanel();
+    await loaded();
+    await settle();
+    const toggle = () => document.querySelector('.lp-lesson-toggle');
+    toggle().click();
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    dirtyState.markStart(START);
+    await settle();
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    toggle().click();
+    dirtyState.markStart(START);
+    await settle();
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
   });
 
   it('waits for the page to load before it opens a picked groove', async () => {
@@ -768,8 +883,7 @@ describe('the library panel', () => {
   it('keeps a typed save title when the editor starts', async () => {
     await openPanel({ load: false });
     await loaded();
-    byId('lpSaveTool').querySelector('summary').click();
-    byId('lpSaveTool').open = true;
+    byId('lpSaveToolButton').click();
     await settle();
     byId('lpSaveTitle').value = 'Mine';
     byId('lpSaveTitle').dispatchEvent(new Event('input'));
@@ -781,7 +895,7 @@ describe('the library panel', () => {
   it('waits for the page to load before it saves, and saves the loaded groove', async () => {
     await openPanel({ load: false });
     await loaded();
-    byId('lpSaveTool').open = true;
+    byId('lpSaveToolButton').click();
     byId('lpSaveNew').click();
     await settle();
     expect(savedGrooves()).toHaveLength(0);
@@ -798,7 +912,7 @@ describe('the library panel', () => {
     await loaded();
     vi.useFakeTimers();
     try {
-      byId('lpSaveTool').open = true;
+      byId('lpSaveToolButton').click();
       byId('lpSaveNew').click();
       expect(byId('lpSaveNew').disabled).toBe(true);
       await vi.advanceTimersByTimeAsync(15_000);
@@ -813,6 +927,7 @@ describe('the library panel', () => {
   it('puts focus back on the pressed button when it comes back', async () => {
     await openPanel();
     await loaded();
+    byId('lpLessonToolButton').click();
     const create = byId('lpLessonForm').querySelector('button');
     byId('lpLessonName').value = 'Bossa';
     create.focus();

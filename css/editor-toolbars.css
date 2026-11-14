@@ -154,7 +154,7 @@
 
 .tool:focus-visible,
 .metronomeButton:focus-visible,
-.tempoStep:focus-visible,
+.tempoKnob:focus-visible,
 #helpAnchor:focus-visible,
 .tool-popover button:focus-visible {
   outline: 2px solid #fff;
@@ -673,7 +673,7 @@
 /* Playback bar. */
 #midiPlayer {
   position: static;
-  flex: 1;
+  flex: none;
   min-width: 0;
   width: auto;
   height: auto;
@@ -719,7 +719,7 @@
 
 #midiPlayer .tempoAndProgress {
   display: block;
-  flex: 1;
+  flex: none;
   min-width: 0;
   width: auto;
   height: auto;
@@ -731,7 +731,6 @@
   height: auto;
 }
 
-#midiPlayer .tempoLabel,
 #metronomeLabel {
   flex: none;
   display: block;
@@ -746,60 +745,139 @@
   text-transform: uppercase;
 }
 
-/* The tempo field looks like a field: a tap types a new tempo. */
-#midiPlayer .tempoTextField {
-  box-sizing: border-box;
+/* The tempo knob replaces the BPM label, the - and + buttons and the range slider. The slider
+   stays in the page, hidden, because groove_utils.js keeps the tempo in it. */
+#midiPlayer.has-tempo-knob .tempoLabel,
+#midiPlayer.has-tempo-knob .tempoInput {
+  display: none;
+}
+
+.tempoKnobHolder {
+  position: relative;
   flex: none;
-  width: 56px;
-  height: var(--touch-size);
-  margin: 0;
-  padding: 0;
+  /* The ring is drawn in a 56 unit viewBox and scales to this size. 60 px leaves 8 px above and
+     below in the 76 px bar, and room for three digits and the caption inside the ring. */
+  width: 60px;
+  height: 60px;
+}
+
+.tempoKnob {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--bar-tools-bg);
   color: var(--bar-text);
-  background: rgba(255, 255, 255, 0.08);
-  border: 0;
-  border-bottom: 2px solid var(--bar-dim);
-  border-radius: 6px 6px 0 0;
-  font-size: 22px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-#midiPlayer .tempoTextField:focus {
-  background: rgba(255, 255, 255, 0.16);
-  border-bottom-color: var(--bar-selected);
-  outline: none;
-}
-
-#midiPlayer .tempoTextField:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 1px;
-}
-
-.tempoStep {
-  flex: none;
-  /* A held button repeats. A long press must not select text or open a menu. */
-  touch-action: manipulation;
+  cursor: grab;
+  /* A drag turns the knob: the page must not scroll or zoom, and a long press must not select
+     text or open a menu. */
+  touch-action: none;
   -webkit-touch-callout: none;
   user-select: none;
   -webkit-user-select: none;
-  width: var(--touch-size);
-  height: var(--touch-size);
-  padding: 0;
-  color: inherit;
-  background: var(--bar-line);
-  border: 0;
-  border-radius: 6px;
-  font-size: 22px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tempoKnob.is-turning {
+  cursor: grabbing;
+}
+
+.tempoKnob:focus-visible {
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.tempoKnobRing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tempoKnobTrack,
+.tempoKnobValueArc {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.tempoKnobTrack {
+  stroke: var(--bar-dim);
+  stroke-opacity: 0.35;
+}
+
+.tempoKnobValueArc {
+  stroke: var(--bar-selected);
+}
+
+.tempoKnobGrip {
+  transform-origin: 28px 28px;
+  fill: var(--bar-text);
+}
+
+/* After a drag the grip settles on the tempo. During a drag it follows the finger at once, and
+   a key or a loaded groove moves it at once too. */
+.tempoKnob.is-settling .tempoKnobGrip {
+  transition: transform 120ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tempoKnob .tempoKnobGrip {
+    transition: none;
+  }
+}
+
+.tempoKnobFace {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tempoKnobNumber {
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
-  cursor: pointer;
 }
 
-.tempoStep:hover {
-  background: #58666f;
+.tempoKnobCaption {
+  margin-top: 1px;
+  color: var(--bar-dim);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
 }
 
-#midiPlayer .tempoInput,
+/* A tap on the knob opens the number for typing. The field lies over the knob. */
+#midiPlayer .tempoKnobHolder .tempoTextField {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  color: var(--bar-text);
+  background: var(--bar-tools-bg);
+  border: 3px solid var(--bar-selected);
+  border-radius: 50%;
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+}
+
+#midiPlayer .tempoKnobHolder:not(.is-typing) .tempoTextField {
+  display: none;
+}
+
 #swingPopover .swingInput {
   height: var(--touch-size);
   min-width: 60px;
@@ -1078,8 +1156,8 @@
 }
 
 /* Below 1200 px, including landscape tablets. Undo, Redo, Save and Share show only their icons
-   (their aria-labels stay), so every tool fits, and the tempo slider keeps room. The portrait
-   block below changes some of these values again. */
+   (their aria-labels stay), so every tool fits. The portrait block below changes some of these
+   values again. */
 @media (max-width: 1199px) {
   .tool-label {
     display: none;
@@ -1102,31 +1180,17 @@
   }
 }
 
-/* The tempo slider and the BPM label show only when the player has room for them, so the
-   slider is never shorter than 120 px and never covers CLICK. The player is a size container
-   only while it fills the free room of the bar; in portrait it has its content width. */
+/* The free room of the bar sits before Save and Share, so the actions keep to the right edge.
+   Portrait spreads its items over the bar instead (below). */
 @media (min-width: 1001px) {
-  #midiPlayer {
-    container: player / inline-size;
-  }
-}
-
-@container player (max-width: 465px) {
-  #midiPlayer .tempoLabel {
-    display: none;
-  }
-}
-
-@container player (max-width: 429px) {
-  #midiPlayer .tempoInput {
-    display: none;
+  #PlaybackBar .tool-group {
+    margin-left: auto;
   }
 }
 
 /* Portrait tablets. The tool labels are hidden by the block above. */
 @media (max-width: 1000px) {
-  #metronomeLabel,
-  #midiPlayer .tempoLabel {
+  #metronomeLabel {
     display: none;
   }
 
@@ -1139,27 +1203,10 @@
     font-size: 18px;
   }
 
-  /* Portrait has no room for the tempo slider next to the click buttons. */
-  #midiPlayer .tempoInput {
-    display: none;
-  }
-
-  #midiPlayer .tempoAndProgress {
-    flex: none;
-  }
-
-  #midiPlayer {
-    flex: none;
-  }
-
   /* The items spread out over the bar, so the gaps between them part the groups. */
   #PlaybackBar {
     justify-content: space-between;
     padding: 0 6px;
-  }
-
-  #midiPlayer .tempoTextField {
-    width: 50px;
   }
 
   #midiPlayer .playerControlsRow {
@@ -1209,10 +1256,11 @@
 }
 
 /* Narrow windows. A phone lays out 980 px wide (see index.html), so this is a narrow desktop
-   window, or an iPad app in Slide Over or a narrow Split View. The playback bar scrolls sideways
-   like the tool bar, so Save, Share and More can be reached. The failed-sound button is fixed to the screen, because the scrolling bar would
+   window, or an iPad app in Slide Over or a narrow Split View. Below 680 px the items of the
+   playback bar do not fit, so it scrolls sideways like the tool bar, and Save, Share and More can
+   be reached. The failed-sound button is fixed to the screen, because the scrolling bar would
    clip it. This block comes after the rule above, which it overrides. */
-@media (max-width: 600px) {
+@media (max-width: 679px) {
   #PlaybackBar {
     overflow-x: auto;
   }

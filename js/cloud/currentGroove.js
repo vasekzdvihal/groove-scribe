@@ -9,7 +9,7 @@ import { sameGroove } from './dirtyState.js';
 const recordKey = (uid) => `grooveScribe.currentGroove.${uid}`;
 
 /**
- * @typedef {{id: string, savedQuery: string, editorQuery: string}} CurrentRecord
+ * @typedef {{id: string, savedQuery: string, editorQuery: string, name?: string}} CurrentRecord
  * @typedef {{id: string, savedQuery: string, version: number}} CurrentGroove
  */
 
@@ -157,10 +157,11 @@ export function createCurrentGroove({
   const open = () => findOpenGroove(current, grooves(), dirtyState.cleanVersion());
 
   /** Call after markClean: the groove in the editor is now this saved groove. */
-  function set(id, savedQuery) {
+  function set(id, savedQuery, name) {
     restoring = null;
     current = { id, savedQuery, version: dirtyState.cleanVersion() };
-    store({ id, savedQuery, editorQuery: editor.currentQuery() });
+    // The name lets a reload show it in the top bar before the library has loaded.
+    store({ id, savedQuery, editorQuery: editor.currentQuery(), name });
   }
 
   /**
@@ -209,14 +210,14 @@ export function createCurrentGroove({
     if (!isClean) {
       // The edits are not saved: Update still saves them over this groove.
       current = { ...current, savedQuery };
-      if (record?.id === written.id) store({ ...record, savedQuery });
+      if (record?.id === written.id) store({ ...record, savedQuery, name: written.title });
       return 'edits';
     }
     const query = editor.currentQuery();
     dirtyState.markClean(query);
     // A refused rename keeps the typed name in the editor, and the page turns dirty.
     written.committed.catch(() => dirtyState.forget(query));
-    set(written.id, savedQuery);
+    set(written.id, savedQuery, written.title);
     return 'clean';
   }
 
@@ -228,5 +229,8 @@ export function createCurrentGroove({
     window.removeEventListener('pageshow', onPageShow);
   }
 
-  return { open, set, restore, followRename, stop };
+  /** The groove of the last visit waits for the library to decide about it. */
+  const isRestoring = () => restoring !== null;
+
+  return { open, set, restore, followRename, isRestoring, stop };
 }
