@@ -17,8 +17,8 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 
 | Command                | Expectation                                                                                                                                                                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `npm test`             | Vitest unit suite — **1065 pass**                                                                                                                                                                                                                       |
-| `npm run test:e2e`     | Playwright golden-master and UI — **288 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
+| `npm test`             | Vitest unit suite — **1073 pass**                                                                                                                                                                                                                       |
+| `npm run test:e2e`     | Playwright golden-master and UI — **301 pass** (on a Mac use `npm run test:e2e:verify`). Byte-identical SVG+MIDI snapshots; this is the real proof that a refactor changed nothing functional. Finishes in <5 min by design.                            |
 | `npm run lint`         | ESLint — **0 errors** (~85 SonarJS _warnings_ are an accepted refactor backlog, not failures)                                                                                                                                                           |
 | `npm run typecheck`    | `tsc --noEmit` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json` (245 known errors). Fails if any file has more errors than its baseline or a new file has errors. After you fix errors, run `npm run typecheck -- --update`. |
 | `npm run knip`         | no unused exports/files                                                                                                                                                                                                                                 |
@@ -26,7 +26,7 @@ and saved grooves use Firebase; the editor itself still works without it. A groo
 | `npm run verify:fast`  | lint + typecheck + format:check + knip + test. CI's "checks" job runs it. `npm run check` is an alias.                                                                                                                                                  |
 | `npm run verify`       | `verify:fast`, then `test:e2e:verify`, `test:rules` and `test:cloud`. Every check in one command (needs Java).                                                                                                                                          |
 | `npm run test:rules`   | Firestore security rules against the emulator — **22 pass** (needs Java)                                                                                                                                                                                |
-| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **102 pass** (needs Java)                                                                                                                                                            |
+| `npm run test:cloud`   | Library panel in Chromium against the Auth + Firestore emulators — **116 pass** (needs Java)                                                                                                                                                            |
 
 Standing rule for all refactoring here: **nothing functional may change** —
 prove it with the golden-master E2E, not by eyeballing.
@@ -207,10 +207,16 @@ signed-in session, and its per-tab record),
 - **Editor bars:** `css/editor-toolbars.css` overrides older rules that other pages still load.
   View mode writes `display: block` or `none` on every `.edit-block`, so a `.edit-block` button
   must not need another display value: put its layout on an inner `.tool-in` span. The player
-  markup is shared with the embeds, so `initPlaybackControls` changes it in the editor only.
+  markup is shared with the embeds, so `initPlaybackControls` changes it in the editor only. It
+  replaces the BPM label, the −/+ buttons and the slider with a tempo knob. The slider stays in the
+  page, hidden, because groove_utils.js reads the tempo from it. The knob wraps `utils.tempoUpdate`:
+  every tempo change must still go through it.
 - **Library panel:** from 1100 px wide it docks next to the music and moves `#RightHandContent`. It
   opens by itself only for people who were signed in on the device or left it open, so a shared
   link does not load the Firebase SDK into the page. Below 1100 px it slides over the editor.
+  The three tools are buttons in a sticky row at the top, and each opens one form (`showTool`).
+  Lessons sort in natural order and have a ⋯ menu. `render()` replaces the rows, puts focus back
+  through `data-focus` keys, and waits while a pointer is down on the list or a tool form.
 - **Toms 2 and 3 and auto speed-up:** the grid has rows only for toms 1 and 4. A loaded groove keeps toms 2 and 3 in `class_kept_toms`, valid for one bar layout, with the same visibility rule as toms 1 and 4. The metronome auto speed-up rewrites the newest undo step instead of adding one.
 - **Golden master width:** the SVG scales to `#svgTarget` width. The spec pins a 1208 px wide
   window, so the baselines stay valid when bars change. Change that value only to re-baseline.

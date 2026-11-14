@@ -203,7 +203,8 @@ function restoreFocus(target) {
   const controls = [...byId('lpLessons').querySelectorAll('[data-focus]')];
   const tryFocus = (row, kind) => {
     const node = controls.find((item) => item.dataset.focus === `${row}|${kind}`);
-    node?.focus();
+    // The list keeps its layout across a redraw, so focus must not scroll it.
+    node?.focus({ preventScroll: true });
     return Boolean(node) && document.activeElement === node;
   };
   const index = target.rows.indexOf(target.row);
@@ -303,9 +304,12 @@ function submitOnce(form, handler) {
       running = false;
       for (const node of buttons) node.disabled = false;
       const focusLost = !document.activeElement || document.activeElement === document.body;
-      // A save closes its form. Focus then goes to the button that opens the form.
-      const target = toolWasOpen && tool.hidden ? toolButton(tool.id) : pressed;
-      if (target?.isConnected && focusLost) target.focus();
+      // A save closes its form. Focus then goes to the button that opens the form. A docked
+      // panel leaves focus on the page instead, as after a pick, so Space plays the groove.
+      const closed = toolWasOpen && tool.hidden;
+      const target = closed ? toolButton(tool.id) : pressed;
+      const keepPageFocus = closed && window.matchMedia(DOCKED_QUERY).matches;
+      if (target?.isConnected && focusLost && !keepPageFocus) target.focus();
     }
   };
 }
@@ -878,11 +882,20 @@ function startLibrary({
     ]);
     toggle.setAttribute('aria-controls', bodyId);
     markFocus(toggle, row, 'main');
+    // The count sits outside the toggle, so a screen reader gets it as the description.
+    const countId = `lpLessonCount-${key}`;
+    const count = lessonGrooves.length;
+    toggle.setAttribute('aria-describedby', countId);
     // ⋯ comes last, in the same column as the ⋯ of the groove rows.
     const head = element('div', { className: 'lp-lesson-head' }, [
       toggle,
       ...(lesson ? syncLabel(lesson) : []),
-      element('small', { className: 'lp-count', textContent: String(lessonGrooves.length) }),
+      element('small', { className: 'lp-count', textContent: String(count), ariaHidden: 'true' }),
+      element('span', {
+        id: countId,
+        hidden: true,
+        textContent: count === 1 ? '1 groove' : `${count} grooves`,
+      }),
       ...(lesson ? [moreButton(row, name)] : []),
     ]);
     const body = element('div', { id: bodyId, className: 'lp-lesson-body' }, [
