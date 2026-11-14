@@ -794,7 +794,8 @@ async function turnKnob(page, degrees, from = 0) {
 }
 
 // The same with a finger, through the Chrome touch events.
-async function turnKnobByTouch(page, degrees) {
+// The finger lifts at the end, or the system cancels the touch (end 'touchCancel').
+async function turnKnobByTouch(page, degrees, end = 'touchEnd') {
   const centre = await knobCentre(page);
   const cdp = await page.context().newCDPSession(page);
   const touch = (type, point) =>
@@ -804,7 +805,21 @@ async function turnKnobByTouch(page, degrees) {
   for (let turned = 5; turned <= Math.abs(degrees); turned += 5) {
     await touch('touchMove', onRing(centre, sign * turned));
   }
-  await touch('touchEnd');
+  await touch(end);
+}
+
+// The grip angle, in degrees, from its rotate() transform.
+const gripAngle = (page) =>
+  page
+    .locator('.tempoKnob .tempoKnobGrip')
+    .evaluate((node) => Number(node.style.transform.match(/-?[\d.]+/)[0]));
+
+// At rest the grip sits at the end of the value arc: -135 degrees at 30 BPM, 1 degree for each
+// BPM, so +135 degrees at 300 BPM. A turn of whole circles is the same place.
+async function expectGripAtArcEnd(page, tempo) {
+  await expect
+    .poll(async () => ((((await gripAngle(page)) - (tempo - 165)) % 360) + 360) % 360)
+    .toBe(0);
 }
 
 async function expectTempo(page, tempo) {
@@ -901,6 +916,65 @@ test.describe('tempo knob', () => {
     await expect(arc).toHaveAttribute('stroke-dasharray', '120 360');
   });
 
+  test('at rest the grip sits at the end of the arc; while turning it follows the finger', async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await expectGripAtArcEnd(page, 80);
+    await page.evaluate(() =>
+      window.myGrooveWriter.loadNewGroove('?TimeSig=4/4&Div=8&Tempo=150&Measures=1&H=|x-x-x-x-|')
+    );
+    await expectGripAtArcEnd(page, 150);
+
+    // A quarter turn moves the grip a quarter turn, then it settles back on the arc end.
+    const centre = await knobCentre(page);
+    const start = onRing(centre, 0);
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    const before = await gripAngle(page);
+    for (let turned = 5; turned <= 90; turned += 5) {
+      const point = onRing(centre, turned);
+      await page.mouse.move(point.x, point.y);
+    }
+    expect(await gripAngle(page)).toBeCloseTo(before + 90, 0);
+    await page.mouse.up();
+    await expectTempo(page, 165);
+    await expectGripAtArcEnd(page, 165);
+  });
+
+  for (const [tempo, direction] of [
+    [300, 1],
+    [30, -1],
+  ]) {
+    test(`at ${tempo} BPM the grip stops when the turn goes on`, async ({ page }) => {
+      await openEditor(page, GROOVE.replace('Tempo=80', 'Tempo=' + tempo));
+      const centre = await knobCentre(page);
+      const start = onRing(centre, 0);
+      await page.mouse.move(start.x, start.y);
+      await page.mouse.down();
+      const angles = [];
+      for (let turned = 2; turned <= 40; turned += 2) {
+        const point = onRing(centre, direction * turned);
+        await page.mouse.move(point.x, point.y);
+        angles.push(await gripAngle(page));
+      }
+      await page.mouse.up();
+      expect(new Set(angles).size).toBe(1);
+      await expectTempo(page, tempo);
+      await expectGripAtArcEnd(page, tempo);
+    });
+  }
+
+  test('a cancelled touch keeps the tempo it reached, and opens no typing', async ({ page }) => {
+    await openEditor(page);
+    await turnKnobByTouch(page, 65, 'touchCancel');
+    await expectTempo(page, 90);
+    await expectGripAtArcEnd(page, 90);
+    await expect(tempoKnob(page)).not.toHaveClass(/is-turning/);
+    await page.waitForTimeout(300);
+    await expect(tempoField(page)).toBeHidden();
+  });
+
   test('the mouse wheel changes the tempo by one for each notch, and does not scroll', async ({
     page,
   }) => {
@@ -918,6 +992,16 @@ test.describe('tempo knob', () => {
     await page.mouse.wheel(0, 100);
     await expectTempo(page, 82);
     expect(await page.evaluate(() => window.wheelScrolls)).toBe(0);
+  });
+
+  test('a sideways or Shift wheel does not change the tempo', async ({ page }) => {
+    await openEditor(page);
+    const centre = await knobCentre(page);
+    await page.mouse.move(centre.x, centre.y);
+    await page.mouse.wheel(100, 0);
+    await page.mouse.wheel(-100, 0);
+    await page.waitForTimeout(100);
+    await expectTempo(page, 80);
   });
 
   test('the keys change the tempo, and the arrow keys do it once', async ({ page }) => {
@@ -985,6 +1069,41 @@ test.describe('tempo knob', () => {
     await page.keyboard.type('abc');
     await page.keyboard.press('Enter');
     await expectTempo(page, 99);
+  });
+
+  test('a click that ends a turn does not open the number for typing', async ({ page }) => {
+    await openEditor(page);
+    await turnKnob(page, 15);
+    await expectTempo(page, 82);
+    // A browser can send a click after the drag. It must not open typing.
+    await tempoKnob(page).dispatchEvent('click');
+    await page.waitForTimeout(100);
+    await expect(tempoField(page)).toBeHidden();
+    // Only a tap opens it: no click on its own, without the pointer down and up before it.
+    await tempoKnob(page).dispatchEvent('click');
+    await expect(tempoField(page)).toBeHidden();
+    await tempoKnob(page).tap();
+    await expect(tempoField(page)).toBeFocused();
+  });
+
+  test('a tap opens typing from the click, not from the pointer up', async ({ page }) => {
+    await openEditor(page);
+    // iOS opens the keyboard only for a focus inside a click. The field must not take focus
+    // before the click.
+    // A capture listener on the window runs before the knob's own click listener.
+    await page.evaluate(() => {
+      window.focusBeforeClick = null;
+      window.addEventListener(
+        'click',
+        () => (window.focusBeforeClick = document.activeElement.id || 'other'),
+        { capture: true }
+      );
+    });
+    await tempoKnob(page).tap();
+    await expect(tempoField(page)).toBeFocused();
+    const before = await page.evaluate(() => window.focusBeforeClick);
+    expect(before).not.toBeNull();
+    expect(before).not.toMatch(/^tempoTextField/);
   });
 
   test('a turn does not open the number for typing', async ({ page }) => {

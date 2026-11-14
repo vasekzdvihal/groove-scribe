@@ -68,7 +68,7 @@ export function initPopovers() {
 const KNOB_DEGREES_PER_BPM = 6; // so a full turn is 60 BPM
 const KNOB_DEAD_RADIUS = 8; // px round the centre where the pointer angle jumps, so it is ignored
 const KNOB_TAP_SLOP = 4; // px of movement that a tap can have
-const KNOB_SETTLE_MS = 150; // the time the grip takes to settle on the tempo after a drag
+const KNOB_SETTLE_MS = 150; // the time the grip takes to settle on the arc end after a drag
 const KNOB_WHEEL_NOTCH = 50; // px of wheel movement for 1 BPM, for a trackpad that sends small steps
 const KNOB_KEY_STEPS = {
   ArrowUp: 1,
@@ -146,28 +146,53 @@ function tempoKnob({ min, max, getTempo, changeTempo, setTempo, openTyping }) {
   face.append(number, caption);
   knob.append(svg, face);
 
-  // The part of a turn that is not yet a whole BPM. The grip shows it, so it follows the finger.
-  let partDegrees = 0;
-  const showGrip = () => {
-    grip.style.transform = `rotate(${getTempo() * KNOB_DEGREES_PER_BPM + partDegrees}deg)`;
+  // At rest the grip sits at the end of the value arc, so the knob shows one value. While a
+  // finger turns the knob, the grip turns with the finger; when it lifts, the grip settles back.
+  const arcEnd = (tempo) => -135 + ((tempo - min) * 270) / range;
+  let gripNow = 0;
+  const showGrip = (angle) => {
+    gripNow = angle;
+    grip.style.transform = `rotate(${angle}deg)`;
   };
+  let settleTimer = 0;
+  const stopSettling = () => {
+    clearTimeout(settleTimer);
+    knob.classList.remove('is-settling');
+  };
+  // The grip goes back to the arc end the short way, however many turns the finger made.
+  const settleGrip = () => {
+    const target = arcEnd(getTempo());
+    const offset = ((((gripNow - target) % 360) + 540) % 360) - 180;
+    if (Math.abs(offset) < 0.5) return showGrip(target);
+    showGrip(target + offset);
+    grip.getBoundingClientRect(); // applies the start angle before the transition starts
+    knob.classList.add('is-settling');
+    showGrip(target);
+    settleTimer = window.setTimeout(stopSettling, KNOB_SETTLE_MS);
+  };
+
+  let drag = null;
   function show() {
     const tempo = getTempo();
     knob.setAttribute('aria-valuenow', String(tempo));
     knob.setAttribute('aria-valuetext', `${tempo} BPM`);
     number.textContent = String(tempo);
     valueArc.setAttribute('stroke-dasharray', `${tempo - min} 360`);
-    showGrip();
+    if (!drag) showGrip(arcEnd(tempo));
   }
 
   // A drag. The tempo changes only after the pointer has moved round the centre, so a finger
   // that lands on the ring causes no jump, and a tap causes no change.
-  let drag = null;
+  // true from the pointer up of a tap until its click. iOS opens the keyboard only for a focus
+  // inside a click, so the click opens typing.
+  let tapPending = false;
   knob.addEventListener('pointerdown', (event) => {
     if (drag || (event.pointerType === 'mouse' && event.button !== 0)) return;
     // No mouse events follow, so the tap does not move focus or select text.
     event.preventDefault();
     knob.setPointerCapture(event.pointerId);
+    stopSettling();
+    tapPending = false;
     const box = knob.getBoundingClientRect();
     const centre = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
     drag = {
@@ -177,6 +202,10 @@ function tempoKnob({ min, max, getTempo, changeTempo, setTempo, openTyping }) {
       angle: pointerAngle(event, centre),
       turned: 0,
       moved: false,
+      tempo: getTempo(),
+      grip: gripNow,
+      // The part of the turn that is not yet a whole BPM. The grip shows it.
+      part: 0,
     };
     knob.classList.add('is-turning');
   });
@@ -194,40 +223,36 @@ function tempoKnob({ min, max, getTempo, changeTempo, setTempo, openTyping }) {
       // The shortest way from the last angle, so a turn past the top does not jump 360 degrees.
       const delta = ((angle - drag.angle + 540) % 360) - 180;
       drag.turned += delta;
-      partDegrees += delta;
+      drag.part += delta;
       // A small margin, so 90 degrees made of many small moves is 15 BPM, not 14.
-      const steps = Math.trunc(
-        (partDegrees + Math.sign(partDegrees) * 1e-6) / KNOB_DEGREES_PER_BPM
-      );
+      const steps = Math.trunc((drag.part + Math.sign(drag.part) * 1e-6) / KNOB_DEGREES_PER_BPM);
       if (steps) {
-        const before = getTempo();
         changeTempo(steps);
-        partDegrees -= steps * KNOB_DEGREES_PER_BPM;
-        // At the end of the range the grip stops too, and a turn back changes the tempo at once.
-        if (getTempo() === before) partDegrees = 0;
+        drag.part -= steps * KNOB_DEGREES_PER_BPM;
       }
-      showGrip();
+      // At the end of the range the grip stops, and a turn back changes the tempo at once.
+      const tempo = getTempo();
+      if ((tempo >= max && drag.part > 0) || (tempo <= min && drag.part < 0)) drag.part = 0;
+      showGrip(drag.grip + (tempo - drag.tempo) * KNOB_DEGREES_PER_BPM + drag.part);
     }
     drag.angle = angle;
   });
-  const endDrag = (event, isTap) => {
+  const endDrag = (event) => {
     if (event.pointerId !== drag?.id) return;
     drag = null;
     knob.classList.remove('is-turning');
-    if (partDegrees) {
-      knob.classList.add('is-settling');
-      window.setTimeout(() => knob.classList.remove('is-settling'), KNOB_SETTLE_MS);
-    }
-    partDegrees = 0;
-    showGrip();
-    if (isTap) openTyping(false);
+    settleGrip();
   };
   knob.addEventListener('pointerup', (event) => {
-    const isTap = drag && !drag.moved && Math.abs(drag.turned) < KNOB_DEGREES_PER_BPM;
-    endDrag(event, isTap);
+    tapPending = !!drag && !drag.moved && Math.abs(drag.turned) < KNOB_DEGREES_PER_BPM;
+    endDrag(event);
   });
-  knob.addEventListener('pointercancel', (event) => endDrag(event, false));
-  knob.addEventListener('lostpointercapture', (event) => endDrag(event, false));
+  knob.addEventListener('pointercancel', endDrag);
+  knob.addEventListener('lostpointercapture', endDrag);
+  knob.addEventListener('click', () => {
+    if (tapPending) openTyping(false);
+    tapPending = false;
+  });
   // A long press on a touch screen must not open a menu.
   knob.addEventListener('contextmenu', (event) => event.preventDefault());
 
@@ -236,6 +261,8 @@ function tempoKnob({ min, max, getTempo, changeTempo, setTempo, openTyping }) {
   knob.addEventListener(
     'wheel',
     (event) => {
+      // A sideways or Shift wheel has no deltaY. It must not change the tempo.
+      if (event.deltaY === 0) return;
       event.preventDefault();
       const notch = event.deltaMode !== WheelEvent.DOM_DELTA_PIXEL;
       wheel =
