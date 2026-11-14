@@ -70,11 +70,11 @@ const PANEL_HTML = `
           <i class="fa fa-floppy-o" aria-hidden="true"></i><span>Save</span>
         </button>
         <button id="lpLinkToolButton" class="lp-tool-button" type="button"
-            aria-label="Add a groove link" aria-expanded="false" aria-controls="lpLinkTool">
+            title="Add a groove link" aria-expanded="false" aria-controls="lpLinkTool">
           <i class="fa fa-link" aria-hidden="true"></i><span>Add link</span>
         </button>
         <button id="lpLessonToolButton" class="lp-tool-button" type="button"
-            aria-label="New lesson" aria-expanded="false" aria-controls="lpLessonTool">
+            aria-expanded="false" aria-controls="lpLessonTool">
           <i class="fa fa-plus" aria-hidden="true"></i><span>New lesson</span>
         </button>
       </div>
@@ -114,6 +114,11 @@ const PANEL_HTML = `
 `;
 
 const byId = (id) => document.getElementById(id);
+// Lessons show in natural order, so "Week 2" comes before "Week 10". The same name keeps the
+// order of its ids.
+const lessonCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const byLessonName = (a, b) =>
+  lessonCollator.compare(String(a.name), String(b.name)) || (a.id < b.id ? -1 : 1);
 const grooveName = (groove) => groove.title || 'Untitled groove';
 const refusedMessage = (name) =>
   name ? `"${name}" could not be saved. The library shows what is saved.` : WRITE_REFUSED;
@@ -148,14 +153,70 @@ function showTool(openId) {
   }
 }
 
-// Escape in an open tool form closes it, and focus goes back to its button. Returns true when
-// it closed a form.
+// The top of the form shows below the sticky row of tool buttons.
+function isToolInView(toolId) {
+  const top = byId(toolId).getBoundingClientRect().top;
+  const row = byId('lpLibrary').querySelector('.lp-tools').getBoundingClientRect();
+  const body = byId('lpLibrary').closest('.lp-body').getBoundingClientRect();
+  return top >= row.bottom - 1 && top < body.bottom;
+}
+
+// Escape in an open tool form, or on its button, closes the form, and focus goes to its
+// button. Returns true when it closed a form.
 function closeToolOf(target) {
-  const toolId = TOOL_IDS.find((id) => isToolOpen(id) && byId(id).contains(target));
+  const toolId = TOOL_IDS.find(
+    (id) => isToolOpen(id) && (byId(id).contains(target) || toolButton(id) === target)
+  );
   if (!toolId) return false;
   showTool(null);
   toolButton(toolId).focus();
   return true;
+}
+
+// A redraw replaces every row of the list, also the control that has focus. Each row and each
+// control in it has a key, so the redraw can put focus on the new control.
+function markFocus(node, row, kind) {
+  node.dataset.focus = `${row}|${kind}`;
+  return node;
+}
+
+// What the redraw needs to find the control again: its key, and the rows around it.
+function focusedInList() {
+  const list = byId('lpLessons');
+  const focused = document.activeElement;
+  if (!focused?.dataset?.focus || !list.contains(focused)) return null;
+  const [row, kind] = focused.dataset.focus.split('|');
+  const isLesson = row.startsWith('lesson:');
+  // The rows of the same kind: the lessons, or the grooves of the same lesson.
+  const scope = isLesson ? list : focused.closest('.lp-lesson');
+  const rows = [...scope.querySelectorAll(isLesson ? '.lp-lesson' : '.lp-groove')].map(
+    (node) => node.dataset.row
+  );
+  return { row, kind, rows, lesson: focused.closest('.lp-lesson').dataset.row };
+}
+
+// Focus the same control in the new list. When it is gone, for example a menu button after
+// the menu closed, focus the ⋯ or the main control of its row. When the row is gone, focus
+// the next row, the row before, or the lesson heading.
+function restoreFocus(target) {
+  if (!target) return;
+  const controls = [...byId('lpLessons').querySelectorAll('[data-focus]')];
+  const tryFocus = (row, kind) => {
+    const node = controls.find((item) => item.dataset.focus === `${row}|${kind}`);
+    node?.focus();
+    return Boolean(node) && document.activeElement === node;
+  };
+  const index = target.rows.indexOf(target.row);
+  const after = target.rows.slice(index + 1);
+  const before = target.rows.slice(0, index).reverse();
+  const candidates = [
+    [target.row, target.kind],
+    [target.row, 'more'],
+    [target.row, 'main'],
+    ...[...after, ...before].map((row) => [row, 'main']),
+    [target.lesson, 'main'],
+  ];
+  candidates.some(([row, kind]) => tryFocus(row, kind));
 }
 
 // Browser storage can throw in private windows. The panel works without it.
@@ -392,7 +453,7 @@ function startLibrary({
   // page alone, unless a change needs a fresh draw. fromServer: the lists are the whole library.
   function draw(nextLessons, nextGrooves, redraw, fromServer = false) {
     const next = JSON.stringify([nextLessons, nextGrooves]);
-    lessons = nextLessons;
+    lessons = [...nextLessons].sort(byLessonName);
     grooves = nextGrooves;
     const wasRestoring = currentGroove.isRestoring();
     const restored = currentGroove.restore(fromServer);
@@ -477,10 +538,12 @@ function startLibrary({
   document.addEventListener('visibilitychange', refresh);
   window.addEventListener('online', refresh);
 
-  // A redraw replaces every row of the list. A click that started on a row before a redraw ends
-  // on a new button, so the browser sends no click and the pick is lost. A redraw comes when a
-  // server answer arrives or the editor turns clean or dirty, at any moment. While the pointer
-  // is down on the list, the redraw waits until the click has run.
+  // A redraw replaces every row of the list, and the buttons of the save form and the options of
+  // the Lesson selects. A click that started on a row before a redraw ends on a new button, so
+  // the browser sends no click and the pick is lost. A redraw comes when a server answer arrives
+  // or the editor turns clean or dirty, at any moment. While the pointer is down on the list or
+  // on a tool form, the redraw waits until the click has run.
+  const pressAreas = ['lpLessons', ...TOOL_IDS].map(byId);
   let pointerDown = false;
   let renderWaits = false;
   let pointerTimer = 0;
@@ -501,7 +564,7 @@ function startLibrary({
       }, 0);
     }
   }
-  byId('lpLessons').addEventListener('pointerdown', onPointerDown);
+  for (const area of pressAreas) area.addEventListener('pointerdown', onPointerDown);
   document.addEventListener('pointerup', onPointerEnd, true);
   document.addEventListener('pointercancel', onPointerEnd, true);
 
@@ -509,7 +572,7 @@ function startLibrary({
   function stop() {
     stopped = true;
     clearTimeout(pointerTimer);
-    byId('lpLessons').removeEventListener('pointerdown', onPointerDown);
+    for (const area of pressAreas) area.removeEventListener('pointerdown', onPointerDown);
     document.removeEventListener('pointerup', onPointerEnd, true);
     document.removeEventListener('pointercancel', onPointerEnd, true);
     byId('lpSaveTool').removeEventListener(TOOL_OPENED, prefillSaveForm);
@@ -681,6 +744,11 @@ function startLibrary({
     openLesson = id;
     closedLesson = null;
     writeLastLesson(id);
+    // The link form follows the open lesson until the user picks one.
+    if (!linkLessonPicked) {
+      const known = lessons.some((lesson) => lesson.id === id);
+      byId('lpLinkLesson').value = known ? id : '';
+    }
   }
 
   function grooveActions(groove) {
@@ -712,34 +780,32 @@ function startLibrary({
       },
       { className: 'lp-danger' }
     );
+    const row = `groove:${groove.id}`;
+    markFocus(move, row, 'move');
+    markFocus(rename, row, 'rename');
+    markFocus(remove, row, 'delete');
     return element('div', { className: 'lp-actions' }, [move, rename, remove]);
   }
 
-  // A ⋯ button opens its menu and closes any other one. The redraw replaces the button, so
-  // focus goes to the new one: a keyboard user can press it again.
-  function moreButton(key, label) {
-    const isMenuOpen = openMenu === key;
+  // A ⋯ button opens the menu of its row and closes any other one. The key of the row is also
+  // the key of its menu.
+  function moreButton(row, label) {
+    const isMenuOpen = openMenu === row;
     const more = button(
       '⋯',
       () => {
-        openMenu = isMenuOpen ? null : key;
+        openMenu = isMenuOpen ? null : row;
         render();
-        const next = [...byId('lpLessons').querySelectorAll('.lp-more')].find(
-          (node) => node.dataset.menu === key
-        );
-        const focusLost = !document.activeElement || document.activeElement === document.body;
-        if (next && focusLost) next.focus();
       },
       { className: 'lp-more', ariaLabel: `Options for ${label}` }
     );
-    more.dataset.menu = key;
     more.setAttribute('aria-expanded', String(isMenuOpen));
-    return more;
+    return markFocus(more, row, 'more');
   }
 
   function grooveRow(groove, lessonKey) {
     const name = grooveName(groove);
-    const menuKey = `groove:${groove.id}`;
+    const row = `groove:${groove.id}`;
     const open = button(
       name,
       async () => {
@@ -756,28 +822,40 @@ function startLibrary({
       { className: 'lp-open' }
     );
     if (openGrooveId === groove.id) open.setAttribute('aria-current', 'true');
-    return element('li', { className: 'lp-groove' }, [
+    markFocus(open, row, 'main');
+    const item = element('li', { className: 'lp-groove' }, [
       open,
       ...syncLabel(groove),
-      moreButton(menuKey, name),
-      ...(openMenu === menuKey ? [grooveActions(groove)] : []),
+      moreButton(row, name),
+      ...(openMenu === row ? [grooveActions(groove)] : []),
     ]);
+    item.dataset.row = row;
+    return item;
   }
 
   function lessonActions(lesson) {
+    const row = `lesson:${lesson.id}`;
     return element('div', { className: 'lp-actions' }, [
-      button('Rename lesson', () => {
-        const name = prompt('Lesson name', lesson.name)?.trim();
-        if (name) act(() => library.renameLesson(lesson.id, name));
-      }),
-      button(
-        'Delete lesson',
-        () => {
-          if (confirm(`Delete lesson "${lesson.name}"? Its grooves stay in your library.`)) {
-            act(() => library.deleteLesson(lesson.id));
-          }
-        },
-        { className: 'lp-danger' }
+      markFocus(
+        button('Rename lesson', () => {
+          const name = prompt('Lesson name', lesson.name)?.trim();
+          if (name) act(() => library.renameLesson(lesson.id, name));
+        }),
+        row,
+        'rename'
+      ),
+      markFocus(
+        button(
+          'Delete lesson',
+          () => {
+            if (confirm(`Delete lesson "${lesson.name}"? Its grooves stay in your library.`)) {
+              act(() => library.deleteLesson(lesson.id));
+            }
+          },
+          { className: 'lp-danger' }
+        ),
+        row,
+        'delete'
       ),
     ]);
   }
@@ -793,17 +871,19 @@ function startLibrary({
   function lessonSection(lesson, lessonGrooves, isOpen) {
     const key = lesson?.id ?? UNFILED;
     const name = lesson?.name ?? 'No lesson';
-    const menuKey = `lesson:${key}`;
+    const row = `lesson:${key}`;
     const bodyId = `lpLessonBody-${key}`;
     const toggle = element('button', { type: 'button', className: 'lp-lesson-toggle' }, [
       element('span', { textContent: name }),
     ]);
     toggle.setAttribute('aria-controls', bodyId);
+    markFocus(toggle, row, 'main');
+    // ⋯ comes last, in the same column as the ⋯ of the groove rows.
     const head = element('div', { className: 'lp-lesson-head' }, [
       toggle,
       ...(lesson ? syncLabel(lesson) : []),
-      ...(lesson ? [moreButton(menuKey, name)] : []),
       element('small', { className: 'lp-count', textContent: String(lessonGrooves.length) }),
+      ...(lesson ? [moreButton(row, name)] : []),
     ]);
     const body = element('div', { id: bodyId, className: 'lp-lesson-body' }, [
       lessonGrooves.length
@@ -816,9 +896,10 @@ function startLibrary({
     ]);
     const section = element('section', { className: 'lp-lesson' }, [
       head,
-      ...(lesson && openMenu === menuKey ? [lessonActions(lesson)] : []),
+      ...(lesson && openMenu === row ? [lessonActions(lesson)] : []),
       body,
     ]);
+    section.dataset.row = row;
     setLessonOpen(section, isOpen);
     // A tap anywhere on the heading but ⋯ opens or closes the lesson, as the name does.
     head.addEventListener('click', (event) => {
@@ -865,7 +946,7 @@ function startLibrary({
   }
 
   function render() {
-    // See onPointerDown: a click on the list is in progress.
+    // See onPointerDown: a click on the list or a tool form is in progress.
     if (pointerDown) {
       renderWaits = true;
       return;
@@ -880,7 +961,10 @@ function startLibrary({
       const keep =
         select.options.length > 0 &&
         (id === 'lpSaveLesson' ? isToolOpen('lpSaveTool') : linkLessonPicked);
-      const selected = keep ? select.value : select.value || (known && openLesson);
+      const follow = known && openLesson;
+      let selected = select.value || follow;
+      if (keep) selected = select.value;
+      else if (id === 'lpLinkLesson') selected = follow;
       select.replaceChildren(...lessonOptions(lessons, selected));
     }
     const openGroove = openSavedGroove();
@@ -905,6 +989,7 @@ function startLibrary({
       ? openLesson
       : entries[0]?.key;
     refreshSaveForm();
+    const focused = focusedInList();
     byId('lpLessons').replaceChildren(
       ...(entries.length
         ? entries.map(({ lesson, key, items }) =>
@@ -917,6 +1002,7 @@ function startLibrary({
             }),
           ])
     );
+    restoreFocus(focused);
   }
 
   function prefillSaveForm() {
@@ -1300,8 +1386,10 @@ export function initLibraryPanel({
 
   function connect() {
     started ??= startCloud(search, editor, dirtyState, {
+      // A docked panel is not a dialog: after a pick, focus goes to the page, so space plays.
       afterPick: () => {
         if (!docked.matches) closePanel();
+        else if (panel.contains(document.activeElement)) document.activeElement.blur();
       },
       libraryShown: showSaveForm,
       signedOut: showSignIn,
@@ -1352,10 +1440,15 @@ export function initLibraryPanel({
     else openPanel();
   });
   byId('lpClose').addEventListener('click', closePanel);
+  // A press opens the form, or closes it when it is in view. An open form that the list has
+  // scrolled away scrolls back into view.
   for (const id of TOOL_IDS) {
     toolButton(id).addEventListener('click', () => {
-      showTool(isToolOpen(id) ? null : id);
-      if (isToolOpen(id)) byId(id).scrollIntoView({ block: 'nearest' });
+      if (isToolOpen(id) && isToolInView(id)) showTool(null);
+      else {
+        showTool(id);
+        byId(id).scrollIntoView({ block: 'nearest' });
+      }
     });
   }
   backdrop.addEventListener('click', closePanel);

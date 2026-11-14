@@ -181,10 +181,13 @@
   font-size: 18px;
 }
 
+/* The button of the open form: accent outline and underline on a tinted background. It must
+   not look like the filled submit button of the form. */
 #libraryPanel .lp-tool-button[aria-expanded='true'] {
-  color: var(--lp-accent-text);
-  background: var(--lp-accent);
+  color: var(--lp-accent);
+  background: rgb(99 177 230 / 14%);
   border-color: var(--lp-accent);
+  box-shadow: inset 0 -3px 0 var(--lp-accent);
 }
 
 /* A form opens below the buttons. The margin keeps it clear of them when it scrolls in. */
@@ -220,15 +223,18 @@
   overflow-wrap: anywhere;
 }
 
+/* The Font Awesome chevrons read at a glance; the triangle characters were a speck. */
 #libraryPanel .lp-lesson-toggle::before {
   flex: none;
+  width: 12px;
   color: var(--lp-muted);
-  font-size: 12px;
-  content: '\25B8';
+  font: normal 12px/1 FontAwesome;
+  text-align: center;
+  content: '\f054';
 }
 
 #libraryPanel .lp-lesson-toggle[aria-expanded='true']::before {
-  content: '\25BE';
+  content: '\f078';
 }
 
 .lp-lesson-toggle > span {
@@ -239,13 +245,21 @@
 .lp-count {
   flex: none;
   min-width: 20px;
+  /* Room for the focus ring of ⋯. */
+  margin-right: 6px;
   color: var(--lp-muted);
   font-size: 14px;
   text-align: right;
 }
 
+/* The focus ring of the first heading needs room below the row of tool buttons. */
+#lpLessons {
+  padding-top: 4px;
+}
+
+/* The lesson menu starts at the same edge as the groove menu. */
 .lp-lesson > .lp-actions {
-  padding-left: 15px;
+  padding-left: 12px;
 }
 
 .lp-lesson ul {
@@ -325,8 +339,11 @@
   padding-left: 12px;
 }
 
+/* "Rename lesson" stays on one line in the narrow docked panel. */
 #libraryPanel .lp-actions button {
   flex: 1;
+  padding-inline: 8px;
+  white-space: nowrap;
 }
 
 #libraryPanel form {

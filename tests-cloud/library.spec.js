@@ -99,7 +99,9 @@ async function signedInPanel(page, email = 'ana@example.com') {
 }
 
 async function createLesson(page, name) {
-  await page.getByRole('button', { name: 'New lesson', exact: true }).click();
+  if (!(await page.locator('#lpLessonForm').isVisible())) {
+    await page.getByRole('button', { name: 'New lesson', exact: true }).click();
+  }
   await page.getByLabel('Lesson name').fill(name);
   await page.getByRole('button', { name: 'Create lesson' }).click();
   await expect(page.locator('.lp-lesson-toggle', { hasText: name })).toBeVisible();
@@ -108,7 +110,7 @@ async function createLesson(page, name) {
 async function addLink(page, query, title) {
   const tool = page.locator('#lpLinkForm');
   if (!(await tool.isVisible())) {
-    await page.getByRole('button', { name: 'Add a groove link', exact: true }).click();
+    await page.getByRole('button', { name: 'Add link', exact: true }).click();
   }
   await tool
     .getByLabel('Groove link', { exact: true })
@@ -239,7 +241,7 @@ test('a lesson lists grooves in the order they were saved', async ({ page }) => 
 
 test('a short link gets a clear message and saves nothing', async ({ page }) => {
   await signedInPanel(page);
-  await page.getByRole('button', { name: 'Add a groove link', exact: true }).click();
+  await page.getByRole('button', { name: 'Add link', exact: true }).click();
   await page.getByLabel('Groove link', { exact: true }).fill('https://gscribe.com/share/abc123');
   await page.getByRole('button', { name: 'Add groove' }).click();
   await expect(page.getByRole('alert')).toContainText('short link');
@@ -249,7 +251,7 @@ test('a short link gets a clear message and saves nothing', async ({ page }) => 
 test.describe('the tool buttons', () => {
   const TOOLS = [
     { name: 'Save current groove', label: 'Save', icon: 'fa-floppy-o', form: '#lpSaveForm' },
-    { name: 'Add a groove link', label: 'Add link', icon: 'fa-link', form: '#lpLinkForm' },
+    { name: 'Add link', label: 'Add link', icon: 'fa-link', form: '#lpLinkForm' },
     { name: 'New lesson', label: 'New lesson', icon: 'fa-plus', form: '#lpLessonForm' },
   ];
   const toolButton = (page, name) => page.getByRole('button', { name, exact: true });
@@ -261,7 +263,10 @@ test.describe('the tool buttons', () => {
       await expect(tool).toHaveText(label);
       await expect(tool.locator(`i.fa.${icon}`)).toHaveCount(1);
       await expect(tool).toHaveAttribute('aria-expanded', 'false');
+      // The accessible name contains the visible label (WCAG 2.5.3).
+      expect(name.startsWith(label)).toBe(true);
     }
+    await expect(toolButton(page, 'Add link')).toHaveAttribute('title', 'Add a groove link');
     await createLesson(page, 'Week 1');
     await toolButton(page, 'New lesson').click();
     const lessons = await page.locator('#lpLessons').boundingBox();
@@ -292,15 +297,50 @@ test.describe('the tool buttons', () => {
 
   test('Escape in a form closes it, and the panel stays open', async ({ page }) => {
     await signedInPanel(page);
-    await toolButton(page, 'Add a groove link').click();
+    await toolButton(page, 'Add link').click();
     await page.getByLabel('Groove link', { exact: true }).focus();
     await page.keyboard.press('Escape');
     await expect(page.locator('#lpLinkForm')).toBeHidden();
-    await expect(toolButton(page, 'Add a groove link')).toBeFocused();
+    await expect(toolButton(page, 'Add link')).toBeFocused();
     await expect(page.locator('#libraryPanel')).toBeVisible();
     // With no form open, Escape closes the slide-over panel as before.
     await page.keyboard.press('Escape');
     await expect(page.locator('#libraryPanel')).toBeHidden();
+  });
+
+  test('Escape on the button of an open form closes the form only', async ({ page }) => {
+    await signedInPanel(page);
+    await toolButton(page, 'Add link').click();
+    await expect(toolButton(page, 'Add link')).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#lpLinkForm')).toBeHidden();
+    await expect(toolButton(page, 'Add link')).toBeFocused();
+    await expect(page.locator('#libraryPanel')).toBeVisible();
+  });
+
+  test('the button of an open form out of view scrolls to it and keeps it open', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1000, height: 500 });
+    await signedInPanel(page);
+    for (let week = 1; week <= 8; week++) await createLesson(page, `Week ${week}`);
+    await expect(page.locator('#lpLessonForm')).toBeVisible();
+    // The field shows when it is below the sticky row of tool buttons.
+    const fieldShows = () =>
+      page.evaluate(() => {
+        const field = document.getElementById('lpLessonName').getBoundingClientRect();
+        const row = document.querySelector('.lp-tools').getBoundingClientRect();
+        return field.top >= row.bottom;
+      });
+    await page.locator('.lp-body').evaluate((node) => (node.scrollTop = node.scrollHeight));
+    expect(await fieldShows()).toBe(false);
+    await toolButton(page, 'New lesson').click();
+    await expect(page.locator('#lpLessonForm')).toBeVisible();
+    await expect(toolButton(page, 'New lesson')).toHaveAttribute('aria-expanded', 'true');
+    expect(await fieldShows()).toBe(true);
+    // In view, the button closes the form.
+    await toolButton(page, 'New lesson').click();
+    await expect(page.locator('#lpLessonForm')).toBeHidden();
   });
 });
 
@@ -309,17 +349,28 @@ test.describe('the options of a lesson', () => {
   const lessonMore = (page, name) =>
     page.getByRole('button', { name: `Options for ${name}`, exact: true });
 
-  test('the heading shows the name, then ⋯, then the count', async ({ page }) => {
+  test('the heading shows the name, then the count, then ⋯ in the column of the groove ⋯', async ({
+    page,
+  }) => {
     await signedInPanel(page);
     await createLesson(page, 'Week 1');
     await addLink(page, QUERY, 'Paradiddle');
     const lesson = page.locator('.lp-lesson').filter({ hasText: 'Week 1' });
-    const name = await lesson.locator('.lp-lesson-toggle span').boundingBox();
-    const more = await lessonMore(page, 'Week 1').boundingBox();
-    const count = await lesson.locator('.lp-count').boundingBox();
     await expect(lesson.locator('.lp-count')).toHaveText('1');
-    expect(name.x + name.width).toBeLessThanOrEqual(more.x);
-    expect(more.x + more.width).toBeLessThanOrEqual(count.x);
+    // Measure all boxes at once: a redraw can replace the rows between two reads.
+    const { name, count, more, grooveMore } = await lesson.evaluate((section) => {
+      const box = (selector) => section.querySelector(selector).getBoundingClientRect().toJSON();
+      return {
+        name: box('.lp-lesson-toggle span'),
+        count: box('.lp-count'),
+        more: box('.lp-lesson-head .lp-more'),
+        grooveMore: box('.lp-groove .lp-more'),
+      };
+    });
+    expect(name.x + name.width).toBeLessThanOrEqual(count.x);
+    expect(count.x + count.width).toBeLessThanOrEqual(more.x);
+    expect(Math.abs(more.x - grooveMore.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(more.width - grooveMore.width)).toBeLessThanOrEqual(1);
     expect(more.height).toBeGreaterThanOrEqual(44);
     expect(more.width).toBeGreaterThanOrEqual(44);
     // "No lesson" has no options.
@@ -370,6 +421,43 @@ test.describe('the options of a lesson', () => {
     await lessonMore(page, 'Week 1').click();
     await expect(page.getByLabel('Lesson for Paradiddle')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Rename lesson' })).toBeVisible();
+  });
+
+  test('focus stays in the list after a rename or a delete', async ({ page }) => {
+    await signedInPanel(page);
+    await createLesson(page, 'Week 1');
+    await createLesson(page, 'Week 2');
+    await page.locator('.lp-lesson-toggle', { hasText: 'Week 1' }).click();
+    for (const title of ['First', 'Second', 'Third']) await addLink(page, QUERY, title);
+    const focusedText = () => page.evaluate(() => document.activeElement.textContent);
+    const focusedLabel = () =>
+      page.evaluate(() => document.activeElement.getAttribute('aria-label'));
+
+    // Rename a groove: focus goes back to its ⋯.
+    page.once('dialog', (dialog) => dialog.accept('Second 2'));
+    await page.getByRole('button', { name: 'Options for Second', exact: true }).click();
+    await page.getByRole('button', { name: 'Rename', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Second 2', exact: true })).toBeVisible();
+    expect(await focusedLabel()).toBe('Options for Second 2');
+
+    // Delete a groove: focus goes to the next groove, or to the one before the last.
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Options for Second 2', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Second 2', exact: true })).toHaveCount(0);
+    expect(await focusedText()).toBe('Third');
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Options for Third', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Third', exact: true })).toHaveCount(0);
+    expect(await focusedText()).toBe('First');
+
+    // Delete a lesson: focus goes to the next lesson.
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Options for Week 1', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete lesson' }).click();
+    await expect(page.locator('.lp-lesson-toggle', { hasText: 'Week 1' })).toHaveCount(0);
+    expect(await focusedText()).toBe('Week 2');
   });
 
   test('the lesson name opens and closes the lesson', async ({ page }) => {
@@ -1005,6 +1093,25 @@ test.describe('updating a saved groove', () => {
     await page.evaluate(() => document.getElementById('undoButton').click());
     await page.mouse.up();
     await expect(page.locator('#tuneTitle')).toHaveValue('Other');
+  });
+
+  test('a redraw while a finger is on Update groove does not lose the press', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await synced(page);
+    await pickSaved(page, 'Paradiddle');
+    await editNote(page);
+    await saveTool(page).click();
+    await updateButton(page).hover();
+    await page.mouse.down();
+    // An Undo makes the groove clean, and the form loses Update while the finger is down. The
+    // press still runs, and it says why nothing changed.
+    await page.evaluate(() => document.getElementById('undoButton').click());
+    await page.mouse.up();
+    await expect(page.getByRole('alert')).toHaveText(
+      'Nothing to update. The groove has no changes.'
+    );
+    await expect(updateButton(page)).toHaveCount(0);
   });
 
   test('renaming an open groove without a title changes only the top bar', async ({ page }) => {
@@ -1930,7 +2037,7 @@ test.describe('without a network', () => {
       }, LONG);
       await page.getByRole('button', { name: 'Create lesson' }).click();
       const tool = page.locator('#lpLinkForm');
-      await page.getByRole('button', { name: 'Add a groove link', exact: true }).click();
+      await page.getByRole('button', { name: 'Add link', exact: true }).click();
       await tool
         .getByLabel('Groove link', { exact: true })
         .fill('https://montulli.github.io/GrooveScribe/' + QUERY);

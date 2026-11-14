@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-// jsdom does not implement scrollIntoView. The panel calls it when a tool form opens.
-if (!Element.prototype.scrollIntoView) {
-  Element.prototype.scrollIntoView = vi.fn();
-}
 import { createLibrary } from '../../js/cloud/library.js';
 import { connectCloud } from '../../js/cloud/firebaseClient.js';
 import { initLibraryPanel } from '../../js/cloud/libraryPanel.js';
 import { createDirtyState, watchDirty } from '../../js/cloud/dirtyState.js';
 import { readRecord, writeRecord } from '../../js/cloud/currentGroove.js';
+
+// jsdom does not implement scrollIntoView. The panel calls it when a tool form opens.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}
 
 vi.mock('../../js/cloud/firebaseClient.js', () => ({
   resolveCloudConfig: () => ({ useEmulator: false, config: {} }),
@@ -771,6 +771,74 @@ describe('the library panel', () => {
     dirtyState.markStart(START);
     await settle();
     expect(document.querySelector('.lp-lesson-toggle').getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('lists lessons in natural order, also in the Lesson selects', async () => {
+    for (const [id, name] of [
+      ['l-10', 'Week 10'],
+      ['l-2', 'Week 2'],
+      ['l-1', 'week 1'],
+      ['l-b', 'Bossa'],
+    ]) {
+      fake.add('lessons', id, { name });
+    }
+    await openPanel();
+    await loaded();
+    const order = ['Bossa', 'week 1', 'Week 2', 'Week 10'];
+    expect(lessonNames()).toEqual(order);
+    for (const id of ['lpSaveLesson', 'lpLinkLesson']) {
+      expect([...byId(id).options].map((option) => option.textContent)).toEqual([
+        'No lesson',
+        ...order,
+      ]);
+    }
+    // A new lesson takes its place in the same order.
+    byId('lpLessonName').value = 'Week 3';
+    byId('lpLessonForm').querySelector('button').click();
+    await vi.waitFor(() =>
+      expect(lessonNames()).toEqual(['Bossa', 'week 1', 'Week 2', 'Week 3', 'Week 10'])
+    );
+  });
+
+  it('files a link in the open lesson until the user picks one', async () => {
+    fake.add('lessons', 'l-a', { name: 'Afro' });
+    await openPanel();
+    await loaded();
+    byId('lpLinkToolButton').click();
+    // A new lesson becomes the open lesson, and the link form follows it.
+    for (const name of ['Bossa', 'Cumbia']) {
+      byId('lpLessonName').value = name;
+      byId('lpLessonForm').querySelector('button').click();
+      await vi.waitFor(() => expect(lessonNames()).toContain(name));
+    }
+    const idOf = (name) =>
+      [...byId('lpLinkLesson').options].find((o) => o.textContent === name).value;
+    expect(byId('lpLinkLesson').value).toBe(idOf('Cumbia'));
+    // Opening a lesson in the list moves the link form to it at once.
+    [...document.querySelectorAll('.lp-lesson-toggle')]
+      .find((node) => node.textContent === 'Afro')
+      .click();
+    expect(byId('lpLinkLesson').value).toBe(idOf('Afro'));
+    // A lesson that the user picked stays.
+    byId('lpLinkLesson').value = idOf('Bossa');
+    byId('lpLinkLesson').dispatchEvent(new Event('change'));
+    [...document.querySelectorAll('.lp-lesson-toggle')]
+      .find((node) => node.textContent === 'Cumbia')
+      .click();
+    dirtyState.markStart(START);
+    await settle();
+    expect(byId('lpLinkLesson').value).toBe(idOf('Bossa'));
+  });
+
+  it('keeps focus on a groove button when the list redraws', async () => {
+    fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
+    await openPanel();
+    await loaded();
+    await settle();
+    grooveButton('Beat').focus();
+    dirtyState.markStart(START);
+    await settle();
+    expect(document.activeElement).toBe(grooveButton('Beat'));
   });
 
   it('keeps a lesson that the user closed closed after a redraw', async () => {
