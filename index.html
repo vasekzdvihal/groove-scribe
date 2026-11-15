@@ -40,6 +40,7 @@
 		<link rel="modulepreload" href="js/wakeLock.js">
 		<link rel="modulepreload" href="js/registerServiceWorker.js">
 		<link rel="modulepreload" href="js/confirmDialog.js">
+		<link rel="modulepreload" href="js/sidePanel.js">
 		<link rel="modulepreload" href="js/cloud/libraryPanel.js">
 		<link rel="modulepreload" href="js/cloud/firebaseClient.js">
 		<link rel="modulepreload" href="js/cloud/firebaseConfig.js">
@@ -92,6 +93,7 @@
 	    <link rel="stylesheet" type="text/css" href="css/confirm-dialog.css">
 		<link rel="stylesheet" type="text/css" href="css/groove_display_orange.css">
 		<link rel="stylesheet" type="text/css" href="css/editor-toolbars.css">
+		<link rel="stylesheet" type="text/css" href="css/side-panel.css">
 		<link rel="stylesheet" type="text/css" href="css/fonts.css">
 
 		<!--   Other peoples JS libraries    -->
@@ -134,7 +136,7 @@
 		<div class="nonPrintable">
 			<div id="TopNav">
 				<span id="logoTextUpperLeft"><img src="images/GScribe_Logo_word_stack.svg" alt="Groove Scribe"></span>
-				<!-- The library button is added by js/cloud/libraryPanel.js. -->
+				<!-- The side panel tabs (js/sidePanel.js) and the library button (js/cloud/libraryPanel.js) go here. -->
 				<span id="upperLeft"></span>
 				<span id="grooveTitleDisplay"></span>
 				<span id="upperRight">
@@ -152,7 +154,6 @@
 				<button type="button" class="tool edit-block" id="redoButton" aria-disabled="true" aria-label="Redo" onclick="myGrooveWriter.redoCommand();"><span class="tool-in"><i class="fa fa-repeat"></i><span class="tool-label">Redo</span></span></button>
 				<span class="tool-sep edit-block"></span>
 				<button type="button" class="tool tool-caret grooveDB_hidden" id="permutationAnchor" onclick="myGrooveWriter.permutationAnchorClick(event);"><span class="tool-in">Permutations</span></button>
-				<button type="button" class="tool tool-caret" id="groovesAnchor" onclick="myGrooveWriter.groovesAnchorClick(event);"><span class="tool-in">Grooves</span></button>
 				<span class="tool-sep"></span>
 				<button type="button" class="tool edit-block" id="showHideTomsButton" onclick="event.preventDefault(); myGrooveWriter.showHideToms(false, false);"><span class="tool-in">Toms</span></button>
 				<button type="button" class="tool tool-caret grooveDB_hidden" id="stickingsButton" onclick="myGrooveWriter.stickingsAnchorClick();"><span class="tool-in">Stickings</span></button>
@@ -477,7 +478,7 @@
 				<li onclick='myGrooveWriter.MIDISaveAs();'><b>Download MIDI file</b></li>
 			</ul>
 		</div>
-		<!-- The grooves menu is built by js/main.js (was document.write). -->
+		<!-- The groove list. js/main.js fills it and moves it into the Grooves tab of the side panel. -->
 		<div id="grooveListWrapper"></div>
 
 		<!-- dialog for the TIME label, hidden by default -->

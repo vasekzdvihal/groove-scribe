@@ -1,13 +1,15 @@
 import { test, expect } from './fixtures.js';
 import { loadGroove } from './helpers.js';
 
-// The editor asks before a groove from the Grooves menu replaces unsaved edits. The library
+// The editor asks before a groove from the Grooves tab replaces unsaved edits. The library
 // panel is never opened here, so the question must work without it.
 
 const discardDialog = (page) => page.getByRole('dialog', { name: 'Discard your changes?' });
 
+// A docked panel stays open after a pick, so open the Grooves tab only when it is not shown.
 async function pickBuiltIn(page, name) {
-  await page.click('#groovesAnchor');
+  const tab = page.locator('#groovesTab');
+  if ((await tab.getAttribute('aria-pressed')) !== 'true') await tab.click();
   await page.locator('#grooveListWrapper .grooveListLI', { hasText: name }).first().click();
 }
 
@@ -137,12 +139,12 @@ test('the leave warning is listening only while the groove has edits', async ({ 
   await expect.poll(listeners).toBe(0);
 });
 
-test('after Escape focus goes back to the Grooves button, and a tap leaves no focus ring', async ({
+test('after Escape focus goes back to the Grooves tab, and a tap leaves no focus ring', async ({
   page,
 }) => {
   await loadGroove(page, '/index.html');
   await page.click('#snare4');
-  const grooves = page.locator('#groovesAnchor');
+  const grooves = page.locator('#groovesTab');
   const dialog = discardDialog(page);
   await pickBuiltIn(page, 'Train Beat');
   await page.keyboard.press('Escape');
@@ -157,4 +159,57 @@ test('after Escape focus goes back to the Grooves button, and a tap leaves no fo
     expect(await grooves.evaluate((node) => node.matches(':focus-visible')), name).toBe(false);
     await expect(grooves).not.toBeFocused();
   }
+});
+
+test('the Grooves tab lists the grooves and a pick loads one', async ({ page }) => {
+  await loadGroove(page, '/index.html');
+  const tab = page.locator('#groovesTab');
+  await tab.click();
+  await expect(page.locator('#sidePanelTitle')).toHaveText('Grooves');
+  await expect(page.locator('#groovesPanel #grooveListWrapper .grooveListLI')).not.toHaveCount(0);
+
+  await pickBuiltIn(page, 'Train Beat');
+  await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+  // Docked, the panel stays open, and focus is not in it, so space plays.
+  await expect(tab).toHaveAttribute('aria-pressed', 'true');
+  expect(
+    await page.evaluate(() => document.getElementById('sidePanel').contains(document.activeElement))
+  ).toBe(false);
+});
+
+test.describe('the Grooves tab on a narrow screen', () => {
+  test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
+
+  test('a pick closes the panel, and focus goes to the tab', async ({ page }) => {
+    await loadGroove(page, '/index.html');
+    const tab = page.locator('#groovesTab');
+    await tab.click();
+    await expect(page.locator('#sidePanelClose')).toBeFocused();
+    await page
+      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
+      .first()
+      .click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+    await expect(page.locator('#sidePanel')).toBeHidden();
+    await expect(tab).toHaveAttribute('aria-pressed', 'false');
+    await expect(tab).toBeFocused();
+  });
+});
+
+test('a pick with unsaved edits asks first', async ({ page }) => {
+  await loadGroove(page, '/index.html');
+  await page.click('#snare4');
+  const edited = page.url();
+  const dialog = discardDialog(page);
+
+  await pickBuiltIn(page, 'Train Beat');
+  await dialog.getByRole('button', { name: 'Keep editing' }).click();
+  await expect(dialog).toBeHidden();
+  expect(page.url()).toBe(edited);
+  await expect(page.locator('#groovesTab')).toHaveAttribute('aria-pressed', 'true');
+
+  await pickBuiltIn(page, 'Train Beat');
+  await dialog.getByRole('button', { name: 'Discard changes' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
 });

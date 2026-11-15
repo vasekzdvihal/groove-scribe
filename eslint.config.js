@@ -116,6 +116,7 @@ export default [
       'js/registerServiceWorker.js',
       'js/main.js',
       'js/confirmDialog.js',
+      'js/sidePanel.js',
       'js/backToEditor.js',
       'js/cloud/**/*.js',
     ],

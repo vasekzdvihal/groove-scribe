@@ -810,21 +810,6 @@ function GrooveWriter() {
     }
   };
 
-  // the user has clicked on the grooves menu
-  root.groovesAnchorClick = function (event) {
-    var contextMenu = document.getElementById('grooveListWrapper');
-    if (contextMenu) {
-      var anchorPoint = document.getElementById('groovesAnchor');
-
-      if (anchorPoint) {
-        var anchorPos = getTagPosition(anchorPoint);
-        contextMenu.style.top = anchorPos.y + anchorPoint.offsetHeight + 'px';
-        contextMenu.style.left = anchorPos.x + 'px';
-      }
-      root.myGrooveUtils.showContextMenu(contextMenu);
-    }
-  };
-
   // the user has clicked on the help menu
   root.helpAnchorClick = function (event) {
     var contextMenu = document.getElementById('helpContextMenu');

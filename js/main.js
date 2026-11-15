@@ -12,6 +12,7 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
 import { initLibraryPanel } from './cloud/libraryPanel.js';
+import { createSidePanel } from './sidePanel.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
 import { askToClearNotes, askToDiscard } from './confirmDialog.js';
 import { createWakeLock } from './wakeLock.js';
@@ -122,6 +123,13 @@ myGrooveWriter.renderNoteGrid();
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
 
+// The tabs in the top bar open one panel on the left. Make it before the library starts.
+const sidePanel = createSidePanel({
+  tabs: [{ id: 'grooves', label: 'Grooves', title: 'Grooves', icon: 'fa fa-list' }],
+});
+const grooveList = document.getElementById('grooveListWrapper');
+if (grooveList) sidePanel.section('grooves').append(grooveList);
+
 const editor = {
   openGroove(query, name) {
     utils.stopMIDI_playback();
@@ -147,7 +155,7 @@ const editor = {
   onDirtyChange: (listener) => dirtyWatch.onDirtyChange(listener),
 };
 
-// The groove that was last loaded or saved. The Grooves menu and the library panel ask before
+// The groove that was last loaded or saved. The Grooves tab and the library panel ask before
 // they replace edits.
 const dirtyState = createDirtyState();
 // After a reload the address holds the edits, so the tab's own clean groove is the start. Read
@@ -163,19 +171,18 @@ myGrooveWriter.onUrlChange = () => {
   dirtyWatch.changed();
 };
 
-// A groove from the Grooves menu replaces the one in the editor, so it asks first too.
-document.getElementById('grooveListWrapper')?.addEventListener('click', async (event) => {
+// A groove from the Grooves tab replaces the one in the editor, so it asks first too.
+grooveList?.addEventListener('click', async (event) => {
   const item = event.target instanceof Element && event.target.closest('.grooveListLI');
   if (!item) return;
-  // Close the menu now, so it does not stay open behind the question.
-  if (utils.visible_context_menu) utils.hideContextMenu(utils.visible_context_menu);
   if (
     dirtyState.isDirty(editor.currentQuery()) &&
-    !(await askToDiscard(document.getElementById('groovesAnchor')))
+    !(await askToDiscard(document.getElementById('groovesTab')))
   )
     return;
   myGrooveWriter.loadNewGroove(item.getAttribute('data-groove'));
   dirtyState.markClean(editor.currentQuery());
+  sidePanel.afterPick();
 });
 
 // Clear all notes asks first, so a wrong tap in the More menu does not lose the groove.
@@ -196,6 +203,9 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
     initSaveButton,
   });
 }
+
+// The tabs have registered. Open the panel as the user left it.
+sidePanel.start({ defaultOpen: false, defaultTab: 'grooves' });
 
 // Read the location now: the editor rewrites the URL on load, and that drops ?sw=1.
 if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(window.Capacitor))) {

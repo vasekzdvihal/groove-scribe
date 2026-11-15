@@ -882,7 +882,7 @@ test.describe('updating a saved groove', () => {
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
     await pickSaved(page, 'Paradiddle');
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()
@@ -998,11 +998,11 @@ test.describe('updating a saved groove', () => {
     await expect(saveAsNewButton(page)).toHaveCount(0);
   });
 
-  test('a groove from the Grooves menu is not the saved groove', async ({ page }) => {
+  test('a groove from the Grooves tab is not the saved groove', async ({ page }) => {
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
     await pickSaved(page, 'Paradiddle');
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()
@@ -1067,7 +1067,7 @@ test.describe('updating a saved groove', () => {
     await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
     // A later pick shows the new name.
     await page.getByRole('button', { name: 'Close library' }).click();
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()
@@ -1204,7 +1204,7 @@ test.describe('the Save button', () => {
     await expect(saveButton(page)).toHaveText('Saved');
 
     // A built-in groove is not the saved groove.
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()

@@ -1324,7 +1324,11 @@ export function initLibraryPanel({
     ariaLabel: 'Open library',
   });
   const toggleContent = element('span', { className: 'tool-in' });
-  toggleContent.append(element('i', { className: 'fa fa-bars' }), 'Library');
+  // The label hides on a phone, like the labels of the side panel tabs (css/side-panel.css).
+  toggleContent.append(
+    element('i', { className: 'fa fa-bars' }),
+    element('span', { className: 'panel-tab-label', textContent: 'Library' })
+  );
   toggle.append(toggleContent);
   toggle.setAttribute('aria-expanded', 'false');
   toggle.setAttribute('aria-controls', 'libraryPanel');

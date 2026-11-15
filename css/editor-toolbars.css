@@ -1136,38 +1136,61 @@
 }
 
 /* The older menus match the popovers, with larger touch targets. */
-.noteContextMenu > ul.list,
-#grooveListWrapper {
+.noteContextMenu > ul.list {
   z-index: 1000;
+  padding: 6px 0;
   background: #fff;
   border: 0;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-.noteContextMenu > ul.list {
-  padding: 6px 0;
-}
-
-.noteContextMenu > ul.list li,
-.grooveListLI {
+.noteContextMenu > ul.list li {
   min-height: 24px;
   padding: 10px 14px;
   border-bottom: 0;
   cursor: pointer;
 }
 
-.noteContextMenu > ul.list li:hover,
-.grooveListLI:hover {
+.noteContextMenu > ul.list li:hover {
   background: #e7ecef;
 }
 
-.grooveListUL {
-  background: #fff;
+/* The groove list fills the Grooves tab of the side panel. The section scrolls, not the list. */
+#grooveListWrapper {
+  position: static;
+  display: block;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  background: none;
+  border: 0;
 }
 
-#grooveListWrapper {
-  height: min(440px, 60vh);
+.grooveListUL {
+  padding-bottom: 8px;
+  color: var(--lp-text);
+  background: none;
+}
+
+.grooveListHeaderLI {
+  padding: 16px 16px 4px;
+  color: var(--lp-muted);
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.grooveListLI {
+  min-height: 24px;
+  padding: 10px 16px;
+  border-bottom: 0;
+  cursor: pointer;
+}
+
+.grooveListLI:hover {
+  color: var(--lp-text);
+  background: var(--lp-surface);
 }
 
 #undoButton {

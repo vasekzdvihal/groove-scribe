@@ -86,9 +86,6 @@ function buildMenuFixtures() {
     <ul id="permutationContextMenu" class="list"></ul>
     <div id="PermutationOptions"></div>
 
-    <span id="groovesAnchor"></span>
-    <div id="grooveListWrapper"></div>
-
     <span id="helpAnchor"></span>
     <ul id="helpContextMenu" class="list"></ul>
 
@@ -167,12 +164,6 @@ describe('anchor openers', () => {
     const menu = document.getElementById('permutationContextMenu');
     gw.permutationAnchorClick({});
     expect(menu.style.display).toBe(''); // never shown
-  });
-
-  it('groovesAnchorClick shows the grooves list', () => {
-    const menu = document.getElementById('grooveListWrapper');
-    gw.groovesAnchorClick({});
-    expect(menu.style.display).toBe('block');
   });
 
   it('helpAnchorClick shows the help context menu', () => {

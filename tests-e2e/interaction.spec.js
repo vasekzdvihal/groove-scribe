@@ -691,7 +691,7 @@ test.describe('change time signature', () => {
 test.describe('editor state regressions', () => {
   test('toms hide when the next loaded groove has none', async ({ page }) => {
     await open(page, `${START}&T1=|o---------------|&T4=|---o------------|`);
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page.locator('.grooveListLI').first().click();
     // The first built-in groove is the empty 16th note groove. It has no toms.
     await expectQuery(page, START);
@@ -699,7 +699,7 @@ test.describe('editor state regressions', () => {
 
   test('stickings hide when the next loaded groove has none', async ({ page }) => {
     await open(page, `${START}&Stickings=|R---------------|`);
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page.locator('.grooveListLI').first().click();
     await expectQuery(page, START);
   });
@@ -756,7 +756,7 @@ test.describe('editor state regressions', () => {
   test('loading another groove clears an active permutation', async ({ page }) => {
     await open(page);
     await choosePermutation(page, 'Kick');
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page.locator('.grooveListLI').first().click();
     await expectNoPermutation(page);
   });

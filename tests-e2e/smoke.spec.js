@@ -46,7 +46,7 @@ test.describe('core UI', () => {
     // Editing grid present.
     await expect(page.locator('#hi-hat0')).toBeAttached();
     // Key controls present.
-    for (const id of ['#groovesAnchor', '#helpAnchor', '#metronomeOff', '#timeSigLabel']) {
+    for (const id of ['#groovesTab', '#helpAnchor', '#metronomeOff', '#timeSigLabel']) {
       await expect(page.locator(id)).toBeAttached();
     }
   });

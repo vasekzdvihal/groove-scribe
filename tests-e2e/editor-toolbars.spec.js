@@ -100,7 +100,6 @@ for (const [name, width, height] of [
       await openEditor(page);
       for (const [trigger, menu] of [
         ['#divisionMenuButton', '#divisionPopover'],
-        ['#groovesAnchor', '#grooveListWrapper'],
         ['#permutationAnchor', '#permutationContextMenu'],
         ['#stickingsButton', '#stickingsContextMenu'],
         ['#detailsButton', '#detailsPopover'],
@@ -123,6 +122,40 @@ for (const [name, width, height] of [
           await expect(page.locator(menu)).toBeHidden({ timeout: 200 });
         }).toPass();
       }
+    });
+
+    test('the Grooves tab opens the side panel on screen, and closes it again', async ({
+      page,
+    }) => {
+      await openEditor(page);
+      const tab = page.locator('#groovesTab');
+      const panel = page.locator('#sidePanel');
+      await tab.click();
+      await expect(tab).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.locator('#sidePanelTitle')).toHaveText('Grooves');
+      await expect(page.locator('#groovesPanel .grooveListLI').first()).toBeVisible();
+      // Measure when the slide-in has ended.
+      await expect(panel).toHaveCSS('transform', 'none');
+      const box = await panel.boundingBox();
+      expect(box.x).toBe(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(height);
+      if (width >= 1100) {
+        // Docked: the panel sits between the bars, and the music starts at its right edge.
+        const tools = await page.locator('#ToolBar').boundingBox();
+        const playback = await page.locator('#PlaybackBar').boundingBox();
+        const music = await page.locator('#RightHandContent').boundingBox();
+        expect(box.y).toBe(tools.y + tools.height);
+        expect(box.y + box.height).toBe(playback.y);
+        expect(music.x).toBe(box.x + box.width);
+        await tab.click();
+      } else {
+        // Overlay: the panel and its backdrop cover the tab, so the panel has its own button.
+        await page.click('#sidePanelClose');
+        await expect(tab).toBeFocused();
+      }
+      await expect(panel).toBeHidden();
+      await expect(tab).toHaveAttribute('aria-pressed', 'false');
     });
   });
 }
@@ -201,7 +234,7 @@ test('view mode hides the edit tools and edit mode shows them again', async ({ p
   await page.click('#view-edit-switch');
   for (const id of edit) await expect(page.locator(id)).toBeHidden();
   await expect(page.locator('#musicalInput')).toBeHidden();
-  await expect(page.locator('#groovesAnchor')).toBeVisible();
+  await expect(page.locator('#groovesTab')).toBeVisible();
   await expect(page.locator('#view-edit-switch')).toHaveText('Edit mode');
 
   await page.click('#view-edit-switch');
