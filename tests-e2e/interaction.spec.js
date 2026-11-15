@@ -824,17 +824,56 @@ test.describe('editor state regressions', () => {
     await expectQuery(page, next);
   });
 
-  test('toms 2 and 3 are dropped when the bar layout changes', async ({ page }) => {
+  test('tom 3 is dropped when the bar layout changes, and the Mid tom stays', async ({ page }) => {
     const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
     const withToms =
-      START + `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('-', 0)}`;
+      START + `&T1=${lane('o', 0)}&T2=${lane('o', 2)}&T3=${lane('o', 4)}&T4=${lane('-', 0)}`;
     await open(page, withToms);
     await expectQuery(page, withToms);
     await chooseDivision(page, 'subdivision_8ths');
-    await expect.poll(() => query(page)).not.toContain('T2=');
+    await expect.poll(() => query(page)).toContain('&T2=|-o------|');
     await expect.poll(() => query(page)).not.toContain('T3=');
     await page.click('#undoButton');
     await expectQuery(page, withToms);
+  });
+
+  test('the Mid tom row sits between the High tom and the Snare', async ({ page }) => {
+    const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
+    await open(page, START + `&T2=${lane('o', 2)}`);
+    await expect(page.locator('#tom2-2')).toHaveAttribute('data-on', '');
+    const labels = [
+      '.hh-label',
+      '#tom1-label',
+      '#tom2-label',
+      '.snare-label',
+      '#tom4-label',
+      '.kick-label',
+    ];
+    for (const size of [
+      { width: 1024, height: 768 },
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(size);
+      const rows = [];
+      for (const sel of labels) {
+        const label = page.locator(`#staff-container1 ${sel}`);
+        rows.push({ text: (await label.textContent()).trim(), y: (await label.boundingBox()).y });
+      }
+      expect(rows.map((r) => r.text)).toEqual([
+        'Hi-hat',
+        'High tom',
+        'Mid tom',
+        'Snare',
+        'Floor tom',
+        'Kick',
+      ]);
+      const ys = rows.map((r) => r.y);
+      expect(ys).toEqual([...ys].sort((a, b) => a - b));
+      const cell = await page.locator('#tom2-2').boundingBox();
+      expect(cell.width).toBeGreaterThanOrEqual(44);
+      expect(cell.height).toBeGreaterThanOrEqual(44);
+    }
   });
 
   test('Clear all notes removes toms 2 and 3, and undo brings them back', async ({ page }) => {
@@ -924,6 +963,16 @@ test.describe('toms 2 and 3 play and show', () => {
     const played = await midiFromPlayButton(page);
     expect(midiNotesFromDataUrl(played)).toEqual(midiNotesFromDataUrl(golden));
     expect(played).toBe(golden);
+  });
+
+  test('a muted Mid tom does not play, and the High tom still does', async ({ page }) => {
+    await open(page, START + `&T1=${lane('o', 0)}&T2=${lane('o', 1)}`);
+    await page.click('#staff-container1 #tom2-label');
+    await page.click('#mute_tom2_menu_item');
+    await expect(page.locator('#unmutetom2Button1')).toBeVisible();
+    const notes = notesOf(await midiFromPlayButton(page));
+    expect(notes).toContain(T1);
+    expect(notes).not.toContain(T2);
   });
 
   test('the saved MIDI file holds notes for all four toms', async ({ page }) => {

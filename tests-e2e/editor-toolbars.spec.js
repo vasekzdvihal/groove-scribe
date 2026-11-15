@@ -366,8 +366,8 @@ for (const [name, width, height] of [
       }) => {
         await openEditor(page, query);
         const cells = await measureCells(page);
-        // hi-hat, two toms, snare and kick in every column
-        expect(cells).toHaveLength(query.includes('T1=') ? 16 * 5 : 8 * 2 * 3);
+        // hi-hat, High, Mid and Floor tom, snare and kick in every column
+        expect(cells).toHaveLength(query.includes('T1=') ? 16 * 6 : 8 * 2 * 3);
         expect(small(cells, (c) => c.width < 44 || c.height < 44)).toEqual([]);
         expect(missed(cells)).toEqual([]);
         expect(await horizontalOverflow(page)).toEqual({ page: 0, grid: 0 });
