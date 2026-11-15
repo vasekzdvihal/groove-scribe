@@ -1,60 +1,11 @@
-/* The library panel in the editor. On a wide screen it stays next to the music.
-   On a narrow screen it slides over the editor. */
-:root {
-  --library-width: 300px;
-}
+/* The library: the Library tab of the side panel (css/side-panel.css). The side panel owns the
+   position, the dock, the colours and the transition. */
 
-#libraryPanel {
-  --lp-bg: #22262a;
-  --lp-surface: #2d3237;
-  --lp-text: #eceef0;
-  --lp-muted: #a7b0b6;
-  --lp-border: #4a5157;
-  --lp-accent: #63b1e6;
-  --lp-accent-text: #0d1a23;
-  --lp-current: #1b6fa8;
-  --lp-danger: #f08a8a;
-
-  position: fixed;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 2001;
+/* The section fills the panel. The body scrolls inside it, below the sticky tool buttons. */
+#libraryPanel:not([hidden]) {
   display: flex;
   flex-direction: column;
-  width: min(380px, 90vw);
-  color: var(--lp-text);
-  background: var(--lp-bg);
-  font-family: Lato, system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.4;
-  text-align: left;
-  visibility: hidden;
-  transform: translateX(-100%);
-  transition:
-    transform 0.18s ease-out,
-    visibility 0s 0.18s;
-}
-
-#libraryPanel.open {
-  transition:
-    transform 0.18s ease-out,
-    visibility 0s;
-  box-shadow: 6px 0 24px rgb(0 0 0 / 45%);
-  visibility: visible;
-  transform: none;
-}
-
-#libraryBackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: none;
-  background: rgb(0 0 0 / 40%);
-}
-
-#libraryBackdrop.open {
-  display: block;
+  overflow: hidden;
 }
 
 #libraryPanel *,
@@ -86,12 +37,6 @@
   width: 100%;
 }
 
-#libraryPanel :focus-visible,
-#libraryToggle:focus-visible {
-  outline: 2px solid var(--lp-accent);
-  outline-offset: 1px;
-}
-
 #libraryPanel .lp-primary {
   color: var(--lp-accent-text);
   background: var(--lp-accent);
@@ -100,29 +45,6 @@
 
 #libraryPanel .lp-danger {
   color: var(--lp-danger);
-}
-
-.lp-head {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 8px 8px 8px 16px;
-  border-bottom: 1px solid var(--lp-border);
-}
-
-.lp-head h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-#libraryPanel #lpClose {
-  width: 44px;
-  padding: 0;
-  background: none;
-  border-color: transparent;
 }
 
 .lp-body {
@@ -367,54 +289,4 @@
 .lp-save-buttons {
   display: grid;
   gap: 8px;
-}
-
-#libraryToggle[aria-expanded='true'] {
-  background: var(--bar-selected);
-}
-
-/* Keep the same width as DOCKED_QUERY in js/cloud/libraryPanel.js. */
-@media (min-width: 1100px) {
-  #libraryPanel {
-    top: calc(var(--bar-top-height) + var(--bar-tools-height));
-    bottom: var(--bar-playback-height);
-    z-index: 997;
-    width: var(--library-width);
-    transition: none;
-  }
-
-  #libraryPanel.open {
-    transition: none;
-    box-shadow: none;
-  }
-
-  #libraryBackdrop.open {
-    display: none;
-  }
-
-  body.library-open #RightHandContent {
-    left: var(--library-width);
-  }
-}
-
-/* The editor page has no viewport tag, so a phone lays it out about 980 px wide. */
-@media (pointer: coarse) and (max-device-width: 600px) {
-  #libraryPanel {
-    width: 36vw;
-    zoom: 2.4;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  #libraryPanel {
-    transition: none;
-  }
-}
-
-@media print {
-  #libraryPanel,
-  #libraryBackdrop,
-  #libraryToggle {
-    display: none !important;
-  }
 }

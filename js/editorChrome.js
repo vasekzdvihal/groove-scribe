@@ -56,9 +56,7 @@ export function initPopovers() {
   // Space plays the groove. A tapped button must not keep focus, or space would press it again.
   document.addEventListener('mousedown', (event) => {
     if (
-      event.target.closest(
-        '#libraryToggle, #ToolBar button, #PlaybackBar button, .tool-popover button'
-      )
+      event.target.closest('.panel-tab, #ToolBar button, #PlaybackBar button, .tool-popover button')
     ) {
       event.preventDefault();
     }

@@ -1,12 +1,10 @@
-// The library panel in the editor: Google sign-in, lessons, and saved grooves.
-//
-// On a wide screen the panel stays next to the music until the user hides it. On a narrow
-// screen it slides over the editor, and picking a groove closes it.
+// The library in the editor: Google sign-in, lessons, and saved grooves. It is the Library tab
+// of the side panel (js/sidePanel.js), which owns the open state, the dock and the tab button.
 //
 // This module is small and loads with the editor. The page runs the Firebase SDK only when the
-// panel opens. It opens by itself only for people who were signed in on this device or who left
-// it open, so a shared link does not load the SDK into the page. The service worker still
-// precaches the SDK file for offline use.
+// Library tab shows. The panel opens by itself on that tab only for people who were signed in on
+// this device or who left it open, so a shared link does not load the SDK into the page. The
+// service worker still precaches the SDK file for offline use.
 import { connectCloud, resolveCloudConfig } from './firebaseClient.js';
 import { askToDiscard, isAskingToDiscard } from '../confirmDialog.js';
 import { createCurrentGroove, readRecord } from './currentGroove.js';
@@ -28,9 +26,6 @@ const LINK_ERRORS = {
 };
 const LAST_LESSON_KEY = 'grooveScribe.lastLesson';
 const USER_KEY = 'grooveScribe.user';
-const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
-// Keep the same width in css/library-panel.css.
-const DOCKED_QUERY = '(min-width: 1100px)';
 const UNFILED = 'unfiled';
 const NOT_ON_DEVICE = 'Offline. This library is not on this device yet.';
 const LOADING_TEXT = 'Loading…';
@@ -51,10 +46,6 @@ const START_WAIT_MS = 15_000;
 const POINTER_WAIT_MAX_MS = 1000;
 
 const PANEL_HTML = `
-  <header class="lp-head">
-    <h2 id="lpTitle">My library</h2>
-    <button id="lpClose" type="button" aria-label="Close library">✕</button>
-  </header>
   <div class="lp-body">
     <p id="lpMessage" role="alert" hidden></p>
     <button id="lpRetry" class="lp-primary" type="button" hidden>Retry</button>
@@ -286,8 +277,9 @@ function showRetry(action) {
 // One submit at a time: a double tap on a slow tablet must not save twice. The buttons are off
 // until the handler returns. A change returns when it is drawn, also when its write waits
 // offline, so they do not stay off until the server answers. A disabled button loses focus, so
-// the pressed button gets it back, unless the user has moved on.
-function submitOnce(form, handler) {
+// the pressed button gets it back, unless the user has moved on. isDocked tells whether the
+// side panel is docked.
+function submitOnce(form, isDocked, handler) {
   let running = false;
   form.onsubmit = async (event) => {
     event.preventDefault();
@@ -308,7 +300,7 @@ function submitOnce(form, handler) {
       // panel leaves focus on the page instead, as after a pick, so Space plays the groove.
       const closed = toolWasOpen && tool.hidden;
       const target = closed ? toolButton(tool.id) : pressed;
-      const keepPageFocus = closed && window.matchMedia(DOCKED_QUERY).matches;
+      const keepPageFocus = closed && isDocked();
       if (target?.isConnected && focusLost && !keepPageFocus) target.focus();
     }
   };
@@ -357,21 +349,13 @@ function nameGrooveOfLastVisit(uid, search, editor) {
   }
 }
 
-function readKeepOpen() {
-  try {
-    const saved = localStorage.getItem(KEEP_OPEN_KEY);
-    return saved === null ? Boolean(readRememberedUser()) : saved === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function writeKeepOpen(keepOpen) {
-  try {
-    localStorage.setItem(KEEP_OPEN_KEY, String(keepOpen));
-  } catch {
-    /* the choice lasts until the page closes */
-  }
+/**
+ * A user was signed in on this device at the last visit. The docked side panel then opens by
+ * itself on the Library tab, unless the user closed it.
+ * @returns {boolean}
+ */
+export function hasRememberedUser() {
+  return Boolean(readRememberedUser());
 }
 
 function avatarContent(user) {
@@ -426,6 +410,7 @@ function startLibrary({
   dirtyState,
   afterPick,
   showGrooveSaved,
+  isDocked,
 }) {
   let lessons = [];
   let grooves = [];
@@ -1039,7 +1024,7 @@ function startLibrary({
   // in the same task, so the user cannot have typed yet.
   byId('lpSaveTool').addEventListener(TOOL_OPENED, prefillSaveForm);
 
-  submitOnce(byId('lpLessonForm'), async () => {
+  submitOnce(byId('lpLessonForm'), isDocked, async () => {
     const name = byId('lpLessonName').value.trim();
     if (!name) return;
     const created = await act(() => {
@@ -1063,7 +1048,7 @@ function startLibrary({
     if (parsed.ok && !byId('lpLinkTitle').value) byId('lpLinkTitle').value = parsed.title;
   };
 
-  submitOnce(byId('lpLinkForm'), async () => {
+  submitOnce(byId('lpLinkForm'), isDocked, async () => {
     const parsed = parseGrooveLink(byId('lpLinkUrl').value);
     if (!parsed.ok) {
       showMessage(LINK_ERRORS[parsed.reason]);
@@ -1126,7 +1111,7 @@ function startLibrary({
     if (saved.ok) afterSave(written, query);
   }
 
-  submitOnce(byId('lpSaveForm'), async (event) => {
+  submitOnce(byId('lpSaveForm'), isDocked, async (event) => {
     const pressed = event.submitter;
     if (!(await pageStarted()) || !isActive()) return;
     const parsed = parseGrooveLink(editor.currentQuery());
@@ -1189,7 +1174,7 @@ function whenIdle(task) {
 }
 
 // Connect to Firebase, and return the sign-out action. The hooks tell the page about the
-// library: afterPick, libraryShown, signedOut, and showGrooveSaved (see startLibrary).
+// library: afterPick, libraryShown, signedOut, showGrooveSaved and isDocked (see startLibrary).
 async function startCloud(search, editor, dirtyState, hooks) {
   const resolved = resolveCloudConfig({ hostname: location.hostname, search });
   if (!resolved) {
@@ -1251,6 +1236,7 @@ async function startCloud(search, editor, dirtyState, hooks) {
       dirtyState,
       afterPick: hooks.afterPick,
       showGrooveSaved: hooks.showGrooveSaved,
+      isDocked: hooks.isDocked,
     });
 
     currentSession = session;
@@ -1294,12 +1280,12 @@ async function startCloud(search, editor, dirtyState, hooks) {
 }
 
 /**
- * Add the Library button and the panel to the editor.
+ * Put the library into the Library tab of the side panel.
  *
  * @param {object} options
  * @param {string} options.search  The URL query at page start, before the editor rewrites it.
- * @param {Promise<void>} [options.whenReady]  Settles when Play is ready. A panel that opens
- *        by itself waits for it before it starts Firebase.
+ * @param {Promise<void>} [options.whenReady]  Settles when Play is ready. A Library tab that
+ *        shows by itself waits for it before it starts Firebase.
  * @param {{openGroove: function(string, string): void, currentQuery: function(): string,
  *          currentTitle: function(): string, rename: function(string): void,
  *          setNameWhenUntitled: function(string): void,
@@ -1309,6 +1295,8 @@ async function startCloud(search, editor, dirtyState, hooks) {
  * @param {function(function(): void): function(boolean): void} options.initSaveButton  Shows
  *        the Save button of the editor with a click action, and returns the call that shows
  *        whether the groove is saved.
+ * @param {ReturnType<typeof import('../sidePanel.js').createSidePanel>} options.sidePanel  The
+ *        side panel, with a Library tab. The caller starts it after this call.
  */
 export function initLibraryPanel({
   search,
@@ -1316,58 +1304,12 @@ export function initLibraryPanel({
   dirtyState,
   initSaveButton,
   whenReady = Promise.resolve(),
+  sidePanel,
 }) {
-  const toggle = element('button', {
-    id: 'libraryToggle',
-    type: 'button',
-    className: 'tool tool-filled',
-    ariaLabel: 'Open library',
-  });
-  const toggleContent = element('span', { className: 'tool-in' });
-  // The label hides on a phone, like the labels of the side panel tabs (css/side-panel.css).
-  toggleContent.append(
-    element('i', { className: 'fa fa-bars' }),
-    element('span', { className: 'panel-tab-label', textContent: 'Library' })
-  );
-  toggle.append(toggleContent);
-  toggle.setAttribute('aria-expanded', 'false');
-  toggle.setAttribute('aria-controls', 'libraryPanel');
-  byId('upperLeft').prepend(toggle);
+  sidePanel.section('library').innerHTML = PANEL_HTML;
 
-  const backdrop = element('div', { id: 'libraryBackdrop' });
-  const panel = element('aside', { id: 'libraryPanel', innerHTML: PANEL_HTML, inert: true });
-  panel.setAttribute('aria-labelledby', 'lpTitle');
-  document.body.append(backdrop, panel);
-
-  const docked = window.matchMedia(DOCKED_QUERY);
-  let keepOpen = readKeepOpen();
+  const isShown = () => sidePanel.activeTab() === 'library';
   let started = null;
-
-  function setOpen(isOpen) {
-    panel.classList.toggle('open', isOpen);
-    backdrop.classList.toggle('open', isOpen);
-    document.body.classList.toggle('library-open', isOpen);
-    panel.inert = !isOpen;
-    toggle.setAttribute('aria-expanded', String(isOpen));
-    toggle.setAttribute('aria-label', isOpen ? 'Hide library' : 'Open library');
-    // A docked panel changes the width of the music, and the music draws to that width.
-    window.dispatchEvent(new Event('resize'));
-  }
-
-  function rememberDockedChoice(isOpen) {
-    if (!docked.matches) return;
-    keepOpen = isOpen;
-    writeKeepOpen(isOpen);
-  }
-
-  function closePanel() {
-    // A docked panel is not a dialog. Focus stays on the page, so space still plays.
-    const moveFocus = !docked.matches || panel.contains(document.activeElement);
-    wantsSaveForm = false;
-    rememberDockedChoice(false);
-    setOpen(false);
-    if (moveFocus) toggle.focus();
-  }
 
   // The Save button asks for the save form. The library shows it when the user is signed in.
   let wantsSaveForm = false;
@@ -1376,44 +1318,31 @@ export function initLibraryPanel({
   let grooveSaved = false;
 
   function showSaveForm() {
-    if (!wantsSaveForm || byId('lpLibrary').hidden) return;
+    // A form that the user cannot see would surprise them when the tab shows again.
+    if (!wantsSaveForm || !isShown() || byId('lpLibrary').hidden) return;
     wantsSaveForm = false;
     // The form fills itself when it opens.
     showTool('lpSaveTool');
     // A docked panel is not a dialog: focus stays on the page, so space still plays.
-    if (!docked.matches) toolButton('lpSaveTool').focus();
+    if (!sidePanel.isDocked()) toolButton('lpSaveTool').focus();
     byId('lpSaveTool').scrollIntoView({ block: 'nearest' });
   }
 
   // Signed out, the Save button leads to the sign-in. The form follows after the sign-in.
   function showSignIn() {
-    if (wantsSaveForm && panel.classList.contains('open')) byId('lpSignIn').focus();
+    if (wantsSaveForm && isShown()) byId('lpSignIn').focus();
   }
-
-  function openSaveForm() {
-    wantsSaveForm = true;
-    if (panel.classList.contains('open')) connect();
-    else openPanel();
-    showSaveForm();
-    if (!byId('lpSignedOut').hidden) showSignIn();
-  }
-
-  const showSaved = initSaveButton(openSaveForm);
-  const drawSaveButton = () => showSaved(grooveSaved && !editorDirty);
 
   function connect() {
     started ??= startCloud(search, editor, dirtyState, {
-      // A docked panel is not a dialog: after a pick, focus goes to the page, so space plays.
-      afterPick: () => {
-        if (!docked.matches) closePanel();
-        else if (panel.contains(document.activeElement)) document.activeElement.blur();
-      },
+      afterPick: () => sidePanel.afterPick(),
       libraryShown: showSaveForm,
       signedOut: showSignIn,
       showGrooveSaved: (isSaved) => {
         grooveSaved = isSaved;
         drawSaveButton();
       },
+      isDocked: () => sidePanel.isDocked(),
     }).catch((error) => {
       started = null;
       setLoading(false);
@@ -1424,19 +1353,41 @@ export function initLibraryPanel({
     return started;
   }
 
-  function openPanel() {
-    rememberDockedChoice(true);
-    setOpen(true);
-    if (!docked.matches) byId('lpClose').focus();
+  function openLibrary() {
+    sidePanel.show('library');
+    // The tab can show already, after a failed start.
     connect();
   }
 
-  // Turning a tablet changes the mode. A docked panel comes back when the tablet turns back.
-  function followScreenWidth() {
-    const isOpen = docked.matches && keepOpen;
-    setOpen(isOpen);
-    if (isOpen) connect();
+  function openSaveForm() {
+    // Showing the tab drops an older wish for the form, so ask for the form after it.
+    openLibrary();
+    wantsSaveForm = true;
+    showSaveForm();
+    if (!byId('lpSignedOut').hidden) showSignIn();
   }
+
+  const showSaved = initSaveButton(openSaveForm);
+  const drawSaveButton = () => showSaved(grooveSaved && !editorDirty);
+
+  sidePanel.onShow((id, { byUser }) => {
+    if (id !== 'library') return;
+    // The Save button asked for the form before the user closed the panel or left the tab.
+    wantsSaveForm = false;
+    if (byUser || started) {
+      connect();
+      return;
+    }
+    // The panel opened by itself. It has nothing to show until Firebase is there. Play comes
+    // first: connect when the sound is ready and the browser has nothing better to do.
+    setLoading(true);
+    whenReady.then(() =>
+      whenIdle(() => {
+        if (isShown()) connect();
+        else setLoading(false); // hidden while it waited: it connects when the tab shows
+      })
+    );
+  });
 
   async function signOut() {
     const cloud = await connect();
@@ -1450,13 +1401,8 @@ export function initLibraryPanel({
   const remembered = readRememberedUser();
   renderUserMenu(remembered);
   nameGrooveOfLastVisit(remembered?.uid, search, editor);
-  byId('userMenuSignIn').addEventListener('click', openPanel);
+  byId('userMenuSignIn').addEventListener('click', openLibrary);
   byId('userMenuSignOut').addEventListener('click', signOut);
-  toggle.addEventListener('click', () => {
-    if (panel.classList.contains('open')) closePanel();
-    else openPanel();
-  });
-  byId('lpClose').addEventListener('click', closePanel);
   // A press opens the form, or closes it when it is in view. An open form that the list has
   // scrolled away scrolls back into view.
   for (const id of TOOL_IDS) {
@@ -1468,20 +1414,14 @@ export function initLibraryPanel({
       }
     });
   }
-  backdrop.addEventListener('click', closePanel);
-  // The editor has document-wide hotkeys, such as space for play. Keep them out of the panel.
-  panel.addEventListener('keydown', (event) => event.stopPropagation());
-  // Listen on the document, because a click on the backdrop can leave focus outside the panel.
-  document.addEventListener(
+  // Escape in a tool form closes the form only. The side panel closes on Escape too, so this
+  // listener is on the window: it hears the key before the document does.
+  window.addEventListener(
     'keydown',
     (event) => {
-      // Escape in the dialog means Keep editing. It must not also close the panel.
+      // Escape in the dialog means Keep editing.
       if (isAskingToDiscard()) return;
-      // Escape in a tool form closes the form only.
-      if (event.key === 'Escape' && closeToolOf(event.target)) return;
-      if (event.key === 'Escape' && panel.classList.contains('open') && !docked.matches) {
-        closePanel();
-      }
+      if (event.key === 'Escape' && closeToolOf(event.target)) event.stopPropagation();
     },
     true
   );
@@ -1500,20 +1440,7 @@ export function initLibraryPanel({
     drawSaveButton();
   });
 
-  docked.addEventListener('change', followScreenWidth);
   // A write queued on an earlier visit goes out when the SDK loads, also with the panel closed.
   if (readPendingWritesFlag()) whenReady.then(() => whenIdle(connect));
-  if (location.hash === '#library') openPanel();
-  else if (docked.matches && keepOpen) {
-    // The panel opens at once, but it has nothing to show until Firebase is there. Play comes
-    // first: connect when the sound is ready and the browser has nothing better to do.
-    setOpen(true);
-    setLoading(true);
-    whenReady.then(() =>
-      whenIdle(() => {
-        if (panel.classList.contains('open')) connect();
-        else setLoading(false); // hidden while it waited: it connects on the next open
-      })
-    );
-  }
+  if (location.hash === '#library') openLibrary();
 }
