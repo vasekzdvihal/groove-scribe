@@ -8,8 +8,8 @@
 import { isAskingToDiscard } from './confirmDialog.js';
 
 // The docked panel is open. The key is older than the side panel: the library panel used it.
-// The side panel uses it only when it has a Library tab. Without one, the key belongs to the
-// library panel, and the docked choice lasts until the page closes.
+// The side panel uses it only when it has a Library tab. Without one, the key is not used, and
+// the docked choice lasts until the page closes.
 const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
 // The tab the panel showed last.
 const TAB_KEY = 'grooveScribe.panelTab';

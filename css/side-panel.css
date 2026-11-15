@@ -314,6 +314,9 @@
      - with all labels: 1129 px, so the labels show from 1129 + 300 = 1429 px wide (1430 up);
      - icons only for Undo, Redo, Save and Share: 931 px, so 1231 px wide and up;
      - icons only and closer tools: 756 px, which fits the narrowest docked bar (800 px).
+     Linux check: tests-e2e/editor-toolbars.spec.js passes in the Playwright Linux image (all 112
+     tests, including both limits and the widths on each side of them). Fonts are bundled, so
+     the widths match.
      Measure again when a tool is added to the bar. */
   @media (max-width: 1429px) {
     body.side-panel-open .tool-label {

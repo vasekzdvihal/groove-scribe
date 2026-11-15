@@ -30,7 +30,9 @@ Read this before you change anything in `js/cloud/`. For the offline side, see
   the docked or overlay switch, and the memory of the docked panel (`grooveScribe.libraryOpen`).
 - `main.js` passes `libraryPanel.js` a small `editor` object, so the library never touches editor
   internals. `profile.html` only redirects to `index.html#library`.
-- The library connects the first time its tab is shown.
+- The library connects the first time its tab is shown. A panel that opens by itself waits for
+  Play to be ready and an idle moment before it connects. Queued offline writes connect while
+  the panel is closed.
 - The three tools (Save, Add link, New lesson) are buttons in a sticky row at the top. Each opens
   one form (`showTool`).
 - Lessons sort in natural order ("Week 2" before "Week 10"). Lessons and grooves have a ⋯ menu;
