@@ -31,3 +31,6 @@ tests/**/__snapshots__/
 # formatting changes can't be verified as behavior-preserving), and several
 # files contain pre-existing markup errors Prettier cannot parse.
 *.html
+
+# Local agent scratch (git-ignored)
+.superpowers/

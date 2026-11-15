@@ -128,6 +128,25 @@ describe('HTMLforStaffContainer', () => {
       expect(html).toContain('>Kick</div>');
     });
 
+    it('has a Mid tom row between the High tom and the Snare, and names the three tom rows', async () => {
+      document.body.innerHTML = '';
+      gw = await newGrooveWriter();
+      const html = gw.HTMLforStaffContainer(1, 0);
+
+      expect(html).toContain('id="tom2-container"');
+      expect(html).toContain('id="tom2-label"');
+      const at = (s) => html.indexOf(s);
+      expect(at('id="tom1-container"')).toBeLessThan(at('id="tom2-container"'));
+      expect(at('id="tom2-container"')).toBeLessThan(at('class="snare-container"'));
+      expect(at('id="tom1-label"')).toBeLessThan(at('id="tom2-label"'));
+      expect(at('id="tom2-label"')).toBeLessThan(at('>Snare</div>'));
+
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      expect(doc.getElementById('tom1-label').textContent).toBe('High tom');
+      expect(doc.getElementById('tom2-label').textContent).toBe('Mid tom');
+      expect(doc.getElementById('tom4-label').textContent).toBe('Floor tom');
+    });
+
     it('emits exactly notesPerMeasure() note cells for every instrument row', async () => {
       document.body.innerHTML = '';
       gw = await newGrooveWriter();
@@ -140,6 +159,7 @@ describe('HTMLforStaffContainer', () => {
       expect(html.match(/id="snare\d+"/g) || []).toHaveLength(n);
       expect(html.match(/id="kick\d+"/g) || []).toHaveLength(n);
       expect(html.match(/id="tom1-\d+"/g) || []).toHaveLength(n);
+      expect(html.match(/id="tom2-\d+"/g) || []).toHaveLength(n);
       expect(html.match(/id="tom4-\d+"/g) || []).toHaveLength(n);
       // Background-highlight cells (used for playback/hover highlighting) also
       // scale with notesPerMeasure.

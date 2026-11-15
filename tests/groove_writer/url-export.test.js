@@ -564,5 +564,42 @@ describe('GrooveWriter url-export (js/groove_writer.js)', () => {
       expect(gd.kick_array[0]).toBeTruthy();
       expect(gw.myGrooveUtils.getTempo()).toBe(100);
     });
+
+    const lane = (note, at) => `|${'-'.repeat(at)}${note}${'-'.repeat(15 - at)}|`;
+    const START =
+      '?TimeSig=4/4&Div=16&Tempo=80&Measures=1' +
+      '&H=|----------------|&S=|----------------|&K=|----------------|';
+
+    it('loads T2 notes into the Mid tom row', async () => {
+      const gw = await newGrooveWriter();
+      buildFullPageDOM(gw, 1);
+      gw.loadNewGroove(START + `&T1=${lane('o', 0)}&T2=${lane('o', 2)}&T4=${lane('-', 0)}`);
+
+      expect(document.getElementById('tom2-2').hasAttribute('data-on')).toBe(true);
+      expect(document.getElementById('tom2-1').hasAttribute('data-on')).toBe(false);
+      const gd = gw.grooveDataFromClickableUI();
+      expect(gd.toms_array[1][2]).toBe('d');
+      expect(gd.toms_array[1].filter(Boolean)).toHaveLength(1);
+    });
+
+    it('writes T2 and T3 back unchanged after a load', async () => {
+      const gw = await newGrooveWriter();
+      buildFullPageDOM(gw, 1);
+      const toms = `&T1=${lane('o', 0)}&T2=${lane('o', 1)}&T3=${lane('o', 2)}&T4=${lane('o', 3)}`;
+      gw.loadNewGroove(START + toms);
+      gw.updateCurrentURL();
+      expect(decodeURIComponent(window.location.search)).toContain(toms);
+    });
+
+    it('writes no T2 for a groove without Mid tom notes', async () => {
+      const gw = await newGrooveWriter();
+      buildFullPageDOM(gw, 1);
+      gw.loadNewGroove(START + `&T1=${lane('o', 0)}&T4=${lane('o', 3)}`);
+      gw.updateCurrentURL();
+      const q = decodeURIComponent(window.location.search);
+      expect(q).toContain('T1=');
+      expect(q).not.toContain('T2=');
+      expect(q).not.toContain('T3=');
+    });
   });
 });

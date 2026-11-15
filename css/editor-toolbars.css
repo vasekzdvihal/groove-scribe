@@ -590,6 +590,7 @@
 #musicalInput .unmuteSnareButton,
 #musicalInput .unmuteKickButton,
 #musicalInput .unmuteTom1Button,
+#musicalInput .unmuteTom2Button,
 #musicalInput .unmuteTom4Button {
   position: absolute;
   top: 0;

@@ -148,16 +148,25 @@ describe('GrooveWriter clickable grid: grooveDataFromClickableUI', () => {
     expect(gd.kick_array.every((v) => v === false)).toBe(true);
   });
 
-  it('toms_array is a 4-slot array but only index 0 (tom1) and 3 (tom4) are ever populated', () => {
-    // Quirk: toms_array is declared as [[],[],[],[]] (one slot per rack/floor
-    // tom) but the writer only ever reads/writes tom1 and tom4 (see
-    // set_tom1_state/set_tom4_state) -- indices 1 and 2 are permanently empty.
+  it('reads toms 1, 2 and 4 from the grid; tom 3 has no row and stays empty', () => {
+    gw.showHideToms(true, true, true);
     const gd = gw.grooveDataFromClickableUI();
+    const len = gw.notesPerMeasure() * gw.numberOfMeasures();
     expect(gd.toms_array).toHaveLength(4);
-    expect(gd.toms_array[1]).toEqual([]);
+    expect(gd.toms_array[0]).toHaveLength(len);
+    expect(gd.toms_array[1]).toHaveLength(len);
     expect(gd.toms_array[2]).toEqual([]);
-    expect(gd.toms_array[0]).toHaveLength(gw.notesPerMeasure() * gw.numberOfMeasures());
-    expect(gd.toms_array[3]).toHaveLength(gw.notesPerMeasure() * gw.numberOfMeasures());
+    expect(gd.toms_array[3]).toHaveLength(len);
+  });
+
+  it('a Mid tom tap reads back as the tom 2 ABC note and plays the tom 2 sound', () => {
+    gw.showHideToms(true, true, true);
+    gw.noteLeftClick({ target: {}, preventDefault() {}, stopPropagation() {} }, 'tom2', 2);
+    const gd = gw.grooveDataFromClickableUI();
+    expect(gd.toms_array[1][2]).toBe('d'); // constant_ABC_T2_Normal
+    expect(gd.toms_array[1].filter(Boolean)).toHaveLength(1);
+    const played = globalThis.MIDI.WebAudio.noteOn.mock.calls.map((c) => c[1]);
+    expect(played).toContain(47); // constant_OUR_MIDI_TOM2_NORMAL
   });
 
   it('showStickings/showToms default to false, and sticking_array is only populated when stickings are shown', () => {
