@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Tests for the menu/popup handlers in js/groove_writer.js: the anchor openers
-// (metronome/permutation/grooves/help/stickings/download), the metronome options
+// (metronome/help/stickings/download), the metronome options
 // popup, the permutation popup + option checkboxes, the help menu, and the time
 // signature popup. Grid/note-click handlers (muteInstrument, noteLabelClick, etc.)
 // are owned by a different suite and are intentionally out of scope here.
@@ -82,9 +82,10 @@ function buildMenuFixtures() {
       <span id="metronomeAutoSpeedupTempoIncreaseIntervalOutput"></span>
     </div>
 
-    <span id="permutationAnchor"></span>
-    <ul id="permutationContextMenu" class="list"></ul>
-    <div id="PermutationOptions"></div>
+    <section id="permutationsPanel">
+      <div class="permutation-choice"></div>
+      <div id="PermutationOptions"></div>
+    </section>
 
     <span id="helpAnchor"></span>
     <ul id="helpContextMenu" class="list"></ul>
@@ -146,24 +147,6 @@ describe('anchor openers', () => {
     expect(menu.style.display).toBe('block');
     // GrooveUtils tracks the currently-open menu so document click-away can close it.
     expect(gw.myGrooveUtils.visible_context_menu).toBe(menu);
-  });
-
-  it('permutationAnchorClick shows the permutation context menu in 4/4 time', () => {
-    const menu = document.getElementById('permutationContextMenu');
-    gw.permutationAnchorClick({});
-    expect(menu.style.display).toBe('block');
-  });
-
-  it('permutationAnchorClick is a no-op outside 4/4 time (guard clause)', () => {
-    buildGridDOM(gw, 1);
-    buildRenderPipelineFixtures();
-    document.getElementById('timeSigPopupTimeSigTop').value = '3';
-    document.getElementById('timeSigPopupTimeSigBottom').value = '4';
-    gw.timeSigPopupClose('ok'); // now in 3/4 time; permutations only work in 4/4
-
-    const menu = document.getElementById('permutationContextMenu');
-    gw.permutationAnchorClick({});
-    expect(menu.style.display).toBe(''); // never shown
   });
 
   it('helpAnchorClick shows the help context menu', () => {
@@ -315,28 +298,83 @@ describe('metronome options menu', () => {
   });
 });
 
-describe('permutation menu', () => {
-  it('permutationPopupClick("kick_16ths") selects the anchor and populates PermutationOptions', () => {
+describe('permutation choice', () => {
+  const choice = () => document.querySelector('#permutationsPanel .permutation-choice');
+  const pressed = () =>
+    [...choice().querySelectorAll('button[aria-pressed="true"]')].map((b) => b.textContent);
+
+  function changeTimeSig(top, bottom) {
+    document.getElementById('timeSigPopupTimeSigTop').value = top;
+    document.getElementById('timeSigPopupTimeSigBottom').value = bottom;
+    gw.timeSigPopupClose('ok');
+  }
+
+  it('a time signature change draws the choice: buttons in 4/4, the message in 3/4', () => {
     buildGridDOM(gw, 1);
     buildRenderPipelineFixtures();
 
+    changeTimeSig('3', '4');
+    expect(choice().querySelectorAll('button')).toHaveLength(0);
+    expect(choice().textContent).toBe('Permutations work in 4/4 time only.');
+
+    changeTimeSig('4', '4');
+    expect([...choice().querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'None',
+      'Kick',
+      'Snare',
+    ]);
+    expect(pressed()).toEqual(['None']);
+  });
+
+  it('a change to 3/4 turns an active permutation off', () => {
+    buildGridDOM(gw, 1);
+    buildRenderPipelineFixtures();
+    changeTimeSig('4', '4');
     gw.permutationPopupClick('kick_16ths');
 
-    expect(document.getElementById('permutationAnchor').className).toContain('buttonSelected');
+    changeTimeSig('3', '4');
+
+    expect(document.getElementById('PermutationOptions').className).not.toContain('displayed');
+    expect(document.getElementById('PermutationOptions').innerHTML).toBe('');
+    expect(choice().textContent).toBe('Permutations work in 4/4 time only.');
+  });
+
+  it('permutationPopupClick("kick_16ths") marks Kick and populates PermutationOptions', () => {
+    buildGridDOM(gw, 1);
+    buildRenderPipelineFixtures();
+    changeTimeSig('4', '4');
+
+    gw.permutationPopupClick('kick_16ths');
+
+    expect(pressed()).toEqual(['Kick']);
     expect(document.getElementById('PermutationOptions').className).toContain('displayed');
     expect(document.getElementById('PermutationOptions').innerHTML.length).toBeGreaterThan(0);
     // updateSheetMusic() ran to completion and populated the hidden ABC textarea.
     expect(document.getElementById('ABCsource').value.length).toBeGreaterThan(0);
   });
 
-  it('permutationPopupClick("snare_16ths") selects the anchor and populates PermutationOptions', () => {
+  it('permutationPopupClick("snare_16ths") marks Snare and populates PermutationOptions', () => {
     buildGridDOM(gw, 1);
     buildRenderPipelineFixtures();
+    changeTimeSig('4', '4');
 
     gw.permutationPopupClick('snare_16ths');
 
-    expect(document.getElementById('permutationAnchor').className).toContain('buttonSelected');
+    expect(pressed()).toEqual(['Snare']);
     expect(document.getElementById('PermutationOptions').className).toContain('displayed');
+  });
+
+  it('a choice keeps the clicked button, so the button keeps its focus', () => {
+    buildGridDOM(gw, 1);
+    buildRenderPipelineFixtures();
+    changeTimeSig('4', '4');
+    const kick = [...choice().querySelectorAll('button')].find((b) => b.textContent === 'Kick');
+    kick.focus();
+
+    gw.permutationPopupClick('kick_16ths');
+
+    expect(choice().contains(kick)).toBe(true);
+    expect(document.activeElement).toBe(kick);
   });
 
   it('permutationPopupClick("none") is a no-op when the permutation is already "none" (early return)', () => {
@@ -353,13 +391,14 @@ describe('permutation menu', () => {
   it('permutationPopupClick("none") fully unwinds a previously-selected permutation', () => {
     buildGridDOM(gw, 1);
     buildRenderPipelineFixtures();
+    changeTimeSig('4', '4');
 
     gw.permutationPopupClick('kick_16ths');
-    expect(document.getElementById('permutationAnchor').className).toContain('buttonSelected');
+    expect(pressed()).toEqual(['Kick']);
 
     gw.permutationPopupClick('none');
 
-    expect(document.getElementById('permutationAnchor').className).not.toContain('buttonSelected');
+    expect(pressed()).toEqual(['None']);
     expect(document.getElementById('PermutationOptions').className).not.toContain('displayed');
     // HTMLforPermutationOptions() returns "" once class_permutation_type is "none".
     expect(document.getElementById('PermutationOptions').innerHTML).toBe('');

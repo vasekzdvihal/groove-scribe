@@ -731,17 +731,69 @@ test.describe('editor state regressions', () => {
     );
   });
 
+  const permutationButton = (page, name) =>
+    page.locator('#permutationsPanel .permutation-choice').getByRole('button', {
+      name,
+      exact: true,
+    });
+
   async function choosePermutation(page, name) {
-    await page.click('#permutationAnchor');
-    await page.locator('#permutationContextMenu li').filter({ hasText: name }).click();
-    await expect(page.locator('#PermutationOptions')).toHaveClass(/displayed/);
+    if ((await page.locator('#permutationsTab').getAttribute('aria-pressed')) !== 'true') {
+      await page.click('#permutationsTab');
+    }
+    await permutationButton(page, name).click();
+    await expect(permutationButton(page, name)).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#permutationsPanel #PermutationOptions')).toHaveClass(/displayed/);
   }
 
   async function expectNoPermutation(page) {
     await expect(page.locator('#PermutationOptions')).not.toHaveClass(/displayed/);
-    await expect(page.locator('#permutationAnchor')).not.toHaveClass(/buttonSelected/);
+    // The groove can be in another time signature, where the tab shows a message only.
+    await expect(
+      page.locator('.permutation-choice [aria-pressed="true"]:not([data-permutation="none"])')
+    ).toHaveCount(0);
     await expect(page.locator('.kick-container').first()).toBeVisible();
   }
+
+  test('the Permutations tab sets a kick permutation and back to None', async ({ page }) => {
+    await open(page, empty(16, 2));
+    await expect(page.locator('#musicalInput .staff-container')).toHaveCount(2);
+    await page.click('#permutationsTab');
+    await expect(page.locator('#sidePanelTitle')).toHaveText('Permutations');
+    // Opening the tab changes nothing.
+    await expect(permutationButton(page, 'None')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#musicalInput .staff-container')).toHaveCount(2);
+
+    await choosePermutation(page, 'Kick');
+    // A kick permutation works on one bar, and hides the kick row.
+    await expect(page.locator('#musicalInput .staff-container')).toHaveCount(1);
+    await expect(page.locator('.kick-container').first()).toBeHidden();
+    await expect(permutationButton(page, 'None')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#PermutationOptionsHeader')).toBeVisible();
+    // The docked panel gives focus back to the page, so space plays.
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.getElementById('sidePanel').contains(document.activeElement))
+      )
+      .toBe(false);
+
+    await permutationButton(page, 'None').click();
+    await expectNoPermutation(page);
+    await expect(permutationButton(page, 'None')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#permutationsPanel #PermutationOptions')).toBeEmpty();
+  });
+
+  test('the Permutations tab shows only a message outside 4/4', async ({ page }) => {
+    await open(
+      page,
+      '?TimeSig=3/4&Div=16&Tempo=80&Measures=1&H=|------------|&S=|------------|&K=|------------|'
+    );
+    await page.click('#permutationsTab');
+    await expect(page.locator('#permutationsPanel')).toContainText(
+      'Permutations work in 4/4 time only.'
+    );
+    await expect(page.locator('#permutationsPanel button')).toHaveCount(0);
+  });
 
   test('undo clears an active permutation', async ({ page }) => {
     await open(page);

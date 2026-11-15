@@ -55,7 +55,7 @@ URL query string  ──parse──►  grooveData  ──►  ABC notation ─�
 - `midiFile.js` — grooveData → MIDI file (via jsmidgen).
 - `browserInfo.js` — user-agent / touch-device probes.
 - `permutations.js` — pure generators for the permutation practice modes.
-- `viewHtml.js` — pure HTML builders (the clickable staff container and the permutation-options menu).
+- `viewHtml.js` — pure HTML builders (the clickable staff container, the permutation choice and the permutation-options menu).
 - `gridState.js` — the clickable-grid **read** layer: per-cell note state and whole-measure array readers (reads the DOM). The note **setters** remain in `groove_writer.js`.
 - `grooves.js` — the built-in groove library.
 

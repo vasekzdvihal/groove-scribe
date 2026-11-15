@@ -1,7 +1,8 @@
 // View HTML builders (Step 4 extraction from groove_writer.js).
 //
-// Pure string builders for two chunks of the editor UI: the clickable staff
-// container (one measure of note cells) and the permutation-options menu. They
+// Pure string builders for chunks of the editor UI: the clickable staff
+// container (one measure of note cells), the permutation choice and the
+// permutation-options menu. They
 // hold no state — layout numbers and the note-grouping size come in via a small
 // context object / arguments, so GrooveWriter (which owns that state) delegates
 // its HTMLforStaffContainer / HTMLforPermutationOptions methods here.
@@ -453,6 +454,30 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
 
   return newHTML;
 } // end function buildStaffContainerHTML
+
+// The choices in the Permutations tab, in display order.
+const PERMUTATION_CHOICES = [
+  { type: 'none', label: 'None' },
+  { type: 'kick_16ths', label: 'Kick' },
+  { type: 'snare_16ths', label: 'Snare' },
+];
+
+/**
+ * The choice in the Permutations tab of the side panel. Permutations work in 4/4 time only, so
+ * another time signature gets a message and no choice.
+ * @param {string} activeType  the active permutation: 'none', 'kick_16ths' or 'snare_16ths'
+ * @param {boolean} isFourFour
+ * @returns {string}
+ */
+export function buildPermutationChoiceHTML(activeType, isFourFour) {
+  if (!isFourFour) return '<p>Permutations work in 4/4 time only.</p>';
+  return PERMUTATION_CHOICES.map(
+    ({ type, label }) =>
+      `<button type="button" class="permutation-choice-button" data-permutation="${type}" ` +
+      `aria-pressed="${type == activeType}" ` +
+      `onclick="myGrooveWriter.permutationPopupClick('${type}')">${label}</button>`
+  ).join('');
+}
 
 export function buildPermutationOptionsHTML(permutationType, usingTriplets) {
   if (permutationType == 'none') return '';

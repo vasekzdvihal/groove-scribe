@@ -7,6 +7,7 @@
 // asserted from reading the source alone.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { newGrooveWriter, buildGridDOM } from '../helpers/loadGrooveWriter.js';
+import { buildPermutationChoiceHTML } from '../../js/viewHtml.js';
 
 // class_time_division is seeded from window.location.search ("Div" query
 // param) at construction time (see GrooveWriter's `class_time_division` init
@@ -518,5 +519,50 @@ describe('HTMLforPermutationOptions', () => {
     scaffoldForStateMutatingCalls(gw);
     swallowingKnownHarnessGap(() => gw.permutationPopupClick('snare_accent_16ths'));
     expect(gw.HTMLforPermutationOptions()).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPermutationChoiceHTML: the choice in the Permutations tab
+// ---------------------------------------------------------------------------
+describe('buildPermutationChoiceHTML', () => {
+  function render(html) {
+    const host = document.createElement('div');
+    host.innerHTML = html;
+    return host;
+  }
+
+  it('shows None, Kick and Snare in 4/4, and marks the active one', () => {
+    const host = render(buildPermutationChoiceHTML('kick_16ths', true));
+    const buttons = [...host.querySelectorAll('button')];
+    expect(buttons.map((button) => button.textContent)).toEqual(['None', 'Kick', 'Snare']);
+    expect(buttons.map((button) => button.getAttribute('type'))).toEqual([
+      'button',
+      'button',
+      'button',
+    ]);
+    expect(buttons.map((button) => button.getAttribute('onclick'))).toEqual([
+      "myGrooveWriter.permutationPopupClick('none')",
+      "myGrooveWriter.permutationPopupClick('kick_16ths')",
+      "myGrooveWriter.permutationPopupClick('snare_16ths')",
+    ]);
+    expect(buttons.map((button) => button.getAttribute('aria-pressed'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
+    expect(host.querySelector('p')).toBeNull();
+  });
+
+  it('marks None when no permutation is active', () => {
+    const host = render(buildPermutationChoiceHTML('none', true));
+    const pressed = [...host.querySelectorAll('button[aria-pressed="true"]')];
+    expect(pressed.map((button) => button.textContent)).toEqual(['None']);
+  });
+
+  it('shows the 4/4 message in 3/4', () => {
+    const host = render(buildPermutationChoiceHTML('none', false));
+    expect(host.querySelectorAll('button')).toHaveLength(0);
+    expect(host.querySelector('p')?.textContent).toBe('Permutations work in 4/4 time only.');
   });
 });

@@ -793,23 +793,6 @@ function GrooveWriter() {
     contextMenu.style.left = Math.max(0, anchorRect.right - contextMenu.offsetWidth) + 'px';
   }
 
-  // the user has clicked on the permutation menu
-  root.permutationAnchorClick = function (event) {
-    if (class_num_beats_per_measure != 4 || class_note_value_per_measure != 4) return; // permutations disabled except in 4/4 time
-
-    var contextMenu = document.getElementById('permutationContextMenu');
-    if (contextMenu) {
-      var anchorPoint = document.getElementById('permutationAnchor');
-
-      if (anchorPoint) {
-        var anchorPos = getTagPosition(anchorPoint);
-        contextMenu.style.top = anchorPos.y + anchorPoint.offsetHeight + 'px';
-        contextMenu.style.left = anchorPos.x + 'px';
-      }
-      root.myGrooveUtils.showContextMenu(contextMenu);
-    }
-  };
-
   // the user has clicked on the help menu
   root.helpAnchorClick = function (event) {
     var contextMenu = document.getElementById('helpContextMenu');
@@ -989,14 +972,31 @@ function GrooveWriter() {
     root.metronomeOptionsMenuOffsetClickPopupClick('1');
   };
 
-  function setupPermutationMenu() {
-    if (class_num_beats_per_measure == 4 && class_note_value_per_measure == 4) {
-      addOrRemoveKeywordFromClassById('permutationAnchor', 'enabled', true);
-    } else {
-      // permutations disabled except in 4/4 time
-      addOrRemoveKeywordFromClassById('permutationAnchor', 'enabled', false);
-      root.permutationPopupClick('none'); // make sure permutation is off
+  function isFourFour() {
+    return class_num_beats_per_measure == 4 && class_note_value_per_measure == 4;
+  }
+
+  // The choice in the Permutations tab of the side panel: None, Kick and Snare in 4/4, else a
+  // message. The pressed button shows the active permutation.
+  function drawPermutationChoice() {
+    var choice = document.querySelector('.permutation-choice');
+    if (!choice) return;
+    var buttons = choice.querySelectorAll('[data-permutation]');
+    // Keep the buttons when they stay, so the clicked button keeps its focus.
+    if (isFourFour() && buttons.length) {
+      buttons.forEach(function (button) {
+        var isActive = button.getAttribute('data-permutation') == class_permutation_type;
+        button.setAttribute('aria-pressed', String(isActive));
+      });
+      return;
     }
+    choice.innerHTML = _view.buildPermutationChoiceHTML(class_permutation_type, isFourFour());
+  }
+
+  function setupPermutationMenu() {
+    // permutations work in 4/4 time only
+    if (!isFourFour()) root.permutationPopupClick('none');
+    drawPermutationChoice();
   }
 
   // Turn the permutation off without a redraw or a URL update, so a restore can use it.
@@ -1005,7 +1005,7 @@ function GrooveWriter() {
     showHideCSS_ClassVisibility('.snare-container', true, true); // show it
     class_permutation_type = 'none';
 
-    unselectButton(document.getElementById('permutationAnchor'));
+    drawPermutationChoice();
     document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
     addOrRemoveKeywordFromClassById('PermutationOptions', 'displayed', false);
   }
@@ -1017,23 +1017,24 @@ function GrooveWriter() {
 
     switch (perm_type) {
       case 'kick_16ths':
-        showHideCSS_ClassVisibility('.kick-container', true, false); // hide it
-        showHideCSS_ClassVisibility('.snare-container', true, true); // show it
+        // Remove the other bars first: that draws the grid again, with every row shown.
         while (class_number_of_measures > 1) {
           root.closeMeasureButtonClick(2);
         }
-        selectButton(document.getElementById('permutationAnchor'));
+        showHideCSS_ClassVisibility('.kick-container', true, false); // hide it
+        showHideCSS_ClassVisibility('.snare-container', true, true); // show it
+        drawPermutationChoice();
         document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
         document.getElementById('PermutationOptions').className += ' displayed';
         break;
 
       case 'snare_16ths':
-        showHideCSS_ClassVisibility('.kick-container', true, true); // show it
-        showHideCSS_ClassVisibility('.snare-container', true, false); // hide it
         while (class_number_of_measures > 1) {
           root.closeMeasureButtonClick(2);
         }
-        selectButton(document.getElementById('permutationAnchor'));
+        showHideCSS_ClassVisibility('.kick-container', true, true); // show it
+        showHideCSS_ClassVisibility('.snare-container', true, false); // hide it
+        drawPermutationChoice();
         document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
         document.getElementById('PermutationOptions').className += ' displayed';
         break;

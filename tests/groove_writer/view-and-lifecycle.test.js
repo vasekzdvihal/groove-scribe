@@ -411,7 +411,7 @@ describe('GrooveWriter view & lifecycle', () => {
   describe('runsOnPageLoad', () => {
     // The full page-bootstrap function. It touches a large, cross-cutting
     // slice of DOM + GrooveUtils state:
-    //   setupWriterHotKeys() -> setupPermutationMenu() (needs #permutationAnchor)
+    //   setupWriterHotKeys() -> setupPermutationMenu() (draws .permutation-choice)
     //   -> setTimeSigLabel() (needs #timeSigLabel)
     //   -> swapViewEditMode(true) (needs .edit-block, optionally #view-edit-switch)
     //   -> selectButton(#subdivision_<N>ths)
@@ -478,7 +478,7 @@ describe('GrooveWriter view & lifecycle', () => {
         '<span id="view-edit-switch"></span>' +
         '<div class="edit-block"></div>' +
         '<span id="timeSigLabel"></span>' +
-        '<span id="permutationAnchor"></span>' +
+        '<div class="permutation-choice"></div>' +
         '<div id="PermutationOptions"></div>' +
         '<span id="subdivision_8ths" class="left-button subdivision edit-block"></span>' +
         '<span id="subdivision_16ths" class="left-button subdivision edit-block"></span>' +
@@ -517,6 +517,15 @@ describe('GrooveWriter view & lifecycle', () => {
     it('runs to completion without throwing, given the full bootstrap fixture', async () => {
       const gw = await setup();
       expect(() => gw.runsOnPageLoad()).not.toThrow();
+      delete globalThis.MIDI;
+    });
+
+    it('draws the permutation choice with None pressed', async () => {
+      const gw = await setup();
+      gw.runsOnPageLoad();
+      const buttons = [...document.querySelectorAll('.permutation-choice button')];
+      expect(buttons.map((button) => button.textContent)).toEqual(['None', 'Kick', 'Snare']);
+      expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
       delete globalThis.MIDI;
     });
 

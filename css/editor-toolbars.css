@@ -212,24 +212,10 @@
   display: none;
 }
 
-/* A control that is on: toms shown, stickings shown, permutation active, note types on. */
+/* A control that is on: toms shown, stickings shown, note types on. */
 .tool.ClickToHide,
 .tool.buttonSelected {
   background: var(--bar-selected);
-  color: #fff;
-}
-
-#permutationAnchor {
-  color: var(--bar-dim);
-  cursor: not-allowed;
-}
-
-#permutationAnchor.enabled {
-  color: inherit;
-  cursor: pointer;
-}
-
-#permutationAnchor.buttonSelected {
   color: #fff;
 }
 
@@ -268,6 +254,12 @@
 @media (max-width: 479px) {
   #TopNav {
     gap: 4px;
+  }
+
+  /* A very narrow window, such as iPad Slide Over, has room for the three tabs and the title,
+     but not for the logo too. */
+  #logoTextUpperLeft {
+    display: none;
   }
 
   .signin-label {

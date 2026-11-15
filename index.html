@@ -153,8 +153,6 @@
 				<button type="button" class="tool edit-block" id="undoButton" aria-disabled="true" aria-label="Undo" onclick="myGrooveWriter.undoCommand();"><span class="tool-in"><i class="fa fa-undo"></i><span class="tool-label">Undo</span></span></button>
 				<button type="button" class="tool edit-block" id="redoButton" aria-disabled="true" aria-label="Redo" onclick="myGrooveWriter.redoCommand();"><span class="tool-in"><i class="fa fa-repeat"></i><span class="tool-label">Redo</span></span></button>
 				<span class="tool-sep edit-block"></span>
-				<button type="button" class="tool tool-caret grooveDB_hidden" id="permutationAnchor" onclick="myGrooveWriter.permutationAnchorClick(event);"><span class="tool-in">Permutations</span></button>
-				<span class="tool-sep"></span>
 				<button type="button" class="tool edit-block" id="showHideTomsButton" onclick="event.preventDefault(); myGrooveWriter.showHideToms(false, false);"><span class="tool-in">Toms</span></button>
 				<button type="button" class="tool tool-caret grooveDB_hidden" id="stickingsButton" onclick="myGrooveWriter.stickingsAnchorClick();"><span class="tool-in">Stickings</span></button>
 				<!-- Populated by js/main.js after load (was document.write). -->
@@ -221,12 +219,6 @@
 		</div>
 
 		<div id="RightHandContent">
-			<div class="nonPrintable">
-
-				<!-- Contents built by js/main.js (was document.write). -->
-				<div id="PermutationOptions"></div>
-			</div>
-
 			<div class="Printable">
 				<!-- rendering area -->
 				<div id="sheetMusicDiv" class="fullWidthEle">
@@ -450,13 +442,6 @@
 			</ul>
 		</div>
 		<div class="noteContextMenu">
-			<ul id="permutationContextMenu" class="list">
-				<li onclick='myGrooveWriter.permutationPopupClick("none");'><b>None</b></li>
-				<li onclick='myGrooveWriter.permutationPopupClick("kick_16ths");'><b>Kick</b> Permutation</li>
-				<li onclick='myGrooveWriter.permutationPopupClick("snare_16ths");'><b>Snare</b> Permutation</li>
-			</ul>
-		</div>
-		<div class="noteContextMenu">
 			<ul id="helpContextMenu" class="list">
 				<li id="userMenuName" hidden></li>
 				<li id="userMenuSignIn" hidden>Sign in</li>
@@ -480,6 +465,10 @@
 		</div>
 		<!-- The groove list. js/main.js fills it and moves it into the Grooves tab of the side panel. -->
 		<div id="grooveListWrapper"></div>
+		<!-- The permutation choice and options. js/main.js moves them into the Permutations tab of
+		     the side panel, and the editor fills them. -->
+		<div class="permutation-choice" role="group" aria-label="Permutation"></div>
+		<div id="PermutationOptions"></div>
 
 		<!-- dialog for the TIME label, hidden by default -->
 		<div id="timeSigPopup">

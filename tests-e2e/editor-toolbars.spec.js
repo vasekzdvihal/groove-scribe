@@ -100,7 +100,6 @@ for (const [name, width, height] of [
       await openEditor(page);
       for (const [trigger, menu] of [
         ['#divisionMenuButton', '#divisionPopover'],
-        ['#permutationAnchor', '#permutationContextMenu'],
         ['#stickingsButton', '#stickingsContextMenu'],
         ['#detailsButton', '#detailsPopover'],
         ['#metronomeOptionsAnchor', '#metronomeOptionsContextMenu'],
@@ -281,7 +280,8 @@ test('GrooveDB authoring mode still loads', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await openEditor(page, '?GDB_Author=1');
-  await expect(page.locator('#permutationAnchor')).toBeHidden();
+  // Without the library, the tabs are Permutations and Grooves.
+  await expect(page.locator('#upperLeft .panel-tab')).toHaveText(['Permutations', 'Grooves']);
   expect(errors).toEqual([]);
 });
 
@@ -1260,7 +1260,8 @@ test.describe('tool bar groups at 768x1024 with touch', () => {
       .evaluateAll(
         (nodes) => nodes.filter((node) => node.getBoundingClientRect().width > 0).length
       );
-    expect(separators).toBeGreaterThanOrEqual(3);
+    // Time and division | Undo and Redo | Toms, Stickings and Note types.
+    expect(separators).toBeGreaterThanOrEqual(2);
   });
 });
 

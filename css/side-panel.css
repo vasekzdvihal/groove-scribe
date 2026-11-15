@@ -130,6 +130,150 @@
   overscroll-behavior: contain;
 }
 
+/* The Permutations tab: the choice, then the options of the chosen permutation. */
+.permutation-choice {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+}
+
+.permutation-choice p {
+  margin: 0;
+  color: var(--lp-muted);
+}
+
+.permutation-choice-button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--lp-text);
+  font: inherit;
+  font-weight: 600;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.permutation-choice-button:hover {
+  border-color: var(--lp-accent);
+}
+
+.permutation-choice-button[aria-pressed='true'] {
+  color: var(--lp-accent-text);
+  background: var(--lp-accent);
+  border-color: var(--lp-accent);
+}
+
+#PermutationOptions.displayed {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--lp-border);
+}
+
+#PermutationOptionsHeader {
+  display: block;
+  padding: 16px 0 4px;
+  color: var(--lp-muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.PermutationOptionWrapper {
+  display: block;
+}
+
+.PermutationOptionGroup {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.PermutationOptionGroup:last-child {
+  border-bottom: 0;
+}
+
+/* The checkbox stays in the tab order. Its label shows the state and is the touch target. */
+#permutationsPanel .myCheckbox {
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+#permutationsPanel .myCheckbox + label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: 44px;
+  color: var(--lp-muted);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#permutationsPanel .myCheckbox:checked + label {
+  color: var(--lp-text);
+}
+
+#permutationsPanel .myCheckbox:focus-visible + label {
+  outline: 2px solid var(--lp-accent);
+  outline-offset: 1px;
+}
+
+#permutationsPanel .myCheckbox + label::before {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  color: var(--lp-accent-text);
+  font-family: FontAwesome;
+  font-size: 14px;
+  letter-spacing: 0;
+  content: '';
+  border: 2px solid var(--lp-muted);
+  border-radius: 4px;
+}
+
+#permutationsPanel .myCheckbox:checked + label::before {
+  content: '\f00c';
+  background: var(--lp-accent);
+  border-color: var(--lp-accent);
+}
+
+/* The sub options of a group are a row of small toggles: one beat position each. */
+.permutationSubOptionContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  padding-left: 34px;
+}
+
+.PermutationSubOption {
+  margin-bottom: 6px;
+}
+
+#permutationsPanel .PermutationSubOption .myCheckbox + label {
+  justify-content: center;
+  min-width: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--lp-border);
+}
+
+#permutationsPanel .PermutationSubOption .myCheckbox + label::before {
+  display: none;
+}
+
+#permutationsPanel .PermutationSubOption .myCheckbox:checked + label {
+  color: #fff;
+  background: var(--lp-current);
+  border-color: var(--lp-current);
+}
+
 /* Keep the same width as DOCKED_QUERY in js/sidePanel.js. */
 @media (min-width: 1100px) {
   #sidePanel {

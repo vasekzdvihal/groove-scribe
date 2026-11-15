@@ -133,11 +133,24 @@ const sidePanel = createSidePanel({
     ...(hasLibrary
       ? [{ id: 'library', label: 'Library', title: 'My library', icon: 'fa fa-bars' }]
       : []),
+    { id: 'permutations', label: 'Permutations', title: 'Permutations', icon: 'fa fa-random' },
     { id: 'grooves', label: 'Grooves', title: 'Grooves', icon: 'fa fa-list' },
   ],
 });
 const grooveList = document.getElementById('grooveListWrapper');
 if (grooveList) sidePanel.section('grooves').append(grooveList);
+// The permutation choice, with the options of the chosen permutation below it.
+const permutationChoice = document.querySelector('.permutation-choice');
+for (const element of [permutationChoice, document.getElementById('PermutationOptions')]) {
+  if (element) sidePanel.section('permutations').append(element);
+}
+// A docked panel gives focus back to the page after a choice, so space plays. An overlay panel
+// stays open: the options of the chosen permutation show in it.
+permutationChoice?.addEventListener('click', (event) => {
+  if (event.target instanceof Element && event.target.closest('button') && sidePanel.isDocked()) {
+    sidePanel.afterPick();
+  }
+});
 
 const editor = {
   openGroove(query, name) {

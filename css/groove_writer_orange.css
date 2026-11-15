@@ -839,49 +839,6 @@ body {
   opacity: 0.35;
   cursor: not-allowed;
 }
-#permutationAnchor {
-  color: #555;
-}
-#permutationAnchor.enabled {
-  color: #eee;
-}
-#PermutationOptions.displayed {
-  padding: 3px 0px 0px 10px;
-  //margin-bottom: -20px;
-  background-color: #ddd;
-}
-#PermutationOptionsHeader {
-  /margin-left: 22px;
-  font-size: 18px;
-  font-weight: bold;
-}
-.PermutationOptionWrapper {
-  display: table;
-  border-collapse: collapse;
-}
-.PermutationOptionGroup {
-  display: table-row;
-  border-bottom: 1px solid #999;
-}
-.PermutationOptionGroup:last-child {
-  border-bottom: 0px solid #999;
-}
-.PermutationOption {
-  height: 20px;
-  display: table-cell;
-  padding-right: 15px;
-  /border-top: 1px solid #999;
-  /border-bottom: 1px solid #999;
-}
-.PermutationSubOption {
-  display: table-cell;
-  padding-right: 15px;
-  /border-top: 1px solid #999;
-  /border-bottom: 1px solid #999;
-}
-#permutationType {
-  margin-top: 10px;
-}
 #noteInstructions {
   font-size: 120%;
   font-weight: bold;
@@ -929,7 +886,6 @@ body {
 /* Context Menu */
 .noteContextMenu {
 }
-#permutationContextMenu,
 #helpContextMenu,
 #metronomeOptionsContextMenu,
 #metronomeOptionsOffsetClickContextMenu {
