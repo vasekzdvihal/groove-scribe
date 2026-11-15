@@ -28,6 +28,9 @@ Rules:
   bar is 96 px (`--bar-playback-height`) and its controls are 56 px tall (`--playback-touch`).
   Below 1001 px and below 768 px the controls get narrower, not lower, so the bar fits down to
   680 px. Below that it scrolls sideways.
+- The playback controls sit in the middle of the bar as one group, at every width. Auto margins
+  on the first and the last control centre them; they become 0 when the bar scrolls, so the first
+  control stays in reach (`justify-content: center` would cut it off).
 - The tools bar fits from 768 px up. Below 1200 px Undo, Redo, Save and Share show only their
   icons (their `aria-label` keeps the name), and from 1000 px down the tools sit closer together.
   Narrower than 768 px, the bar scrolls sideways and does not wrap. A tool that gets focus
@@ -51,8 +54,10 @@ Rules:
   bar, so both end on one line. The docked panel is not a dialog: focus stays on the page, and
   Space still plays.
 - The docked panel takes 300 px (`--side-panel-width`) from the tools bar. So in the same
-  `@media` block the tools bar gets its narrow rules 300 px earlier: icons only below 1500 px,
-  closer tools from 1300 px down.
+  `@media` block the tools bar gets its narrow rules at other widths: icons only below 1430 px,
+  closer tools from 1230 px down. These limits are the measured width of the fullest tools bar
+  plus 300 px (the comment in `css/side-panel.css` has the numbers). Measure again when a tool
+  is added to the bar.
 - Below 1100 px the panel slides over the editor like a dialog, with a backdrop and a Close panel
   button. A groove picked in the Grooves tab closes the panel and puts focus on the tab. A
   permutation choice keeps the panel open, because its options show in the same panel. Docked,

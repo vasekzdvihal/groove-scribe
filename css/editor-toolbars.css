@@ -991,6 +991,17 @@
   height: 36px;
 }
 
+/* The playback controls sit in the middle of the bar as one group, at every width. Auto margins
+   centre them, and become 0 when the bar is too narrow and scrolls (below 680 px), so the first
+   control can still be reached. justify-content: center would push it out of reach. */
+#midiPlayer {
+  margin-left: auto;
+}
+
+#swingButton {
+  margin-right: auto;
+}
+
 .metronomeButton.Options:hover {
   background: rgba(255, 255, 255, 0.1);
 }
@@ -1244,10 +1255,11 @@
   }
 }
 
-/* With their labels, Save and Share have one width, so the pair looks even. */
+/* With their labels, Save and Share have one width, so the pair looks even. 96 px holds "Saved"
+   and "Share" (about 85 px each). The docked limits in css/side-panel.css count this width. */
 @media (min-width: 1200px) {
   #ToolBar .tool-group .tool {
-    min-width: 104px;
+    min-width: 96px;
   }
 }
 
@@ -1293,18 +1305,12 @@
     min-width: 48px;
   }
 
-  /* The items spread out over the bar, so the gaps between them part the groups. */
   #PlaybackBar {
-    justify-content: space-between;
     padding: 0 6px;
   }
 
   #midiPlayer .playerControlsRow {
     gap: 4px;
-  }
-
-  #PlaybackBar .tool-sep {
-    display: none;
   }
 
   /* A short line between the groups of tools, so the groups do not run together. 4 px on each

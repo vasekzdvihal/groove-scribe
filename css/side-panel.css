@@ -307,11 +307,15 @@
     left: var(--side-panel-width);
   }
 
-  /* The docked panel takes 300 px from the tools bar. So the tools bar gets its narrow-screen
-     rules from css/editor-toolbars.css 300 px earlier: below 1200 px wide, Undo, Redo, Save and
-     Share show only their icons (here below 1500 px), and from 1000 px down the tools are closer
-     together (here from 1300 px down). */
-  @media (max-width: 1499px) {
+  /* The docked panel takes 300 px from the tools bar, so the tools bar uses the narrow rules of
+     css/editor-toolbars.css at other window widths. The limits come from the measured width of
+     the fullest tools bar: touch screen (Note types), Save shown and called Saved, and the longest
+     division label (Mixed division). Measured in Chromium:
+     - with all labels: 1129 px, so the labels show from 1129 + 300 = 1429 px wide (1430 up);
+     - icons only for Undo, Redo, Save and Share: 931 px, so 1231 px wide and up;
+     - icons only and closer tools: 756 px, which fits the narrowest docked bar (800 px).
+     Measure again when a tool is added to the bar. */
+  @media (max-width: 1429px) {
     body.side-panel-open .tool-label {
       display: none;
     }
@@ -325,7 +329,7 @@
     }
   }
 
-  @media (max-width: 1300px) {
+  @media (max-width: 1230px) {
     body.side-panel-open #ToolBar {
       gap: 0;
       padding: 0 6px;

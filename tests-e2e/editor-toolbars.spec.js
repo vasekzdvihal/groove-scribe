@@ -681,17 +681,77 @@ test.describe('scoped bars at 1440x900', () => {
     page,
   }) => {
     await openEditor(page);
-    await page.evaluate(() => (document.getElementById('saveButton').hidden = false));
+    // The fullest tools bar: Save shown and called Saved, and the longest division label.
+    await page.evaluate(() => {
+      document.getElementById('saveButton').hidden = false;
+      document.querySelector('#saveButton .tool-label').textContent = 'Saved';
+      document.getElementById('divisionMenuLabel').textContent = 'Mixed division';
+    });
     await page.click('#groovesTab');
     await expect(page.locator('#sidePanel')).toBeVisible();
     const problems = [];
-    for (let width = 1100; width <= 1500; width += 20) {
+    // Every 20 px, and each side of the two limits in css/side-panel.css.
+    const widths = [1229, 1230, 1231, 1232, 1429, 1430, 1431];
+    for (let width = 1100; width <= 1500; width += 20) widths.push(width);
+    for (const width of widths) {
       await page.setViewportSize({ width, height: 900 });
       problems.push(...(await barProblems(page, width)));
     }
     expect(problems).toEqual([]);
   });
+
+  test('with the panel docked, Save and Share keep their labels while they fit', async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await page.evaluate(() => (document.getElementById('saveButton').hidden = false));
+    await page.click('#groovesTab');
+    await expect(page.locator('#sidePanel')).toBeVisible();
+    await expect(page.locator('#saveButton .tool-label')).toBeVisible();
+    await expect(page.locator('#shareSaveButton .tool-label')).toBeVisible();
+    expect(await barProblems(page, '1440x900')).toEqual([]);
+  });
 });
+
+// The playback controls sit in the middle of the bar as one group: the free room on the left and
+// on the right is the same.
+async function playbackFreeRoom(page) {
+  return page.evaluate(() => {
+    const bar = document.getElementById('PlaybackBar');
+    const style = getComputedStyle(bar);
+    const edge = bar.getBoundingClientRect();
+    const items = [...bar.children]
+      .filter((node) => node.getClientRects().length)
+      .filter((node) => !['absolute', 'fixed'].includes(getComputedStyle(node).position))
+      .map((node) => node.getBoundingClientRect());
+    return {
+      left: Math.round(items[0].left - edge.left - parseFloat(style.paddingLeft)),
+      right: Math.round(edge.right - parseFloat(style.paddingRight) - items.at(-1).right),
+    };
+  });
+}
+
+for (const [width, height, docked] of [
+  [1440, 900, false],
+  [1440, 900, true],
+  [1024, 768, false],
+  [768, 1024, false],
+]) {
+  test.describe(`playback bar at ${width}x${height}${docked ? ' docked' : ''}`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true });
+
+    test('the controls sit in the middle of the bar', async ({ page }) => {
+      await openEditor(page);
+      if (docked) {
+        await page.click('#groovesTab');
+        await expect(page.locator('#sidePanel')).toBeVisible();
+      }
+      const room = await playbackFreeRoom(page);
+      expect(room.left).toBeGreaterThan(0);
+      expect(Math.abs(room.left - room.right), JSON.stringify(room)).toBeLessThanOrEqual(2);
+    });
+  });
+}
 
 // Items of the tool bar and the playback bar that overlap, leave their bar, or are smaller than a
 // finger. A bar that scrolls sideways is a problem too.

@@ -64,13 +64,16 @@ test.describe('visual layout (screenshot backstop)', () => {
     await expect(page).toHaveScreenshot('home.png', opts);
   });
 
+  // The default groove is this same rock beat, so this one also has a title, its own tempo and
+  // the toms. Without them the two screenshots were the same picture.
   test('a rendered 16th-note rock groove', async ({ page }) => {
     await loadGroove(
       page,
       grooveUrl(
-        '?TimeSig=4/4&Div=16&Tempo=80&Measures=1&H=|xxxxxxxxxxxxxxxx|&S=|----O-------O---|&K=|o-------o-------|'
+        '?TimeSig=4/4&Div=16&Title=Rock 16ths&Tempo=96&Measures=1&H=|xxxxxxxxxxxxxxxx|&S=|----O-------O---|&K=|o-------o-------|&T1=|--------------o-|&T4=|---------------o|'
       )
     );
+    await expect(page.locator('#grooveTitleDisplay')).toHaveText('Rock 16ths');
     await expect(page).toHaveScreenshot('rock16.png', opts);
   });
 });
