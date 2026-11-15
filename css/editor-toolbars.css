@@ -4,7 +4,7 @@
 :root {
   --bar-top-height: 56px;
   --bar-tools-height: 52px;
-  --bar-playback-height: 76px;
+  --bar-playback-height: 96px;
   --bar-text: #eef2f4;
   --bar-dim: #b4c0c7;
   --bar-tools-bg: #2a3238;
@@ -13,6 +13,8 @@
   --bar-selected: #2484c0;
   --bar-danger: #a8261a;
   --touch-size: 44px;
+  /* The playback bar is the main control from the drum stool, so its targets are bigger. */
+  --playback-touch: 56px;
 }
 
 #TopNav,
@@ -694,12 +696,12 @@
 }
 
 #midiPlayer .midiPlayImage {
-  width: 56px;
-  height: 56px;
+  width: 68px;
+  height: 68px;
   margin: 0;
   background: var(--bar-selected);
-  font-size: 24px;
-  line-height: 56px;
+  font-size: 30px;
+  line-height: 68px;
 }
 
 #midiPlayer .midiPlayImage:hover {
@@ -708,11 +710,11 @@
 
 #midiPlayer .MIDIPlayTime {
   flex: none;
-  width: 64px;
+  width: 72px;
   margin: 0;
   padding: 0;
   color: var(--bar-text);
-  font-size: 22px;
+  font-size: 26px;
   font-variant-numeric: tabular-nums;
   line-height: normal;
 }
@@ -739,7 +741,7 @@
   margin: 0;
   padding: 0;
   color: var(--bar-dim);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -755,10 +757,10 @@
 .tempoKnobHolder {
   position: relative;
   flex: none;
-  /* The ring is drawn in a 56 unit viewBox and scales to this size. 60 px leaves 8 px above and
-     below in the 76 px bar, and room for three digits and the caption inside the ring. */
-  width: 60px;
-  height: 60px;
+  /* The ring is drawn in a 56 unit viewBox and scales to this size. 76 px leaves 10 px above and
+     below in the 96 px bar, and room for three digits and the caption inside the ring. */
+  width: 76px;
+  height: 76px;
 }
 
 .tempoKnob {
@@ -839,7 +841,7 @@
 }
 
 .tempoKnobNumber {
-  font-size: 17px;
+  font-size: 22px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -848,7 +850,7 @@
 .tempoKnobCaption {
   margin-top: 1px;
   color: var(--bar-dim);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   line-height: 1;
@@ -867,7 +869,7 @@
   background: var(--bar-tools-bg);
   border: 3px solid var(--bar-selected);
   border-radius: 50%;
-  font-size: 17px;
+  font-size: 22px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: center;
@@ -921,16 +923,20 @@
 }
 
 .metronomeButton {
-  height: var(--touch-size);
-  min-width: var(--touch-size);
+  height: var(--playback-touch);
+  min-width: var(--playback-touch);
   margin: 0;
-  padding: 0 8px;
+  padding: 0 10px;
   color: inherit;
   font: inherit;
+  font-size: 20px;
   background: none;
   border: 0;
   border-radius: 5px;
   cursor: pointer;
+  /* groove_writer.css animates every property. Only the colour may animate here: the size
+     changes with the window width, and it must not lag behind. */
+  transition: background-color 0.1s ease-in-out;
 }
 
 .metronomeButton:hover,
@@ -945,10 +951,24 @@
 }
 
 .metronomeButton.Options {
-  width: var(--touch-size);
-  height: var(--touch-size);
+  width: var(--playback-touch);
+  height: var(--playback-touch);
   padding: 0;
-  font-size: 20px;
+  font-size: 26px;
+}
+
+#PlaybackBar .tool {
+  height: var(--playback-touch);
+  min-width: var(--playback-touch);
+  font-size: 19px;
+}
+
+#PlaybackBar .tool .fa {
+  font-size: 22px;
+}
+
+#PlaybackBar .tool-sep {
+  height: 36px;
 }
 
 .metronomeButton.Options:hover {
@@ -1167,8 +1187,9 @@
     gap: 4px;
   }
 
+  /* 6 px keeps the knob's focus ring clear of the line. */
   #PlaybackBar .tool-sep {
-    margin: 0 3px;
+    margin: 0 6px;
   }
 
   #ToolBar .tool-sep {
@@ -1188,6 +1209,13 @@
   }
 }
 
+/* With their labels, Save and Share have one width, so the pair looks even. */
+@media (min-width: 1200px) {
+  #PlaybackBar .tool-group .tool {
+    min-width: 104px;
+  }
+}
+
 /* Portrait tablets. The tool labels are hidden by the block above. */
 @media (max-width: 1000px) {
   #metronomeLabel {
@@ -1199,8 +1227,36 @@
   }
 
   #midiPlayer .MIDIPlayTime {
-    width: 52px;
+    width: 56px;
+    font-size: 20px;
+  }
+
+  /* The playback controls keep their 56 px height, but are narrower, so the bar fits 768 px. */
+  #midiPlayer .midiPlayImage {
+    width: 64px;
+    height: 64px;
+    line-height: 64px;
+  }
+
+  .tempoKnobHolder {
+    width: 72px;
+    height: 72px;
+  }
+
+  #metronomeContainer {
+    gap: 4px;
+  }
+
+  .metronomeButton {
+    min-width: 48px;
+    padding: 0 6px;
     font-size: 18px;
+  }
+
+  .metronomeButton.Options,
+  #PlaybackBar #moreButton {
+    width: 48px;
+    min-width: 48px;
   }
 
   /* The items spread out over the bar, so the gaps between them part the groups. */
@@ -1253,6 +1309,52 @@
   left: 12px;
   bottom: 100%;
   margin-bottom: 8px;
+}
+
+/* Narrow tablet windows (Split View). The playback controls keep their 56 px height, but are
+   narrower again, so the bar fits down to 680 px. */
+@media (max-width: 767px) {
+  #midiPlayer .midiPlayImage {
+    width: 60px;
+    height: 60px;
+    line-height: 60px;
+  }
+
+  .tempoKnobHolder {
+    width: 64px;
+    height: 64px;
+  }
+
+  .tempoKnobNumber,
+  #midiPlayer .tempoKnobHolder .tempoTextField {
+    font-size: 20px;
+  }
+
+  #midiPlayer .MIDIPlayTime {
+    width: 50px;
+    font-size: 18px;
+  }
+
+  .metronomeButton {
+    min-width: 44px;
+    padding: 0 4px;
+    font-size: 17px;
+  }
+
+  .metronomeButton.Options,
+  #PlaybackBar #moreButton {
+    width: 44px;
+    min-width: 44px;
+  }
+
+  #PlaybackBar .tool {
+    min-width: 48px;
+    font-size: 17px;
+  }
+
+  #PlaybackBar .tool-in {
+    padding: 0 6px;
+  }
 }
 
 /* Narrow windows. A phone lays out 980 px wide (see index.html), so this is a narrow desktop
