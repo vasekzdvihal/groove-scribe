@@ -260,7 +260,7 @@ describe('GrooveWriter playback highlighting (hilight_note)', () => {
 
   const fireNote = (type, pct) => gw.myGrooveUtils.midiEventCallbacks.notePlaying(gw, type, pct);
 
-  it.each(['hi-hat', 'snare', 'kick', 'tom1', 'tom4'])(
+  it.each(['hi-hat', 'snare', 'kick', 'tom1', 'tom2', 'tom4'])(
     'highlights the %s row as playback advances without error',
     (instrument) => {
       expect(() => {
