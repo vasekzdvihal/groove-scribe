@@ -19,8 +19,9 @@
   background: #2d97da;
 }
 
-/* On a phone the tabs show only their icons, so the top bar keeps room for the title. */
-@media (max-width: 479px) {
+/* Below 768 px the tabs show only their icons, so the top bar keeps room for the title. Each tab
+   keeps its name in aria-label. */
+@media (max-width: 767px) {
   #upperLeft {
     gap: 4px;
   }
@@ -90,13 +91,16 @@
   outline-offset: 1px;
 }
 
+/* The head has the height of the tools bar, so the docked panel and the tools bar end on one line. */
 .side-panel-head {
   display: flex;
   flex: none;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 8px 8px 16px;
+  box-sizing: border-box;
+  height: var(--bar-tools-height);
+  padding: 0 4px 0 16px;
   border-bottom: 1px solid var(--lp-border);
 }
 
@@ -274,13 +278,17 @@
   border-color: var(--lp-current);
 }
 
-/* Keep the same width as DOCKED_QUERY in js/sidePanel.js. */
+/* Keep the same width as DOCKED_QUERY in js/sidePanel.js. The docked panel runs from the top bar
+   to the bottom of the screen. The tools bar, the music and the playback bar start at its right
+   edge, so each bar stays next to what it controls. */
 @media (min-width: 1100px) {
   #sidePanel {
-    top: calc(var(--bar-top-height) + var(--bar-tools-height));
-    bottom: var(--bar-playback-height);
+    top: var(--bar-top-height);
+    bottom: 0;
     z-index: 997;
     width: var(--side-panel-width);
+    /* The same black line as the edges of the bars. */
+    border-right: 1px solid #000;
     transition: none;
   }
 
@@ -293,8 +301,45 @@
     display: none;
   }
 
-  body.side-panel-open #RightHandContent {
+  body.side-panel-open #ToolBar,
+  body.side-panel-open #RightHandContent,
+  body.side-panel-open #PlaybackBar {
     left: var(--side-panel-width);
+  }
+
+  /* The docked panel takes 300 px from the tools bar. So the tools bar gets its narrow-screen
+     rules from css/editor-toolbars.css 300 px earlier: below 1200 px wide, Undo, Redo, Save and
+     Share show only their icons (here below 1500 px), and from 1000 px down the tools are closer
+     together (here from 1300 px down). */
+  @media (max-width: 1499px) {
+    body.side-panel-open .tool-label {
+      display: none;
+    }
+
+    body.side-panel-open #ToolBar .tool-group .tool {
+      min-width: var(--touch-size);
+    }
+
+    body.side-panel-open #ToolBar .tool-sep {
+      margin: 0 4px;
+    }
+  }
+
+  @media (max-width: 1300px) {
+    body.side-panel-open #ToolBar {
+      gap: 0;
+      padding: 0 6px;
+      font-size: 14px;
+    }
+
+    body.side-panel-open #ToolBar .tool-in {
+      gap: 3px;
+      padding: 0 4px;
+    }
+
+    body.side-panel-open #ToolBar .tool-sep {
+      height: 20px;
+    }
   }
 }
 

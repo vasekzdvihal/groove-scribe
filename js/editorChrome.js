@@ -63,6 +63,18 @@ export function initPopovers() {
   });
 }
 
+// A bar that scrolls sideways on a narrow screen brings a tool that gets focus fully into view,
+// with the room that scroll-padding gives for its focus ring. Chrome does not scroll a bar inside
+// a fixed element for focus by itself.
+export function initBarScroll() {
+  for (const id of ['ToolBar', 'PlaybackBar']) {
+    document.getElementById(id)?.addEventListener('focusin', (event) => {
+      if (!(event.target instanceof HTMLElement)) return;
+      event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
+}
+
 const KNOB_DEGREES_PER_BPM = 6; // so a full turn is 60 BPM
 const KNOB_DEAD_RADIUS = 8; // px round the centre where the pointer angle jumps, so it is ignored
 const KNOB_TAP_SLOP = 4; // px of movement that a tap can have

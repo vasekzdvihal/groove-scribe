@@ -140,13 +140,14 @@ for (const [name, width, height] of [
       expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.y + box.height).toBeLessThanOrEqual(height);
       if (width >= 1100) {
-        // Docked: the panel sits between the bars, and the music starts at its right edge.
-        const tools = await page.locator('#ToolBar').boundingBox();
-        const playback = await page.locator('#PlaybackBar').boundingBox();
-        const music = await page.locator('#RightHandContent').boundingBox();
-        expect(box.y).toBe(tools.y + tools.height);
-        expect(box.y + box.height).toBe(playback.y);
-        expect(music.x).toBe(box.x + box.width);
+        // Docked: the panel runs from the top bar to the bottom. The tools bar, the music and
+        // the playback bar start at its right edge.
+        const top = await page.locator('#TopNav').boundingBox();
+        expect(box.y).toBe(top.y + top.height);
+        expect(box.y + box.height).toBe(height);
+        for (const id of ['#ToolBar', '#RightHandContent', '#PlaybackBar']) {
+          expect((await page.locator(id).boundingBox()).x, id).toBe(box.x + box.width);
+        }
         await tab.click();
       } else {
         // Overlay: the panel and its backdrop cover the tab, so the panel has its own button.
@@ -568,10 +569,222 @@ test.describe('finger-size notes, reading the grid back', () => {
   });
 });
 
-test('Save stays in view mode', async ({ page }) => {
+// The groove actions sit in the bar above the notes. The bar below the notes is the metronome.
+test('Save, Share and ⋯ sit in the tools bar and stay in view mode', async ({ page }) => {
   await openEditor(page);
+  const actions = ['saveButton', 'shareSaveButton', 'moreButton'];
+  const layout = await page.evaluate((ids) => {
+    const bar = document.getElementById('ToolBar');
+    const children = [...bar.children];
+    // js/main.js puts the View mode button in place of its slot.
+    const slot = children.indexOf(document.getElementById('view-edit-switch').closest('button'));
+    const group = document.getElementById('saveButton').closest('.tool-group');
+    return {
+      inToolBar: ids.filter((id) => bar.contains(document.getElementById(id))),
+      afterSwitch: children.slice(slot + 1).map((node) => node.id || node.className),
+      sameGroup: group === document.getElementById('shareSaveButton').closest('.tool-group'),
+      groupId: group.id || group.className,
+    };
+  }, actions);
+  expect(layout.inToolBar).toEqual(actions);
+  expect(layout.sameGroup).toBe(true);
+  expect(layout.afterSwitch).toEqual(['tool-sep', layout.groupId, 'moreButton']);
+
   await page.click('#view-edit-switch');
   await expect(page.locator('#saveButton')).toBeVisible();
+  await expect(page.locator('#shareSaveButton')).toBeVisible();
+  await expect(page.locator('#moreButton')).toBeVisible();
+  await expect(page.locator('#ToolBar .tool-sep').last()).toBeVisible();
+});
+
+test('the playback bar holds play, tempo, click and swing only', async ({ page }) => {
+  await openEditor(page);
+  const bar = page.locator('#PlaybackBar');
+  await expect(bar.locator('.midiPlayImage')).toBeVisible();
+  await expect(bar.getByRole('slider', { name: 'Tempo', exact: true })).toBeVisible();
+  const buttons = await bar
+    .locator('button:visible')
+    .evaluateAll((nodes) => nodes.map((node) => node.id));
+  expect(buttons).toEqual([
+    'metronomeOff',
+    'metronome4ths',
+    'metronome8ths',
+    'metronome16ths',
+    'metronomeOptionsAnchor',
+    'swingButton',
+  ]);
+  for (const id of ['#saveButton', '#shareSaveButton', '#moreButton']) {
+    await expect(bar.locator(id)).toHaveCount(0);
+  }
+});
+
+test.describe('scoped bars at 1440x900', () => {
+  test.use({ viewport: { width: 1440, height: 900 }, hasTouch: true });
+
+  const boxes = (page) =>
+    page.evaluate(() =>
+      Object.fromEntries(
+        ['TopNav', 'ToolBar', 'RightHandContent', 'PlaybackBar', 'sidePanel'].map((id) => {
+          const box = document.getElementById(id).getBoundingClientRect();
+          return [id, { left: box.left, right: box.right, top: box.top, bottom: box.bottom }];
+        })
+      )
+    );
+
+  test('the docked panel runs from the top bar to the bottom, and both bars start at its edge', async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await page.click('#groovesTab');
+    await expect(page.locator('#sidePanel')).toBeVisible();
+    const box = await boxes(page);
+    // The top bar keeps the full width: the tabs and the title stay where they are.
+    expect(box.TopNav).toMatchObject({ left: 0, right: 1440 });
+    expect(box.sidePanel).toMatchObject({ left: 0, top: box.TopNav.bottom, bottom: 900 });
+    for (const id of ['ToolBar', 'RightHandContent', 'PlaybackBar']) {
+      expect(box[id].left, id).toBe(box.sidePanel.right);
+      expect(box[id].right, id).toBe(1440);
+    }
+    expect(box.ToolBar.top).toBe(box.TopNav.bottom);
+    expect(box.PlaybackBar.bottom).toBe(900);
+    // Space still plays: the tab click leaves no focus in the panel.
+    await page.keyboard.press('Space');
+    await expect
+      .poll(() => page.evaluate(() => window.myGrooveWriter.myGrooveUtils.isPlaying()), {
+        timeout: 15000,
+      })
+      .toBe(true);
+    await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.stopMIDI_playback());
+  });
+
+  test('with the panel closed the bars and the music use the full width', async ({ page }) => {
+    await openEditor(page);
+    const closed = await boxes(page);
+    for (const id of ['TopNav', 'ToolBar', 'RightHandContent', 'PlaybackBar']) {
+      expect(closed[id], id).toMatchObject({ left: 0, right: 1440 });
+    }
+    // Open and close again: everything goes back to the full width.
+    await page.click('#groovesTab');
+    await expect(page.locator('#sidePanel')).toBeVisible();
+    await page.click('#groovesTab');
+    await expect(page.locator('#sidePanel')).toBeHidden();
+    expect(await boxes(page)).toMatchObject({
+      ToolBar: closed.ToolBar,
+      RightHandContent: closed.RightHandContent,
+      PlaybackBar: closed.PlaybackBar,
+    });
+  });
+
+  // The docked panel takes 300 px from both bars. They still fit, with no sideways scroll, from
+  // the narrowest docked window up.
+  test('with the panel docked both bars fit at every width from 1100 to 1500 px', async ({
+    page,
+  }) => {
+    await openEditor(page);
+    await page.evaluate(() => (document.getElementById('saveButton').hidden = false));
+    await page.click('#groovesTab');
+    await expect(page.locator('#sidePanel')).toBeVisible();
+    const problems = [];
+    for (let width = 1100; width <= 1500; width += 20) {
+      await page.setViewportSize({ width, height: 900 });
+      problems.push(...(await barProblems(page, width)));
+    }
+    expect(problems).toEqual([]);
+  });
+});
+
+// Items of the tool bar and the playback bar that overlap, leave their bar, or are smaller than a
+// finger. A bar that scrolls sideways is a problem too.
+function barProblems(page, label) {
+  return page.evaluate((label) => {
+    const covers = (a, b) =>
+      a.left < b.right - 0.5 &&
+      b.left < a.right - 0.5 &&
+      a.top < b.bottom - 0.5 &&
+      b.top < a.bottom - 0.5;
+    const itemsOf = (bar) =>
+      [
+        ...bar.querySelectorAll(
+          'button, .tempoKnob, #metronomeLabel, .MIDIPlayTime, .midiPlayImage'
+        ),
+      ]
+        .filter((node) => node.getClientRects().length && !node.closest('.swingRow'))
+        .map((node) => ({
+          name: node.id || node.className,
+          box: node.getBoundingClientRect(),
+          // The play time and the Click label are text, not targets.
+          isText: node.matches('#metronomeLabel, .MIDIPlayTime'),
+        }))
+        .filter(({ box }) => box.width > 0);
+    const problems = [];
+    for (const id of ['ToolBar', 'PlaybackBar']) {
+      const bar = document.getElementById(id);
+      const edge = bar.getBoundingClientRect();
+      const items = itemsOf(bar);
+      const report = (text) => problems.push(`${label} ${id}: ${text}`);
+      if (bar.scrollWidth > bar.clientWidth) report(`scroll ${bar.scrollWidth - bar.clientWidth}`);
+      items
+        .filter(({ box }) => box.left < edge.left || box.right > edge.right + 0.5)
+        .forEach(({ name }) => report(`outside ${name}`));
+      items
+        .filter(({ box, isText }) => !isText && (box.width < 44 || box.height < 44))
+        .forEach(({ name }) => report(`small ${name}`));
+      items.forEach((a, i) =>
+        items
+          .slice(i + 1)
+          .filter((b) => covers(a.box, b.box))
+          .forEach((b) => report(`${a.name} / ${b.name}`))
+      );
+    }
+    return problems;
+  }, label);
+}
+
+test.describe('the tools bar with touch', () => {
+  test.use({ hasTouch: true });
+
+  test('the tools bar fits or scrolls at 768x1024 and 1024x768, with 44 px targets', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await openEditor(page);
+    await page.evaluate(() => (document.getElementById('saveButton').hidden = false));
+    // The tablet widths fit without a sideways scroll.
+    for (const [width, height] of [
+      [768, 1024],
+      [1024, 768],
+    ]) {
+      await page.setViewportSize({ width, height });
+      expect(await barProblems(page, `${width}x${height}`)).toEqual([]);
+    }
+
+    // A narrower window scrolls the tools bar sideways. It does not wrap, and every tool can be
+    // reached, with its 44 px.
+    await page.setViewportSize({ width: 700, height: 1024 });
+    const bar = page.locator('#ToolBar');
+    expect((await bar.boundingBox()).height).toBe(52);
+    expect(await bar.evaluate((node) => getComputedStyle(node).overflowX)).toBe('auto');
+    expect(await bar.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+    // The Tab key brings the focused tool into view with its focus ring.
+    await page.focus('#shareSaveButton');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('#moreButton')).toBeFocused();
+    const more = await page.locator('#moreButton').boundingBox();
+    expect(more.x + more.width + 3).toBeLessThanOrEqual(700);
+    for (const id of ['#timeLabel', '#saveButton', '#shareSaveButton', '#moreButton']) {
+      const button = page.locator(id);
+      await button.scrollIntoViewIfNeeded();
+      const box = await button.boundingBox();
+      expect(box.x, id).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, id).toBeLessThanOrEqual(700.5);
+      expect(Math.min(box.width, box.height), id).toBeGreaterThanOrEqual(44);
+    }
+    // The tabs show only their icons, and keep their names.
+    await expect(page.locator('.panel-tab-label').first()).toBeHidden();
+    await expect(page.locator('#groovesTab')).toHaveAccessibleName('Grooves');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await expect(page.locator('.panel-tab-label').first()).toBeVisible();
+  });
 });
 
 // Controls (audit item 31 and the Severity 2 and 1 rows).
@@ -801,10 +1014,12 @@ for (const [width, height] of [
             '#metronome16ths',
             '#metronomeOptionsAnchor',
             '#swingButton',
-            '#saveButton',
-            '#shareSaveButton',
-            '#moreButton',
           ].map((selector) => [selector, box(selector).height]),
+          // The groove actions are in the tools bar, with its 44 px targets.
+          actions: ['#saveButton', '#shareSaveButton', '#moreButton'].map((selector) => [
+            selector,
+            box(selector).height,
+          ]),
           clickText: font('#metronome8ths'),
           tempoText: font('.tempoKnobNumber'),
         };
@@ -814,6 +1029,7 @@ for (const [width, height] of [
       expect(sizes.play.height).toBe(sizes.play.width);
       expect(sizes.knob.width).toBeGreaterThanOrEqual(72);
       expect(sizes.controls.filter(([, h]) => h !== 56)).toEqual([]);
+      expect(sizes.actions.filter(([, h]) => h !== 44)).toEqual([]);
       expect(sizes.clickText).toBeGreaterThanOrEqual(18);
       expect(sizes.tempoText).toBeGreaterThanOrEqual(20);
     });

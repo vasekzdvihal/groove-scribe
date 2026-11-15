@@ -10,7 +10,12 @@
 import { GrooveWriter } from './groove_writer.js';
 import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
-import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
+import {
+  initBarScroll,
+  initPlaybackControls,
+  initPopovers,
+  initSaveButton,
+} from './editorChrome.js';
 import { hasRememberedUser, initLibraryPanel } from './cloud/libraryPanel.js';
 import { createSidePanel } from './sidePanel.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
@@ -239,6 +244,7 @@ if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(wind
 }
 
 initPopovers();
+initBarScroll();
 
 // Back can bring this page out of the back-forward cache after another page in the tab wrote
 // the tab's storage. Write this page's own address and clean groove again.
