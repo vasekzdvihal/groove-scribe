@@ -59,6 +59,24 @@ export function createLibrary(sdk, db, uid) {
    * @param {function(Lists): Lists} patch
    */
   const queued = (committed, id, title, patch) => ({ committed, id, title, patch });
+
+  // The SDK sends a write again when the connection breaks before the answer arrives. If the
+  // server stored the first copy, the rules see the second one as an update of the new document
+  // and refuse it, because its createdAt is a new time. The document is saved all the same, so
+  // a refusal counts only when the server does not have the document. The rules refuse a read
+  // of a missing document, so a failed read also counts as a refusal.
+  async function existsOnServer(ref) {
+    try {
+      return (await sdk.getDocFromServer(ref)).exists();
+    } catch {
+      return false;
+    }
+  }
+  const create = (ref, fields) =>
+    sdk.setDoc(ref, fields).catch(async (error) => {
+      if (!(await existsOnServer(ref))) throw error;
+    });
+
   // A new document. If the server refuses it, it is gone for good.
   const isNew = (...args) => ({ ...queued(...args), isNew: true });
 
@@ -124,7 +142,7 @@ export function createLibrary(sdk, db, uid) {
       const ref = sdk.doc(lessons);
       const fields = { ownerId: uid, name: cleanName(name) };
       return isNew(
-        sdk.setDoc(ref, { ...fields, createdAt: now(), updatedAt: now() }),
+        create(ref, { ...fields, createdAt: now(), updatedAt: now() }),
         ref.id,
         fields.name,
         (lists) => ({
@@ -185,7 +203,7 @@ export function createLibrary(sdk, db, uid) {
         query: withTitle(query, cleanTitle),
       };
       const written = isNew(
-        sdk.setDoc(ref, { ...fields, createdAt: now(), updatedAt: now() }),
+        create(ref, { ...fields, createdAt: now(), updatedAt: now() }),
         ref.id,
         fields.title,
         (lists) => ({

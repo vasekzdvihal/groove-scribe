@@ -20,6 +20,7 @@ export {
   getDoc,
   getDocs,
   getDocsFromCache,
+  getDocFromServer,
   getDocsFromServer,
   initializeFirestore,
   orderBy,
