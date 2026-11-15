@@ -239,15 +239,44 @@ describe('createSidePanel', () => {
   });
 
   it('works without a library tab', () => {
-    setUp({ stored: { 'grooveScribe.libraryOpen': 'true', 'grooveScribe.panelTab': 'library' } });
+    setUp({ stored: { 'grooveScribe.panelTab': 'library' } });
     const panel = createSidePanel({ tabs: [PERMUTATIONS, GROOVES] });
     expect([...document.querySelectorAll('#upperLeft button')].map((b) => b.id)).toEqual([
       'permutationsTab',
       'groovesTab',
     ]);
-    panel.start({ defaultOpen: false, defaultTab: 'grooves' });
+    panel.start({ defaultOpen: true, defaultTab: 'grooves' });
     expect(panel.activeTab()).toBe('grooves');
     expect(document.getElementById('libraryPanel')).toBeNull();
+  });
+
+  // The library panel owns grooveScribe.libraryOpen until the library is a tab of the side panel.
+  it('does not touch grooveScribe.libraryOpen without a library tab', () => {
+    setUp({ stored: { 'grooveScribe.libraryOpen': 'true', 'grooveScribe.panelTab': 'grooves' } });
+    const getItem = vi.spyOn(storage, 'getItem');
+    const setItem = vi.spyOn(storage, 'setItem');
+    const panel = createSidePanel({ tabs: [PERMUTATIONS, GROOVES] });
+    panel.start({ defaultOpen: false, defaultTab: 'grooves' });
+    // The stored value is the library's: the docked panel starts closed.
+    expect(panel.isOpen()).toBe(false);
+    panel.show('grooves');
+    panel.close();
+    const keys = (spy) => spy.mock.calls.map(([key]) => key);
+    expect(keys(getItem)).not.toContain('grooveScribe.libraryOpen');
+    expect(keys(setItem)).not.toContain('grooveScribe.libraryOpen');
+    expect(storage.map.get('grooveScribe.libraryOpen')).toBe('true');
+    expect(storage.map.get('grooveScribe.panelTab')).toBe('grooves');
+  });
+
+  it('without a library tab, a docked panel the user left open comes back after a turn', () => {
+    setUp();
+    const panel = createSidePanel({ tabs: [PERMUTATIONS, GROOVES] });
+    panel.start({ defaultOpen: false, defaultTab: 'grooves' });
+    panel.show('grooves');
+    media.set(false);
+    expect(panel.isOpen()).toBe(false);
+    media.set(true);
+    expect(panel.activeTab()).toBe('grooves');
   });
 
   it('afterPick closes the overlay and focuses the tab, and blurs when docked', () => {

@@ -8,6 +8,8 @@
 import { isAskingToDiscard } from './confirmDialog.js';
 
 // The docked panel is open. The key is older than the side panel: the library panel used it.
+// The side panel uses it only when it has a Library tab. Without one, the key belongs to the
+// library panel, and the docked choice lasts until the page closes.
 const KEEP_OPEN_KEY = 'grooveScribe.libraryOpen';
 // The tab the panel showed last.
 const TAB_KEY = 'grooveScribe.panelTab';
@@ -66,6 +68,7 @@ function tabButton(tab) {
 export function createSidePanel({ tabs }) {
   const docked = window.matchMedia(DOCKED_QUERY);
   const byTab = new Map(tabs.map((tab) => [tab.id, tab]));
+  const storesKeepOpen = byTab.has('library');
 
   const backdrop = document.createElement('div');
   backdrop.id = 'sidePanelBackdrop';
@@ -137,7 +140,7 @@ export function createSidePanel({ tabs }) {
   function rememberDockedChoice(isOpen) {
     if (!docked.matches) return;
     keepOpen = isOpen;
-    writeStored(KEEP_OPEN_KEY, String(isOpen));
+    if (storesKeepOpen) writeStored(KEEP_OPEN_KEY, String(isOpen));
   }
 
   function reveal(id, byUser) {
@@ -195,11 +198,12 @@ export function createSidePanel({ tabs }) {
 
   /**
    * Apply the stored state once. A docked panel opens when the user left it open, or when
-   * nothing is stored and defaultOpen is true. An overlay panel stays closed.
+   * nothing is stored (always so without a Library tab) and defaultOpen is true. An overlay
+   * panel stays closed.
    * @param {{ defaultOpen: boolean, defaultTab: TabId }} options
    */
   function start({ defaultOpen, defaultTab }) {
-    const stored = readStored(KEEP_OPEN_KEY);
+    const stored = storesKeepOpen ? readStored(KEEP_OPEN_KEY) : null;
     keepOpen = stored === null ? defaultOpen : stored === 'true';
     const storedTab = /** @type {TabId} */ (readStored(TAB_KEY));
     if (byTab.has(storedTab)) lastTab = storedTab;
