@@ -11,6 +11,12 @@ lock. Read this before you change editor UI.
 - The player markup is shared with the embed pages. `initPlaybackControls` in
   `js/editorChrome.js` changes it in the editor only. Never edit the shared markup for an
   editor-only change.
+- The playback bar is the main control from the drum stool, so it is bigger than the rest: the
+  bar is 96 px (`--bar-playback-height`) and its controls are 56 px tall (`--playback-touch`).
+  Below 1001 px and below 768 px the controls get narrower, not lower, so the bar fits down to
+  680 px. Below that it scrolls sideways.
+- `groove_writer.css` sets `transition: all` on old buttons. A control whose size changes with
+  the window width must limit its transition to colours, or tests measure it mid-change.
 
 ## Tempo knob
 

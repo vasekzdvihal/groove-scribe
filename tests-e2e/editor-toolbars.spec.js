@@ -687,6 +687,8 @@ for (const [width, height] of [
 
       test('every item is in view and covers no other', async ({ page }) => {
         await openEditor(page);
+        // A signed-in user also has Save, so check the fullest bar.
+        await page.evaluate(() => (document.getElementById('saveButton').hidden = false));
         const report = await page.evaluate(() => {
           const result = {};
           for (const id of ['ToolBar', 'PlaybackBar']) {
@@ -733,6 +735,56 @@ for (const [width, height] of [
       });
     });
   }
+}
+
+// The playback bar is the drummer's main control in the rehearsal room, so its controls are
+// bigger than the 44 px minimum: easy to hit with a finger from the drum stool.
+for (const [width, height] of [
+  [1024, 768],
+  [768, 1024],
+  [1440, 900],
+]) {
+  test.describe(`playback bar size at ${width}x${height}`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true });
+
+    test('the bar is 96 px tall and its controls are big', async ({ page }) => {
+      await openEditor(page);
+      await page.evaluate(() => (document.getElementById('saveButton').hidden = false));
+      const sizes = await page.evaluate(() => {
+        const box = (selector) => {
+          const rect = document.querySelector(selector).getBoundingClientRect();
+          return { width: Math.round(rect.width), height: Math.round(rect.height) };
+        };
+        const font = (selector) =>
+          parseFloat(getComputedStyle(document.querySelector(selector)).fontSize);
+        return {
+          bar: box('#PlaybackBar').height,
+          play: box('#midiPlayer .midiPlayImage'),
+          knob: box('.tempoKnob'),
+          controls: [
+            '#metronomeOff',
+            '#metronome4ths',
+            '#metronome8ths',
+            '#metronome16ths',
+            '#metronomeOptionsAnchor',
+            '#swingButton',
+            '#saveButton',
+            '#shareSaveButton',
+            '#moreButton',
+          ].map((selector) => [selector, box(selector).height]),
+          clickText: font('#metronome8ths'),
+          tempoText: font('.tempoKnobNumber'),
+        };
+      });
+      expect(sizes.bar).toBe(96);
+      expect(sizes.play.width).toBeGreaterThanOrEqual(64);
+      expect(sizes.play.height).toBe(sizes.play.width);
+      expect(sizes.knob.width).toBeGreaterThanOrEqual(72);
+      expect(sizes.controls.filter(([, h]) => h !== 56)).toEqual([]);
+      expect(sizes.clickText).toBeGreaterThanOrEqual(18);
+      expect(sizes.tempoText).toBeGreaterThanOrEqual(20);
+    });
+  });
 }
 
 test.describe('controls, fix round 1', () => {
@@ -854,7 +906,7 @@ for (const [width, height] of [
       await expect(bar.getByRole('button', { name: /Faster|Slower/ })).toHaveCount(0);
       await expect(bar.locator('input[type="range"]:visible')).toHaveCount(0);
       // The knob keeps the bar at its height.
-      expect((await bar.boundingBox()).height).toBe(76);
+      expect((await bar.boundingBox()).height).toBe(96);
     });
 
     test('a turn of the knob changes the tempo by 1 BPM for each 6 degrees', async ({ page }) => {
