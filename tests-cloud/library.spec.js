@@ -2076,6 +2076,60 @@ test.describe('without a network', () => {
       expect(renamedGroove.title.stringValue).toBe('y'.repeat(200));
     });
 
+    // The server stores the write, and its answer is lost on the way. The SDK sends the write
+    // again, and the rules refuse the copy: the document exists now, so it is an update.
+    // The page goes offline, so the answer cannot arrive, and the test sends the write.
+    async function loseFirstAnswer(page, text) {
+      let lost = false;
+      await page.route(/Firestore\/Write\/channel/, async (route) => {
+        const request = route.request();
+        if (lost || !(request.postData() ?? '').includes(encodeURIComponent(text))) {
+          return route.continue();
+        }
+        lost = true;
+        await page.context().setOffline(true);
+        await page.request.fetch(request.url(), {
+          method: 'POST',
+          headers: request.headers(),
+          data: request.postDataBuffer(),
+        });
+        await route.abort('internetdisconnected');
+      });
+      return () => lost;
+    }
+
+    test('a new lesson whose answer was lost is not reported as refused', async ({ page }) => {
+      await signedInPanel(page);
+      await synced(page);
+      const wasLost = await loseFirstAnswer(page, 'Lost answer');
+      await createLesson(page, 'Lost answer');
+      await expect.poll(wasLost).toBe(true);
+
+      await goOnline(page);
+      await synced(page);
+      await expect(alert(page)).toBeHidden();
+      await expect(page.locator('.lp-lesson-toggle', { hasText: 'Lost answer' })).toBeVisible();
+      expect((await savedDocs(page, 'lessons')).map((item) => item.name.stringValue)).toEqual([
+        'Lost answer',
+      ]);
+    });
+
+    test('a new groove whose answer was lost is not reported as refused', async ({ page }) => {
+      await signedInPanel(page);
+      await synced(page);
+      const wasLost = await loseFirstAnswer(page, 'Lost answer');
+      await addLink(page, QUERY, 'Lost answer');
+      await expect.poll(wasLost).toBe(true);
+
+      await goOnline(page);
+      await synced(page);
+      await expect(alert(page)).toBeHidden();
+      await expect(grooveButton(page, 'Lost answer')).toBeVisible();
+      expect((await savedDocs(page, 'grooves')).map((item) => item.title.stringValue)).toEqual([
+        'Lost answer',
+      ]);
+    });
+
     test.describe('a queued write on a device that did not open the panel', () => {
       const watchSdk = (page) => {
         const requests = [];

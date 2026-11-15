@@ -54,6 +54,9 @@ function createFakeSdk() {
     online: true,
     // The next write is refused by the server: the cache drops it again.
     refuseNext: false,
+    // The server stores the next write, the answer is lost, and the SDK sends it again. The
+    // rules refuse the copy.
+    refuseCopyOfNext: false,
     calls,
     collections,
     popups,
@@ -82,6 +85,13 @@ function createFakeSdk() {
 
   function write(ref, update) {
     const docs = collections.get(ref.collection);
+    if (fake.refuseCopyOfNext) {
+      fake.refuseCopyOfNext = false;
+      const item = update(docs.get(ref.id));
+      if (item) docs.set(ref.id, { ...item, pending: false });
+      else docs.delete(ref.id);
+      return Promise.reject(Object.assign(new Error('refused'), { code: 'permission-denied' }));
+    }
     if (fake.refuseNext) {
       fake.refuseNext = false;
       const before = docs.get(ref.id);
@@ -157,6 +167,13 @@ function createFakeSdk() {
     },
     getDocsFromServer: async (query) => snapshot(query, false),
     getDoc: async (ref) => ({ exists: () => collections.get(ref.collection).has(ref.id) }),
+    // The rules refuse a read of a missing document.
+    async getDocFromServer(ref) {
+      if (!collections.get(ref.collection).has(ref.id)) {
+        throw Object.assign(new Error('refused'), { code: 'permission-denied' });
+      }
+      return { exists: () => true };
+    },
     setDoc: (ref, fields) => write(ref, () => ({ fields: { ...fields }, order: ++order })),
     updateDoc: (ref, fields) =>
       write(ref, (item) => ({ ...item, fields: { ...item.fields, ...fields } })),
@@ -285,6 +302,24 @@ describe('createLibrary: a change draws without a read', () => {
       library.renameGroove('g3', 'Named', untitled)
     );
     expect(again.grooves.at(-1)).toMatchObject({ title: 'Named', query: untitled });
+  });
+
+  it('does not report a refused copy of a new document that the server stored', async () => {
+    const library = createLibrary(fake.sdk, 'db', UID);
+    fake.refuseCopyOfNext = true;
+    await expect(library.createLesson('Afro').committed).resolves.toBeUndefined();
+    fake.refuseCopyOfNext = true;
+    const saved = library.saveGroove({ query: BEAT, title: 'Copy', lessonId: null });
+    await expect(saved.committed).resolves.toBeUndefined();
+  });
+
+  it('reports a refused new document that the server does not have', async () => {
+    const library = createLibrary(fake.sdk, 'db', UID);
+    fake.refuseNext = true;
+    await expect(library.createLesson('Afro').committed).rejects.toThrow('refused');
+    fake.refuseNext = true;
+    const saved = library.saveGroove({ query: BEAT, title: 'Refused', lessonId: null });
+    await expect(saved.committed).rejects.toThrow('refused');
   });
 
   it('names the item in a refusal of a move, a delete and a lesson rename', async () => {

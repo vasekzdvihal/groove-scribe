@@ -35,6 +35,9 @@ Code: `pendingSync.js`, `libraryPanel.js`.
 - A queued delete has no row, so writes are counted in session state.
 - In memory mode, a queued write of any kind warns before the page leaves.
 - `deleteLesson` needs the server and is refused offline.
+- The SDK sends a write again when the connection breaks before the answer. The rules refuse a
+  second copy of a new lesson or groove as an update. `library.js` reports that refusal only when
+  the server does not have the document (`getDocFromServer`).
 
 ## Recovery from a bad service worker
 
