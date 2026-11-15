@@ -39,6 +39,7 @@ import {
   constant_ABC_STICK_OFF,
   constant_ABC_STICK_R,
   constant_ABC_T1_Normal,
+  constant_ABC_T2_Normal,
   constant_ABC_T4_Normal,
   constant_note_on_color_rgb,
   constant_snare_accent_on_color_rgb,
@@ -130,6 +131,8 @@ export function get_tom_state(id, tom_num, returnType) {
       switch (tom_num) {
         case 1:
           return constant_ABC_T1_Normal; // normal
+        case 2:
+          return constant_ABC_T2_Normal; // normal
         case 4:
           return constant_ABC_T4_Normal; // normal
         default:
@@ -335,11 +338,11 @@ export function get32NoteArrayFromClickableUI(
 
     if (ctx.tomsVisible) {
       Toms_Array[0][array_index] = get_tom_state(i + startIndexForClickableUI, 1, 'ABC');
+      Toms_Array[1][array_index] = get_tom_state(i + startIndexForClickableUI, 2, 'ABC');
       Toms_Array[3][array_index] = get_tom_state(i + startIndexForClickableUI, 4, 'ABC');
-      if (ctx.keptTomLanes) {
-        // Toms 2 and 3 have no grid row, so their notes come from the loaded groove.
-        Toms_Array[1][array_index] = ctx.keptTomLanes[0][i + startIndexForClickableUI];
-        Toms_Array[2][array_index] = ctx.keptTomLanes[1][i + startIndexForClickableUI];
+      if (ctx.keptTom3Lane) {
+        // Tom 3 has no grid row, so its notes come from the loaded groove.
+        Toms_Array[2][array_index] = ctx.keptTom3Lane[i + startIndexForClickableUI];
       }
     }
 

@@ -8,6 +8,67 @@
 
 import { constant_MAX_MEASURES } from './constants.js';
 
+// One tom lane (High tom = 1, Mid tom = 2, Floor tom = 4) of a bar in the note grid.
+function tomLaneHTML(tomNum, baseindex, indexStartForNotes, ctx) {
+  var newHTML = '';
+  var i;
+  newHTML +=
+    '\
+										<div class="toms-container" id="tom' +
+    tomNum +
+    '-container">\
+											<div class="opening_note_space"> </div>';
+  for (i = indexStartForNotes; i < ctx.notesPerMeasure + indexStartForNotes; i++) {
+    newHTML +=
+      '\
+						<div id="tom' +
+      tomNum +
+      '-' +
+      i +
+      '" class="tom" onClick="myGrooveWriter.noteLeftClick(event, \'tom' +
+      tomNum +
+      "', " +
+      i +
+      ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteRightClick(event, \'tom' +
+      tomNum +
+      "', " +
+      i +
+      ')" onmouseenter="myGrooveWriter.noteOnMouseEnter(event, \'tom' +
+      tomNum +
+      "', " +
+      i +
+      ')">\
+							<div class="tom_circle note_part"  id="tom_circle' +
+      tomNum +
+      '-' +
+      i +
+      '"></div>\
+						</div>\n\
+						';
+
+    if (
+      (i - (indexStartForNotes - 1)) % ctx.noteGrouping === 0 &&
+      i < ctx.notesPerMeasure + indexStartForNotes - 1
+    ) {
+      newHTML += '<div class="space_between_note_groups"> </div> \n';
+    }
+  }
+  newHTML +=
+    '<span class="unmuteTom' +
+    tomNum +
+    'Button" id="unmutetom' +
+    tomNum +
+    'Button' +
+    baseindex +
+    '" onClick=\'myGrooveWriter.muteInstrument("tom' +
+    tomNum +
+    '", ' +
+    baseindex +
+    ', false)\'><span class="fa-stack unmuteStack"><i class="fa fa-ban fa-stack-2x" style="color:red"></i><i class="fa fa-volume-down fa-stack-1x"></i></span>';
+  newHTML += '<div class="end_note_space"></div>\n</div>\n';
+  return newHTML;
+}
+
 export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
   var newHTML =
     '\
@@ -98,7 +159,12 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
     baseindex +
     ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteLabelClick(event, \'tom1\', ' +
     baseindex +
-    ')">Tom</div>\
+    ')">High tom</div>\
+									<div class="tom-label" id="tom2-label" onClick="myGrooveWriter.noteLabelClick(event, \'tom2\', ' +
+    baseindex +
+    ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteLabelClick(event, \'tom2\', ' +
+    baseindex +
+    ')">Mid tom</div>\
 									<div class="snare-label" onClick="myGrooveWriter.noteLabelClick(event, \'snare\', ' +
     baseindex +
     ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteLabelClick(event, \'snare\', ' +
@@ -108,7 +174,7 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
     baseindex +
     ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteLabelClick(event, \'tom4\', ' +
     baseindex +
-    ')">Tom</div>\
+    ')">Floor tom</div>\
 									<div class="kick-label" onClick="myGrooveWriter.noteLabelClick(event, \'kick\', ' +
     baseindex +
     ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteLabelClick(event, \'kick\', ' +
@@ -213,43 +279,9 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
     ', false)\'><span class="fa-stack unmuteHHStack"><i class="fa fa-ban fa-stack-2x" style="color:red"></i><i class="fa fa-volume-down fa-stack-1x"></i></div>';
   newHTML += '<div class="end_note_space"></div>\n</div>\n';
 
-  // Toms 1
-  newHTML +=
-    '\
-										<div class="toms-container" id="tom1-container">\
-											<div class="opening_note_space"> </div>';
-  for (i = indexStartForNotes; i < ctx.notesPerMeasure + indexStartForNotes; i++) {
-    newHTML +=
-      '\
-						<div id="tom1-' +
-      i +
-      '" class="tom" onClick="myGrooveWriter.noteLeftClick(event, \'tom1\', ' +
-      i +
-      ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteRightClick(event, \'tom1\', ' +
-      i +
-      ')" onmouseenter="myGrooveWriter.noteOnMouseEnter(event, \'tom1\', ' +
-      i +
-      ')">\
-							<div class="tom_circle note_part"  id="tom_circle1-' +
-      i +
-      '"></div>\
-						</div>\n\
-						';
-
-    if (
-      (i - (indexStartForNotes - 1)) % ctx.noteGrouping === 0 &&
-      i < ctx.notesPerMeasure + indexStartForNotes - 1
-    ) {
-      newHTML += '<div class="space_between_note_groups"> </div> \n';
-    }
-  }
-  newHTML +=
-    '<span class="unmuteTom1Button" id="unmutetom1Button' +
-    baseindex +
-    '" onClick=\'myGrooveWriter.muteInstrument("tom1", ' +
-    baseindex +
-    ', false)\'><span class="fa-stack unmuteStack"><i class="fa fa-ban fa-stack-2x" style="color:red"></i><i class="fa fa-volume-down fa-stack-1x"></i></span>';
-  newHTML += '<div class="end_note_space"></div>\n</div>\n';
+  // Toms 1 and 2 (High and Mid tom)
+  newHTML += tomLaneHTML(1, baseindex, indexStartForNotes, ctx);
+  newHTML += tomLaneHTML(2, baseindex, indexStartForNotes, ctx);
 
   // Snare stuff
   newHTML +=
@@ -346,43 +378,8 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
     ', false)\'><span class="fa-stack unmuteStack"><i class="fa fa-ban fa-stack-2x" style="color:red"></i><i class="fa fa-volume-down fa-stack-1x"></i></span>';
   newHTML += '<div class="end_note_space"></div>\n</div>\n';
 
-  // Toms 4
-  newHTML +=
-    '\
-										<div class="toms-container" id="tom4-container">\
-											<div class="opening_note_space"> </div>';
-  for (i = indexStartForNotes; i < ctx.notesPerMeasure + indexStartForNotes; i++) {
-    newHTML +=
-      '\
-						<div id="tom4-' +
-      i +
-      '" class="tom" onClick="myGrooveWriter.noteLeftClick(event, \'tom4\', ' +
-      i +
-      ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteRightClick(event, \'tom4\', ' +
-      i +
-      ')" onmouseenter="myGrooveWriter.noteOnMouseEnter(event, \'tom4\', ' +
-      i +
-      ')">\
-							<div class="tom_circle note_part"  id="tom_circle4-' +
-      i +
-      '"></div>\
-						</div>\n\
-						';
-
-    if (
-      (i - (indexStartForNotes - 1)) % ctx.noteGrouping === 0 &&
-      i < ctx.notesPerMeasure + indexStartForNotes - 1
-    ) {
-      newHTML += '<div class="space_between_note_groups"> </div> \n';
-    }
-  }
-  newHTML +=
-    '<span class="unmuteTom4Button" id="unmutetom4Button' +
-    baseindex +
-    '" onClick=\'myGrooveWriter.muteInstrument("tom4", ' +
-    baseindex +
-    ', false)\'><span class="fa-stack unmuteStack"><i class="fa fa-ban fa-stack-2x" style="color:red"></i><i class="fa fa-volume-down fa-stack-1x"></i></span>';
-  newHTML += '<div class="end_note_space"></div>\n</div>\n';
+  // Toms 4 (Floor tom)
+  newHTML += tomLaneHTML(4, baseindex, indexStartForNotes, ctx);
 
   // Kick stuff
   newHTML +=

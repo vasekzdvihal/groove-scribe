@@ -379,7 +379,7 @@ export function getUrlStringFromGrooveData(myGrooveData, url_destination) {
         total_notes,
         myGrooveData.notesPerMeasure
       );
-    // T2 and T3 have no grid rows. They are written only when they hold notes, and in lane order.
+    // T2 (Mid tom) and T3 are written only when they hold notes, and in lane order.
     fullURL +=
       Tom1 +
       tomLaneIfUsed('T2', myGrooveData.toms_array[1]) +

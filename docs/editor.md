@@ -37,8 +37,11 @@ lock. Read this before you change editor UI.
   draws off notes smaller: a cue for "on" that is not colour.
 - `renderNoteGrid()` owns the `--notes` and `--groups` custom properties on `#measureContainer`.
   The grid CSS sizes the cells and the bars from them.
-- The grid has rows only for toms 1 and 4. A loaded groove keeps toms 2 and 3 in
-  `class_kept_toms`, valid for one bar layout, with the same visibility rule as toms 1 and 4.
+- The grid has rows for toms 1, 2 and 4: High, Mid and Floor tom, in sheet-music order. A loaded
+  groove keeps tom 3 in `class_kept_toms`, valid for one bar layout, with the same visibility
+  rule as the other toms.
+- The label column is 100 px wide on a wide screen, so "Floor tom" fits on one line. Narrower
+  columns let a tom name go onto two lines.
 - The metronome auto speed-up rewrites the newest undo step instead of adding one.
 
 ## Sound

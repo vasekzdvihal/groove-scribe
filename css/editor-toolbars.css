@@ -356,7 +356,8 @@
   --kick-line-top: var(--cell-height);
   /* The beat lines and the playback highlight stop at the kick line. */
   --below-kick-line: calc(var(--kick-height) - var(--kick-line-top) - var(--lane-line));
-  --label-width: 80px;
+  /* Room for "Floor tom" on one line at 20 px, with the label padding. */
+  --label-width: 100px;
   --beat-gap: 16px;
   --bar-gap: 24px;
   /* The narrowest a bar may be before it goes to the next row: 44 px cells. */
@@ -575,6 +576,17 @@
   font-size: 12px;
 }
 
+/* A tom name goes onto two lines when the label column is too narrow for it. */
+#musicalInput .line-labels .tom-label {
+  white-space: normal;
+  line-height: 1.1;
+}
+
+/* Labels start at the left edge, also when a name goes onto two lines. */
+#musicalInput .line-labels > div {
+  text-align: left;
+}
+
 /* The hi-hat symbols sit low in their lane. */
 #musicalInput .line-labels .hh-label {
   padding-top: 8px;
@@ -590,6 +602,7 @@
 #musicalInput .unmuteSnareButton,
 #musicalInput .unmuteKickButton,
 #musicalInput .unmuteTom1Button,
+#musicalInput .unmuteTom2Button,
 #musicalInput .unmuteTom4Button {
   position: absolute;
   top: 0;
