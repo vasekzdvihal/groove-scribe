@@ -9,7 +9,7 @@ Readme for Groove Scribe Source Code.
 - A secondary application is referred to as **Groove Display** in the source code and includes the sheet-music generator and the MIDI player.
 - Shared logic used by both lives in **Groove Utils**.
 
-Since the 2026 refactor, the source in `js/` is loaded as **native ES modules** (`<script type="module">`) — there is **no build/bundler step**. Serve the project over HTTP (`npm run serve`) rather than opening the HTML via `file://`, or the sound library will fail to load. See `README.md` for the developer tooling (Vitest, Playwright, ESLint, Prettier, TypeScript `checkJs`, Knip) and `CLAUDE.md` for a fuller architecture tour.
+Since the 2026 refactor, the source in `js/` is loaded as **native ES modules** (`<script type="module">`) — there is **no build/bundler step**. Serve the project over HTTP (`npm run serve`) rather than opening the HTML via `file://`, or the sound library will fail to load. See `README.md` for the developer tooling (Vitest, Playwright, ESLint, Prettier, TypeScript `checkJs`, Knip) and `docs/architecture.md` for a fuller architecture tour.
 
 ## Data flow
 

@@ -10,7 +10,7 @@ and means you don't need any native toolchain (or a Mac) locally to ship builds.
 
 ## How a build happens (GitHub Actions)
 
-Workflow: [`.github/workflows/mobile-build.yml`](.github/workflows/mobile-build.yml).
+Workflow: [`.github/workflows/mobile-build.yml`](../.github/workflows/mobile-build.yml).
 It has two independent jobs:
 
 | Job       | Runner          | Produces                                              |
@@ -46,11 +46,11 @@ Android APK. Shipping to stores / real iOS devices additionally needs:
 
 ## Configuration
 
-- [`capacitor.config.json`](capacitor.config.json) — `appId`
+- [`capacitor.config.json`](../capacitor.config.json) — `appId`
   (`com.montulli.groovescribe`), `appName` ("Groove Scribe"), and
   `webDir: "www"`. Change `appId` here before your first store submission (it's
   permanent once published).
-- [`scripts/build-www.mjs`](scripts/build-www.mjs) — assembles `www/` (the
+- [`scripts/build-www.mjs`](../scripts/build-www.mjs) — assembles `www/` (the
   Capacitor web-dir) from the runtime files only: `index.html`, the app-wired
   pages, `js/ css/ MIDI.js/ images/ font-awesome/`, and the two `gunshot`
   soundfonts the app loads. It excludes `node_modules`, the test suites, and the
@@ -70,7 +70,7 @@ npx cap add android && npx cap sync android && npx cap open android
 npx cap add ios && npx cap sync ios && npx cap open ios
 ```
 
-Note: the repo pins **Node 22** (see [`.nvmrc`](.nvmrc)), which the CI runners
+Note: the repo pins **Node 22** (see [`.nvmrc`](../.nvmrc)), which the CI runners
 also use. Capacitor 6 is used here; Capacitor 7 also works on Node 20+, so you
 can upgrade later if you want its newer features.
 
