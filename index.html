@@ -40,6 +40,7 @@
 		<link rel="modulepreload" href="js/wakeLock.js">
 		<link rel="modulepreload" href="js/registerServiceWorker.js">
 		<link rel="modulepreload" href="js/confirmDialog.js">
+		<link rel="modulepreload" href="js/sidePanel.js">
 		<link rel="modulepreload" href="js/cloud/libraryPanel.js">
 		<link rel="modulepreload" href="js/cloud/firebaseClient.js">
 		<link rel="modulepreload" href="js/cloud/firebaseConfig.js">
@@ -92,6 +93,7 @@
 	    <link rel="stylesheet" type="text/css" href="css/confirm-dialog.css">
 		<link rel="stylesheet" type="text/css" href="css/groove_display_orange.css">
 		<link rel="stylesheet" type="text/css" href="css/editor-toolbars.css">
+		<link rel="stylesheet" type="text/css" href="css/side-panel.css">
 		<link rel="stylesheet" type="text/css" href="css/fonts.css">
 
 		<!--   Other peoples JS libraries    -->
@@ -134,7 +136,7 @@
 		<div class="nonPrintable">
 			<div id="TopNav">
 				<span id="logoTextUpperLeft"><img src="images/GScribe_Logo_word_stack.svg" alt="Groove Scribe"></span>
-				<!-- The library button is added by js/cloud/libraryPanel.js. -->
+				<!-- The side panel tabs (js/sidePanel.js) go here. -->
 				<span id="upperLeft"></span>
 				<span id="grooveTitleDisplay"></span>
 				<span id="upperRight">
@@ -151,9 +153,6 @@
 				<button type="button" class="tool edit-block" id="undoButton" aria-disabled="true" aria-label="Undo" onclick="myGrooveWriter.undoCommand();"><span class="tool-in"><i class="fa fa-undo"></i><span class="tool-label">Undo</span></span></button>
 				<button type="button" class="tool edit-block" id="redoButton" aria-disabled="true" aria-label="Redo" onclick="myGrooveWriter.redoCommand();"><span class="tool-in"><i class="fa fa-repeat"></i><span class="tool-label">Redo</span></span></button>
 				<span class="tool-sep edit-block"></span>
-				<button type="button" class="tool tool-caret grooveDB_hidden" id="permutationAnchor" onclick="myGrooveWriter.permutationAnchorClick(event);"><span class="tool-in">Permutations</span></button>
-				<button type="button" class="tool tool-caret" id="groovesAnchor" onclick="myGrooveWriter.groovesAnchorClick(event);"><span class="tool-in">Grooves</span></button>
-				<span class="tool-sep"></span>
 				<button type="button" class="tool edit-block" id="showHideTomsButton" onclick="event.preventDefault(); myGrooveWriter.showHideToms(false, false);"><span class="tool-in">Toms</span></button>
 				<button type="button" class="tool tool-caret grooveDB_hidden" id="stickingsButton" onclick="myGrooveWriter.stickingsAnchorClick();"><span class="tool-in">Stickings</span></button>
 				<!-- Populated by js/main.js after load (was document.write). -->
@@ -161,6 +160,14 @@
 				<span class="tool-grow"></span>
 				<button type="button" class="tool tool-caret edit-block grooveDB_hidden" id="detailsButton" data-popover="detailsPopover"><span class="tool-in">Details</span></button>
 				<span id="viewEditSwitchSlot"></span>
+				<!-- The groove actions. They stay in view mode. The library shows Save, because without
+				     the library there is nothing to save to. -->
+				<span class="tool-sep"></span>
+				<span class="tool-group">
+					<button type="button" class="tool tool-primary grooveDB_hidden" id="saveButton" aria-label="Save" hidden><span class="tool-in"><i class="fa fa-floppy-o" aria-hidden="true"></i><span class="tool-label">Save</span></span></button>
+					<button type="button" class="tool tool-primary grooveDB_hidden" id="shareSaveButton" aria-label="Share" onclick="event.preventDefault(); myGrooveWriter.show_FullURLPopup();"><span class="tool-in"><i class="fa fa-share"></i><span class="tool-label">Share</span></span></button>
+				</span>
+				<button type="button" class="tool" id="moreButton" aria-label="More actions" data-popover="morePopover"><span class="tool-in"><i class="fa fa-ellipsis-h"></i></span></button>
 			</div>
 
 			<div id="PlaybackBar">
@@ -178,13 +185,6 @@
 				</span>
 				<span class="tool-sep"></span>
 				<button type="button" class="tool tool-caret" id="swingButton" data-popover="swingPopover"><span class="tool-in"><span id="swingButtonLabel">Swing</span></span></button>
-				<!-- The library panel shows Save, because without the library there is nothing to save to.
-				     The group keeps Save next to Share when the bar spreads out its items. -->
-				<span class="tool-group">
-					<button type="button" class="tool tool-primary grooveDB_hidden" id="saveButton" aria-label="Save" hidden><span class="tool-in"><i class="fa fa-floppy-o" aria-hidden="true"></i><span class="tool-label">Save</span></span></button>
-					<button type="button" class="tool tool-primary grooveDB_hidden" id="shareSaveButton" aria-label="Share" onclick="event.preventDefault(); myGrooveWriter.show_FullURLPopup();"><span class="tool-in"><i class="fa fa-share"></i><span class="tool-label">Share</span></span></button>
-				</span>
-				<button type="button" class="tool" id="moreButton" aria-label="More actions" data-popover="morePopover"><span class="tool-in"><i class="fa fa-ellipsis-h"></i></span></button>
 			</div>
 
 			<div class="tool-popover" id="divisionPopover" hidden>
@@ -220,12 +220,6 @@
 		</div>
 
 		<div id="RightHandContent">
-			<div class="nonPrintable">
-
-				<!-- Contents built by js/main.js (was document.write). -->
-				<div id="PermutationOptions"></div>
-			</div>
-
 			<div class="Printable">
 				<!-- rendering area -->
 				<div id="sheetMusicDiv" class="fullWidthEle">
@@ -449,13 +443,6 @@
 			</ul>
 		</div>
 		<div class="noteContextMenu">
-			<ul id="permutationContextMenu" class="list">
-				<li onclick='myGrooveWriter.permutationPopupClick("none");'><b>None</b></li>
-				<li onclick='myGrooveWriter.permutationPopupClick("kick_16ths");'><b>Kick</b> Permutation</li>
-				<li onclick='myGrooveWriter.permutationPopupClick("snare_16ths");'><b>Snare</b> Permutation</li>
-			</ul>
-		</div>
-		<div class="noteContextMenu">
 			<ul id="helpContextMenu" class="list">
 				<li id="userMenuName" hidden></li>
 				<li id="userMenuSignIn" hidden>Sign in</li>
@@ -477,8 +464,12 @@
 				<li onclick='myGrooveWriter.MIDISaveAs();'><b>Download MIDI file</b></li>
 			</ul>
 		</div>
-		<!-- The grooves menu is built by js/main.js (was document.write). -->
+		<!-- The groove list. js/main.js fills it and moves it into the Grooves tab of the side panel. -->
 		<div id="grooveListWrapper"></div>
+		<!-- The permutation choice and options. js/main.js moves them into the Permutations tab of
+		     the side panel, and the editor fills them. -->
+		<div class="permutation-choice" role="group" aria-label="Permutation"></div>
+		<div id="PermutationOptions"></div>
 
 		<!-- dialog for the TIME label, hidden by default -->
 		<div id="timeSigPopup">

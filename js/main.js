@@ -10,8 +10,14 @@
 import { GrooveWriter } from './groove_writer.js';
 import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
-import { initPlaybackControls, initPopovers, initSaveButton } from './editorChrome.js';
-import { initLibraryPanel } from './cloud/libraryPanel.js';
+import {
+  initBarScroll,
+  initPlaybackControls,
+  initPopovers,
+  initSaveButton,
+} from './editorChrome.js';
+import { hasRememberedUser, initLibraryPanel } from './cloud/libraryPanel.js';
+import { createSidePanel } from './sidePanel.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
 import { askToClearNotes, askToDiscard } from './confirmDialog.js';
 import { createWakeLock } from './wakeLock.js';
@@ -122,6 +128,35 @@ myGrooveWriter.renderNoteGrid();
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
 
+// The library needs a Google sign-in popup, which the native app shell does not support yet,
+// and GrooveDB authoring has its own save flow.
+const hasLibrary = !utils.grooveDBAuthoring && !window.Capacitor;
+
+// The tabs in the top bar open one panel on the left. Make it before the library starts.
+const sidePanel = createSidePanel({
+  tabs: [
+    ...(hasLibrary
+      ? [{ id: 'library', label: 'Library', title: 'My library', icon: 'fa fa-bars' }]
+      : []),
+    { id: 'permutations', label: 'Permutations', title: 'Permutations', icon: 'fa fa-random' },
+    { id: 'grooves', label: 'Grooves', title: 'Grooves', icon: 'fa fa-list' },
+  ],
+});
+const grooveList = document.getElementById('grooveListWrapper');
+if (grooveList) sidePanel.section('grooves').append(grooveList);
+// The permutation choice, with the options of the chosen permutation below it.
+const permutationChoice = document.querySelector('.permutation-choice');
+for (const element of [permutationChoice, document.getElementById('PermutationOptions')]) {
+  if (element) sidePanel.section('permutations').append(element);
+}
+// A docked panel gives focus back to the page after a choice, so space plays. An overlay panel
+// stays open: the options of the chosen permutation show in it.
+permutationChoice?.addEventListener('click', (event) => {
+  if (event.target instanceof Element && event.target.closest('button') && sidePanel.isDocked()) {
+    sidePanel.afterPick();
+  }
+});
+
 const editor = {
   openGroove(query, name) {
     utils.stopMIDI_playback();
@@ -147,7 +182,7 @@ const editor = {
   onDirtyChange: (listener) => dirtyWatch.onDirtyChange(listener),
 };
 
-// The groove that was last loaded or saved. The Grooves menu and the library panel ask before
+// The groove that was last loaded or saved. The Grooves tab and the library panel ask before
 // they replace edits.
 const dirtyState = createDirtyState();
 // After a reload the address holds the edits, so the tab's own clean groove is the start. Read
@@ -163,19 +198,18 @@ myGrooveWriter.onUrlChange = () => {
   dirtyWatch.changed();
 };
 
-// A groove from the Grooves menu replaces the one in the editor, so it asks first too.
-document.getElementById('grooveListWrapper')?.addEventListener('click', async (event) => {
+// A groove from the Grooves tab replaces the one in the editor, so it asks first too.
+grooveList?.addEventListener('click', async (event) => {
   const item = event.target instanceof Element && event.target.closest('.grooveListLI');
   if (!item) return;
-  // Close the menu now, so it does not stay open behind the question.
-  if (utils.visible_context_menu) utils.hideContextMenu(utils.visible_context_menu);
   if (
     dirtyState.isDirty(editor.currentQuery()) &&
-    !(await askToDiscard(document.getElementById('groovesAnchor')))
+    !(await askToDiscard(document.getElementById('groovesTab')))
   )
     return;
   myGrooveWriter.loadNewGroove(item.getAttribute('data-groove'));
   dirtyState.markClean(editor.currentQuery());
+  sidePanel.afterPick();
 });
 
 // Clear all notes asks first, so a wrong tap in the More menu does not lose the groove.
@@ -183,9 +217,7 @@ document.getElementById('clearAllNotesButton')?.addEventListener('click', async 
   if (await askToClearNotes(document.getElementById('moreButton'))) myGrooveWriter.clearAllNotes();
 });
 
-// The library panel needs a Google sign-in popup, which the native app shell does not
-// support yet, and GrooveDB authoring has its own save flow.
-if (!utils.grooveDBAuthoring && !window.Capacitor) {
+if (hasLibrary) {
   initLibraryPanel({
     // Read now: the editor rewrites the URL on load.
     search: window.location.search,
@@ -194,8 +226,17 @@ if (!utils.grooveDBAuthoring && !window.Capacitor) {
     dirtyState,
     // The panel shows the button: without the library there is nothing to save to.
     initSaveButton,
+    sidePanel,
   });
 }
+
+// The tabs have registered. Open the panel as the user left it. A user who was signed in on
+// this device gets the library.
+sidePanel.start(
+  hasLibrary
+    ? { defaultOpen: hasRememberedUser(), defaultTab: 'library' }
+    : { defaultOpen: false, defaultTab: 'grooves' }
+);
 
 // Read the location now: the editor rewrites the URL on load, and that drops ?sw=1.
 if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(window.Capacitor))) {
@@ -203,6 +244,7 @@ if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(wind
 }
 
 initPopovers();
+initBarScroll();
 
 // Back can bring this page out of the back-forward cache after another page in the tab wrote
 // the tab's storage. Write this page's own address and clean groove again.

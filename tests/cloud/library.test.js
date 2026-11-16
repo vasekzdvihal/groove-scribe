@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLibrary } from '../../js/cloud/library.js';
 import { connectCloud } from '../../js/cloud/firebaseClient.js';
-import { initLibraryPanel } from '../../js/cloud/libraryPanel.js';
+import { hasRememberedUser, initLibraryPanel } from '../../js/cloud/libraryPanel.js';
+import { createSidePanel } from '../../js/sidePanel.js';
 import { createDirtyState, watchDirty } from '../../js/cloud/dirtyState.js';
 import { readRecord, writeRecord } from '../../js/cloud/currentGroove.js';
 
@@ -342,6 +343,9 @@ describe('createLibrary: a change draws without a read', () => {
   });
 });
 
+const LIBRARY_TAB = { id: 'library', label: 'Library', title: 'My library', icon: 'fa fa-bars' };
+const GROOVES_TAB = { id: 'grooves', label: 'Grooves', title: 'Grooves', icon: 'fa fa-list' };
+
 describe('the library panel', () => {
   let fake;
   let dirtyState;
@@ -349,6 +353,9 @@ describe('the library panel', () => {
   let started;
   // Each value the Save button of the editor showed: true for "Saved".
   let saveButtonStates;
+  // The click action of the Save button of the editor.
+  let saveAction;
+  let sidePanel;
 
   const byId = (id) => document.getElementById(id);
   const savedGrooves = () => [...fake.collections.get('grooves').values()];
@@ -392,7 +399,7 @@ describe('the library panel', () => {
   // Open the panel, connect, and sign in. The page has loaded unless told otherwise.
   async function openPanel({ user = { uid: UID, displayName: 'Ana' }, load = true } = {}) {
     if (load) editor.load();
-    byId('libraryToggle').click();
+    byId('libraryTab').click();
     await vi.waitFor(() => expect(fake.hasAuthListener()).toBe(true));
     started = fake.signIn(user);
     if (user) await vi.waitFor(() => expect(byId('lpLibrary').hidden).toBe(false));
@@ -401,18 +408,46 @@ describe('the library panel', () => {
   // Wait for the first server answer, also when the test holds it.
   const loaded = () => started;
 
-  beforeEach(() => {
-    // Node has its own localStorage global, which hides the one of jsdom.
-    vi.stubGlobal('localStorage', globalThis.jsdom.window.localStorage);
-    vi.stubGlobal('sessionStorage', globalThis.jsdom.window.sessionStorage);
-    localStorage.clear();
-    sessionStorage.clear();
+  // The editor page as main.js builds it: the side panel with a Library tab, then the library,
+  // then the start of the side panel. A test can mount the page again, for example docked.
+  function mount({ whenReady } = {}) {
     document.body.innerHTML = `
       <div id="upperLeft"></div>
       <a id="helpAnchor"></a>
       <span id="userMenuName"></span>
       <button id="userMenuSignOut"></button>
       <button id="userMenuSignIn"></button>`;
+    sidePanel = createSidePanel({ tabs: [LIBRARY_TAB, GROOVES_TAB] });
+    initLibraryPanel({
+      search: START,
+      editor,
+      dirtyState,
+      initSaveButton: (action) => {
+        saveAction = action;
+        return (saved) => saveButtonStates.push(saved);
+      },
+      whenReady,
+      sidePanel,
+    });
+    sidePanel.start({ defaultOpen: hasRememberedUser(), defaultTab: 'library' });
+  }
+
+  // A wide screen, where the panel is docked next to the music.
+  function stubDocked() {
+    vi.stubGlobal('matchMedia', (query) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+  }
+
+  beforeEach(() => {
+    // Node has its own localStorage global, which hides the one of jsdom.
+    vi.stubGlobal('localStorage', globalThis.jsdom.window.localStorage);
+    vi.stubGlobal('sessionStorage', globalThis.jsdom.window.sessionStorage);
+    localStorage.clear();
+    sessionStorage.clear();
     fake = createFakeSdk();
     vi.mocked(connectCloud).mockResolvedValue({
       sdk: fake.sdk,
@@ -423,16 +458,109 @@ describe('the library panel', () => {
     dirtyState = createDirtyState(null);
     editor = createEditor();
     saveButtonStates = [];
-    initLibraryPanel({
-      search: START,
-      editor,
-      dirtyState,
-      initSaveButton: () => (saved) => saveButtonStates.push(saved),
-    });
+    vi.mocked(connectCloud).mockClear();
+    mount();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  describe('in the side panel', () => {
+    const pressed = (id) => byId(id).getAttribute('aria-pressed') === 'true';
+
+    it('connects when the Library tab is shown, not before', async () => {
+      editor.load();
+      await settle();
+      expect(connectCloud).not.toHaveBeenCalled();
+      byId('groovesTab').click();
+      await settle();
+      expect(connectCloud).not.toHaveBeenCalled();
+      byId('libraryTab').click();
+      await vi.waitFor(() => expect(connectCloud).toHaveBeenCalledTimes(1));
+      expect(byId('libraryPanel').hidden).toBe(false);
+      expect(byId('sidePanelTitle').textContent).toBe('My library');
+    });
+
+    it('puts the library in the Library section, with no panel or button of its own', () => {
+      expect(byId('libraryPanel').closest('#sidePanel')).not.toBeNull();
+      expect(byId('libraryPanel').querySelector('#lpLibrary')).not.toBeNull();
+      expect(document.querySelectorAll('aside')).toHaveLength(1);
+      for (const id of ['libraryToggle', 'libraryBackdrop', 'lpClose', 'lpTitle']) {
+        expect(byId(id)).toBeNull();
+      }
+    });
+
+    it('Save opens the Library tab and the save form', async () => {
+      editor.load();
+      saveAction();
+      expect(pressed('libraryTab')).toBe(true);
+      await vi.waitFor(() => expect(fake.hasAuthListener()).toBe(true));
+      started = fake.signIn({ uid: UID, displayName: 'Ana' });
+      await vi.waitFor(() => expect(byId('lpSaveTool').hidden).toBe(false));
+      expect(byId('lpSaveToolButton').getAttribute('aria-expanded')).toBe('true');
+      await loaded();
+    });
+
+    it('Save from the Grooves tab moves the panel to the Library tab', async () => {
+      editor.load();
+      byId('groovesTab').click();
+      saveAction();
+      expect(pressed('libraryTab')).toBe(true);
+      expect(pressed('groovesTab')).toBe(false);
+      await vi.waitFor(() => expect(connectCloud).toHaveBeenCalledTimes(1));
+    });
+
+    it('a docked panel that opens by itself waits for the sound before it connects', async () => {
+      stubDocked();
+      localStorage.setItem('grooveScribe.libraryOpen', 'true');
+      const sound = deferred();
+      mount({ whenReady: sound.promise });
+      expect(pressed('libraryTab')).toBe(true);
+      expect(byId('libraryPanel').hidden).toBe(false);
+      expect(byId('lpLoading').hidden).toBe(false);
+      await settle();
+      expect(connectCloud).not.toHaveBeenCalled();
+      sound.resolve();
+      await vi.waitFor(() => expect(connectCloud).toHaveBeenCalledTimes(1));
+    });
+
+    it('a docked panel opens by itself on the Library tab for a remembered user', async () => {
+      stubDocked();
+      localStorage.setItem('grooveScribe.user', JSON.stringify({ name: 'Ana', uid: UID }));
+      mount();
+      expect(hasRememberedUser()).toBe(true);
+      expect(pressed('libraryTab')).toBe(true);
+      await vi.waitFor(() => expect(connectCloud).toHaveBeenCalledTimes(1));
+    });
+
+    it('a docked panel left open on Grooves opens on Grooves after a reload, and the library waits', async () => {
+      stubDocked();
+      localStorage.setItem('grooveScribe.libraryOpen', 'true');
+      localStorage.setItem('grooveScribe.panelTab', 'grooves');
+      mount();
+      expect(document.querySelectorAll('aside')).toHaveLength(1);
+      expect(byId('sidePanel').classList.contains('open')).toBe(true);
+      expect(pressed('groovesTab')).toBe(true);
+      expect(byId('libraryPanel').hidden).toBe(true);
+      expect(byId('libraryToggle')).toBeNull();
+      expect(byId('libraryBackdrop')).toBeNull();
+      // The sound is ready and the browser is idle: the library still does not connect.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(connectCloud).not.toHaveBeenCalled();
+      byId('libraryTab').click();
+      await vi.waitFor(() => expect(connectCloud).toHaveBeenCalledTimes(1));
+    });
+
+    it('a pick in the slide-over panel closes it, and focus goes to the Library tab', async () => {
+      fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
+      await openPanel();
+      await loaded();
+      grooveButton('Beat').click();
+      await vi.waitFor(() => expect(editor.currentQuery()).toBe(BEAT));
+      expect(byId('sidePanel').classList.contains('open')).toBe(false);
+      expect(document.activeElement).toBe(byId('libraryTab'));
+    });
   });
 
   it('saves one groove on a double tap of Save', async () => {
@@ -516,7 +644,7 @@ describe('the library panel', () => {
       await loaded();
       grooveButton('Beat').click();
       await vi.waitFor(() => expect(editor.currentQuery()).toBe(BEAT));
-      byId('libraryToggle').click(); // a pick closes the slide-over panel
+      byId('libraryTab').click(); // a pick closes the slide-over panel
     }
 
     async function renameBeat({ wait = true } = {}) {
@@ -554,7 +682,7 @@ describe('the library panel', () => {
       // Another groove, as from the Grooves menu, then the renamed one again.
       editor.openGroove(START);
       dirtyState.markClean(START);
-      byId('libraryToggle').click();
+      byId('libraryTab').click();
       grooveButton('Fresh').click();
       await vi.waitFor(() => expect(editor.currentTitle()).toBe('Fresh'));
     });
@@ -571,7 +699,7 @@ describe('the library panel', () => {
     const OTHER_DEVICE = BEAT.replace('Tempo=95', 'Tempo=90');
 
     async function pressUpdate() {
-      byId('libraryToggle').click();
+      byId('libraryTab').click();
       byId('lpSaveToolButton').click();
       await settle();
       expect(byId('lpUpdate')).not.toBeNull();
@@ -621,7 +749,7 @@ describe('the library panel', () => {
     it('keeps the open groove after a save with a typed title', async () => {
       await pickBeat();
       editor.edit(EDITED);
-      byId('libraryToggle').click();
+      byId('libraryTab').click();
       byId('lpSaveToolButton').click();
       byId('lpSaveTitle').value = 'Another name';
       byId('lpSaveNew').click();
@@ -640,7 +768,7 @@ describe('the library panel', () => {
     it('drops the Title of the stored query, and the editor title, on a save without a title', async () => {
       await pickBeat();
       editor.edit(EDITED);
-      byId('libraryToggle').click();
+      byId('libraryTab').click();
       byId('lpSaveToolButton').click();
       byId('lpSaveTitle').value = '';
       byId('lpSaveNew').click();
@@ -651,7 +779,7 @@ describe('the library panel', () => {
 
     it('says why a clean open groove has only the plain save', async () => {
       await pickBeat();
-      byId('libraryToggle').click();
+      byId('libraryTab').click();
       byId('lpSaveToolButton').click();
       expect(byId('lpUpdateHint').hidden).toBe(false);
       expect(byId('lpUpdateHint').textContent).toBe('No changes. Save groove makes a copy.');

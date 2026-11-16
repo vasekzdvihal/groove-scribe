@@ -39,7 +39,9 @@ async function openEditor(page, url = EDITOR) {
   await page.waitForSelector('#svgTarget svg');
 }
 
-const openPanel = (page) => page.getByRole('button', { name: 'Open library' }).click();
+// The Library tab opens the side panel on the library. A second click closes the panel.
+const libraryTab = (page) => page.locator('#libraryTab');
+const openPanel = (page) => libraryTab(page).click();
 
 const idTokenFor = (address) =>
   JSON.stringify({ sub: address, email: address, email_verified: true });
@@ -86,7 +88,7 @@ async function signIn(page, email) {
 }
 
 async function signOut(page) {
-  await page.getByRole('button', { name: 'Close library' }).click();
+  await page.getByRole('button', { name: 'Close panel' }).click();
   await page.locator('#helpAnchor').click();
   await page.locator('#userMenuSignOut').click();
   await expect(page.locator('#helpAnchor')).toContainText('Sign in');
@@ -152,18 +154,18 @@ test('the sign-in button opens the auth popup', async ({ page, context }) => {
 test('the panel closes with the close button, the backdrop and Escape', async ({ page }) => {
   await openEditor(page);
   const panel = page.locator('#libraryPanel');
-  const toggle = page.getByRole('button', { name: 'Open library' });
+  const toggle = libraryTab(page);
 
   await openPanel(page);
   await expect(panel).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Close library' })).toBeFocused();
-  await page.getByRole('button', { name: 'Close library' }).click();
+  await expect(page.getByRole('button', { name: 'Close panel' })).toBeFocused();
+  await page.getByRole('button', { name: 'Close panel' }).click();
   await expect(panel).toBeHidden();
   await expect(toggle).toBeFocused();
 
   await openPanel(page);
   await expect(panel).toBeVisible();
-  await page.locator('#libraryBackdrop').click({ position: { x: 800, y: 300 } });
+  await page.locator('#sidePanelBackdrop').click({ position: { x: 800, y: 300 } });
   await expect(panel).toBeHidden();
 
   await openPanel(page);
@@ -556,7 +558,7 @@ test('picking a groove stops playback', async ({ page }) => {
 
 test('keys pressed in the panel do not trigger editor hotkeys', async ({ page }) => {
   await signedInPanel(page);
-  await page.getByRole('button', { name: 'Close library' }).focus();
+  await page.getByRole('button', { name: 'Close panel' }).focus();
   await page.keyboard.down(' ');
   const isPlaying = await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
   expect(isPlaying).toBe(false);
@@ -564,7 +566,7 @@ test('keys pressed in the panel do not trigger editor hotkeys', async ({ page })
 
 test('the top bar shows the user on the next visit without loading Firebase', async ({ page }) => {
   await signedInPanel(page);
-  await page.getByRole('button', { name: 'Close library' }).click();
+  await page.getByRole('button', { name: 'Close panel' }).click();
   await expect(page.locator('#helpAnchor')).toHaveClass(/signedIn/);
 
   const sdkRequests = [];
@@ -653,7 +655,7 @@ test.describe('unsaved edits', () => {
 
   // The slide-over panel covers the grid, so close it for the edit.
   async function editNote(page) {
-    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.getByRole('button', { name: 'Close panel' }).click();
     await page.click('#snare4');
     await openPanel(page);
   }
@@ -761,8 +763,8 @@ test.describe('updating a saved groove', () => {
   // The slide-over panel covers the grid, so it closes for the edit.
   async function editNote(page, note = '#snare4') {
     // A pick closes the panel by itself.
-    if (await page.locator('#libraryPanel.open').count()) {
-      await page.getByRole('button', { name: 'Close library' }).click();
+    if (await page.locator('#libraryPanel').isVisible()) {
+      await page.getByRole('button', { name: 'Close panel' }).click();
     }
     await page.click(note);
     await openPanel(page);
@@ -882,7 +884,7 @@ test.describe('updating a saved groove', () => {
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
     await pickSaved(page, 'Paradiddle');
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()
@@ -998,11 +1000,11 @@ test.describe('updating a saved groove', () => {
     await expect(saveAsNewButton(page)).toHaveCount(0);
   });
 
-  test('a groove from the Grooves menu is not the saved groove', async ({ page }) => {
+  test('a groove from the Grooves tab is not the saved groove', async ({ page }) => {
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
     await pickSaved(page, 'Paradiddle');
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()
@@ -1066,8 +1068,8 @@ test.describe('updating a saved groove', () => {
     await openPanel(page);
     await expect(grooveButton(page, 'Single paradiddle')).toHaveAttribute('aria-current', 'true');
     // A later pick shows the new name.
-    await page.getByRole('button', { name: 'Close library' }).click();
-    await page.click('#groovesAnchor');
+    await page.getByRole('button', { name: 'Close panel' }).click();
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()
@@ -1174,7 +1176,7 @@ test.describe('the Save button', () => {
 
   test('signed in, it opens the panel at the save form, and the form saves', async ({ page }) => {
     await signedInPanel(page);
-    await page.getByRole('button', { name: 'Close library' }).click();
+    await page.getByRole('button', { name: 'Close panel' }).click();
     await page.click('#snare4');
     await saveButton(page).click();
     await expect(page.locator('#libraryPanel')).toBeVisible();
@@ -1204,7 +1206,7 @@ test.describe('the Save button', () => {
     await expect(saveButton(page)).toHaveText('Saved');
 
     // A built-in groove is not the saved groove.
-    await page.click('#groovesAnchor');
+    await page.click('#groovesTab');
     await page
       .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
       .first()
@@ -1755,7 +1757,7 @@ test.describe('without a network', () => {
       await signedInPanel(page);
       await createLesson(page, 'Week 1');
       await synced(page);
-      await page.getByRole('button', { name: 'Close library' }).click();
+      await page.getByRole('button', { name: 'Close panel' }).click();
       await page.click('#snare4');
       await openPanel(page);
       await goOffline(page);
@@ -2338,9 +2340,9 @@ test.describe('docked on a wide screen', () => {
     await expect(page.locator('#libraryPanel')).toBeVisible();
     expect(await musicLeft(page)).toBe(300);
     await expect.poll(() => svgWidth(page)).toBeLessThan(wideSvg);
-    await expect(page.locator('#libraryBackdrop')).toBeHidden();
+    await expect(page.locator('#sidePanelBackdrop')).toBeHidden();
 
-    await page.getByRole('button', { name: 'Hide library' }).click();
+    await libraryTab(page).click();
     await expect(page.locator('#libraryPanel')).toBeHidden();
     expect(await musicLeft(page)).toBe(0);
     await expect.poll(() => svgWidth(page)).toBe(wideSvg);
@@ -2410,7 +2412,7 @@ test.describe('docked on a wide screen', () => {
     await signedInPanel(page);
     await addLink(page, QUERY, 'Paradiddle');
     await page.getByRole('button', { name: 'Paradiddle', exact: true }).click();
-    await page.getByRole('button', { name: 'Hide library' }).click();
+    await libraryTab(page).click();
 
     await page.locator('#saveButton').click();
     await expect(page.locator('#libraryPanel')).toBeVisible();
@@ -2447,11 +2449,34 @@ test.describe('docked on a wide screen', () => {
     await page.reload();
     await expect(page.locator('#libraryPanel')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Hide library' }).click();
+    await libraryTab(page).click();
     await page.reload();
     await page.waitForSelector('#svgTarget svg');
     await expect(page.locator('#libraryPanel')).toBeHidden();
-    await expect(page.getByRole('button', { name: 'Open library' })).toBeVisible();
+    await expect(libraryTab(page)).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('a reload on the Grooves tab opens one panel there, and the library waits for its tab', async ({
+    page,
+  }) => {
+    const sdkRequests = [];
+    page.on('request', (request) => {
+      if (request.url().includes('vendor/firebase.js')) sdkRequests.push(request.url());
+    });
+    await openEditor(page);
+    await page.locator('#groovesTab').click();
+    await page.reload();
+    await page.waitForSelector('#svgTarget svg');
+    await expect(page.locator('aside')).toHaveCount(1);
+    await expect(page.locator('#grooveListWrapper')).toBeVisible();
+    await expect(page.locator('#groovesTab')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#libraryPanel')).toBeHidden();
+    await page.waitForTimeout(1500); // longer than the idle wait the SDK would need
+    expect(sdkRequests).toEqual([]);
+
+    await openPanel(page);
+    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeVisible();
+    expect(sdkRequests).toHaveLength(1);
   });
 
   test('a signed-in user gets it open by default', async ({ page }) => {
@@ -2536,7 +2561,7 @@ test.describe('docked on a wide screen', () => {
     await openPanel(page);
     await page.setViewportSize({ width: 820, height: 1180 });
     await expect(page.locator('#libraryPanel')).toBeHidden();
-    await expect(page.locator('#libraryBackdrop')).toBeHidden();
+    await expect(page.locator('#sidePanelBackdrop')).toBeHidden();
     expect(await musicLeft(page)).toBe(0);
 
     await page.setViewportSize({ width: 1180, height: 820 });

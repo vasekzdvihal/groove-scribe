@@ -56,13 +56,23 @@ export function initPopovers() {
   // Space plays the groove. A tapped button must not keep focus, or space would press it again.
   document.addEventListener('mousedown', (event) => {
     if (
-      event.target.closest(
-        '#libraryToggle, #ToolBar button, #PlaybackBar button, .tool-popover button'
-      )
+      event.target.closest('.panel-tab, #ToolBar button, #PlaybackBar button, .tool-popover button')
     ) {
       event.preventDefault();
     }
   });
+}
+
+// A bar that scrolls sideways on a narrow screen brings a tool that gets focus fully into view,
+// with the room that scroll-padding gives for its focus ring. Chrome does not scroll a bar inside
+// a fixed element for focus by itself.
+export function initBarScroll() {
+  for (const id of ['ToolBar', 'PlaybackBar']) {
+    document.getElementById(id)?.addEventListener('focusin', (event) => {
+      if (!(event.target instanceof HTMLElement)) return;
+      event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
 }
 
 const KNOB_DEGREES_PER_BPM = 6; // so a full turn is 60 BPM

@@ -25,11 +25,14 @@ Read this before you change anything in `js/cloud/`. For the offline side, see
 
 ## The panel
 
-- `libraryPanel.js` is a slide-in panel in the editor. `main.js` passes it a small `editor`
-  object, so the panel never touches editor internals. `profile.html` only redirects to
-  `index.html#library`.
-- From 1100 px wide it docks next to the music and moves `#RightHandContent`. Below 1100 px it
-  slides over the editor.
+- The library is the Library tab of the side panel (see [`editor.md`](editor.md)).
+  `libraryPanel.js` fills its section, `#libraryPanel`. `js/sidePanel.js` owns open and close,
+  the docked or overlay switch, and the memory of the docked panel (`grooveScribe.libraryOpen`).
+- `main.js` passes `libraryPanel.js` a small `editor` object, so the library never touches editor
+  internals. `profile.html` only redirects to `index.html#library`.
+- The library connects the first time its tab is shown. A panel that opens by itself waits for
+  Play to be ready and an idle moment before it connects. Queued offline writes connect while
+  the panel is closed.
 - The three tools (Save, Add link, New lesson) are buttons in a sticky row at the top. Each opens
   one form (`showTool`).
 - Lessons sort in natural order ("Week 2" before "Week 10"). Lessons and grooves have a ⋯ menu;
@@ -61,8 +64,9 @@ Read this before you change anything in `js/cloud/`. For the offline side, see
 
 ## Save button
 
-- The Save button next to Share opens the panel at its save form, or at the sign-in.
+- Save, Share and ⋯ are at the end of the tools bar, above the notes. Save opens the Library tab
+  at its save form, or at the sign-in.
 - It says Saved only while the editor shows an open saved groove unchanged and its save is safe
   on this device (persistent cache, or no pending write).
-- The panel shows the button. The native app and GrooveDB authoring have no panel, so they do not
-  show it.
+- The library shows the button. The native app and GrooveDB authoring have no library, so they
+  do not show it.

@@ -75,8 +75,8 @@ test.describe('division & structure', () => {
 });
 
 test.describe('menus & popups', () => {
-  test('grooves menu opens', async ({ page }) => {
-    await page.click('#groovesAnchor');
+  test('the Grooves tab shows the groove list', async ({ page }) => {
+    await page.click('#groovesTab');
     await expect(page.locator('#grooveListWrapper')).toBeVisible();
   });
 

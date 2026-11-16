@@ -57,7 +57,7 @@ tests/
 │   ├── core-state.test.js         # measures, division, metronome freq, undo/redo, tempo
 │   ├── grid-notes.test.js         # note clicks, context menu, grid read, clear/mute
 │   ├── measures-toms-stickings.test.js # add/remove measure, toms & stickings, refresh
-│   ├── html-generation.test.js    # HTMLforStaffContainer, permutation-options HTML
+│   ├── html-generation.test.js    # HTMLforStaffContainer, permutation choice and options HTML
 │   ├── menus-popups.test.js       # anchor/menu/popup handlers
 │   ├── url-export.test.js         # share-URL, clipboard, MIDI/PNG/SVG/ABC export, loadNewGroove
 │   ├── view-and-lifecycle.test.js # view toggle, hot-keys, displayNewSVG, runsOnPageLoad

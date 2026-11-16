@@ -42,10 +42,14 @@
   border-bottom: 0;
 }
 
+/* When the tools do not fit, the bar scrolls sideways and does not wrap: below 768 px, and in a
+   window that is narrower still. A tool that gets focus scrolls in with room for its focus ring. */
 #ToolBar {
   top: var(--bar-top-height);
   height: var(--bar-tools-height);
+  flex-wrap: nowrap;
   overflow-x: auto;
+  scroll-padding-inline: 8px;
   background: var(--bar-tools-bg);
   border-bottom: 1px solid #000;
 }
@@ -208,28 +212,25 @@
   gap: inherit;
 }
 
+/* Two filled buttons side by side keep at least 4 px between them, so the 3 px focus ring of one
+   does not touch the other. The gap of the tools bar is 2 px, and 0 on a narrow screen. */
+#ToolBar .tool-group {
+  gap: 6px;
+}
+
+#timeLabel,
+#ToolBar .tool-group {
+  margin-right: 4px;
+}
+
 #advancedEditSlot:empty {
   display: none;
 }
 
-/* A control that is on: toms shown, stickings shown, permutation active, note types on. */
+/* A control that is on: toms shown, stickings shown, note types on. */
 .tool.ClickToHide,
 .tool.buttonSelected {
   background: var(--bar-selected);
-  color: #fff;
-}
-
-#permutationAnchor {
-  color: var(--bar-dim);
-  cursor: not-allowed;
-}
-
-#permutationAnchor.enabled {
-  color: inherit;
-  cursor: pointer;
-}
-
-#permutationAnchor.buttonSelected {
   color: #fff;
 }
 
@@ -268,6 +269,12 @@
 @media (max-width: 479px) {
   #TopNav {
     gap: 4px;
+  }
+
+  /* A very narrow window, such as iPad Slide Over, has room for the three tabs and the title,
+     but not for the logo too. */
+  #logoTextUpperLeft {
+    display: none;
   }
 
   .signin-label {
@@ -984,6 +991,17 @@
   height: 36px;
 }
 
+/* The playback controls sit in the middle of the bar as one group, at every width. Auto margins
+   centre them, and become 0 when the bar is too narrow and scrolls (below 680 px), so the first
+   control can still be reached. justify-content: center would push it out of reach. */
+#midiPlayer {
+  margin-left: auto;
+}
+
+#swingButton {
+  margin-right: auto;
+}
+
 .metronomeButton.Options:hover {
   background: rgba(255, 255, 255, 0.1);
 }
@@ -1136,38 +1154,61 @@
 }
 
 /* The older menus match the popovers, with larger touch targets. */
-.noteContextMenu > ul.list,
-#grooveListWrapper {
+.noteContextMenu > ul.list {
   z-index: 1000;
+  padding: 6px 0;
   background: #fff;
   border: 0;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-.noteContextMenu > ul.list {
-  padding: 6px 0;
-}
-
-.noteContextMenu > ul.list li,
-.grooveListLI {
+.noteContextMenu > ul.list li {
   min-height: 24px;
   padding: 10px 14px;
   border-bottom: 0;
   cursor: pointer;
 }
 
-.noteContextMenu > ul.list li:hover,
-.grooveListLI:hover {
+.noteContextMenu > ul.list li:hover {
   background: #e7ecef;
 }
 
-.grooveListUL {
-  background: #fff;
+/* The groove list fills the Grooves tab of the side panel. The section scrolls, not the list. */
+#grooveListWrapper {
+  position: static;
+  display: block;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  background: none;
+  border: 0;
 }
 
-#grooveListWrapper {
-  height: min(440px, 60vh);
+.grooveListUL {
+  padding-bottom: 8px;
+  color: var(--lp-text);
+  background: none;
+}
+
+.grooveListHeaderLI {
+  padding: 16px 16px 4px;
+  color: var(--lp-muted);
+  background: none;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.grooveListLI {
+  min-height: 24px;
+  padding: 10px 16px;
+  border-bottom: 0;
+  cursor: pointer;
+}
+
+.grooveListLI:hover {
+  color: var(--lp-text);
+  background: var(--lp-surface);
 }
 
 #undoButton {
@@ -1214,18 +1255,11 @@
   }
 }
 
-/* The free room of the bar sits before Save and Share, so the actions keep to the right edge.
-   Portrait spreads its items over the bar instead (below). */
-@media (min-width: 1001px) {
-  #PlaybackBar .tool-group {
-    margin-left: auto;
-  }
-}
-
-/* With their labels, Save and Share have one width, so the pair looks even. */
+/* With their labels, Save and Share have one width, so the pair looks even. 96 px holds "Saved"
+   and "Share" (about 85 px each). The docked limits in css/side-panel.css count this width. */
 @media (min-width: 1200px) {
-  #PlaybackBar .tool-group .tool {
-    min-width: 104px;
+  #ToolBar .tool-group .tool {
+    min-width: 96px;
   }
 }
 
@@ -1266,15 +1300,12 @@
     font-size: 18px;
   }
 
-  .metronomeButton.Options,
-  #PlaybackBar #moreButton {
+  .metronomeButton.Options {
     width: 48px;
     min-width: 48px;
   }
 
-  /* The items spread out over the bar, so the gaps between them part the groups. */
   #PlaybackBar {
-    justify-content: space-between;
     padding: 0 6px;
   }
 
@@ -1282,14 +1313,10 @@
     gap: 4px;
   }
 
-  #PlaybackBar .tool-sep {
-    display: none;
-  }
-
-  /* A short line between the groups of tools, so the groups do not run together. */
+  /* A short line between the groups of tools, so the groups do not run together. 4 px on each
+     side keeps it clear of a focus ring or a pressed button. */
   #ToolBar .tool-sep {
     height: 20px;
-    margin: 0 2px;
   }
 
   #ToolBar {
@@ -1354,8 +1381,7 @@
     font-size: 17px;
   }
 
-  .metronomeButton.Options,
-  #PlaybackBar #moreButton {
+  .metronomeButton.Options {
     width: 44px;
     min-width: 44px;
   }
@@ -1378,6 +1404,7 @@
 @media (max-width: 679px) {
   #PlaybackBar {
     overflow-x: auto;
+    scroll-padding-inline: 8px;
   }
 
   #PlaybackBar .soundRetryNote {

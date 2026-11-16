@@ -148,6 +148,77 @@ describe('GrooveWriter permutation engine', () => {
   });
 });
 
+// The Permutations tab of the side panel: the choice buttons and the options sit in one section.
+describe('GrooveWriter Permutations tab', () => {
+  let gw;
+  beforeEach(async () => {
+    document.body.innerHTML = '';
+    gw = await newGrooveWriter();
+    buildFullPageDOM(gw, 2);
+    // As main.js does: the choice and the options move into the Permutations section.
+    const section = document.createElement('section');
+    section.id = 'permutationsPanel';
+    const choice = document.createElement('div');
+    choice.className = 'permutation-choice';
+    section.append(choice, document.getElementById('PermutationOptions'));
+    document.body.append(section);
+    // The choice buttons call the editor by its global name, as in index.html.
+    globalThis.myGrooveWriter = gw;
+    gw.loadNewGroove(
+      '?TimeSig=4/4&Div=16&Tempo=90&Measures=2' +
+        '&H=|xxxxxxxxxxxxxxxx|xxxxxxxxxxxxxxxx|' +
+        '&S=|----O-------O---|----O-------O---|' +
+        '&K=|o-o-o-o-o-o-o-o-|o-o-o-o-o-o-o-o-|'
+    );
+  });
+
+  afterEach(() => {
+    delete globalThis.myGrooveWriter;
+  });
+
+  const button = (name) =>
+    [...document.querySelectorAll('#permutationsPanel .permutation-choice button')].find(
+      (b) => b.textContent === name
+    );
+  // jsdom here does not run inline handlers, so run the button's own onclick text.
+  const tap = (name) => new Function(button(name).getAttribute('onclick')).call(button(name));
+
+  it('Kick permutation from the tab collapses to one bar and shows its options in the panel', () => {
+    expect(gw.grooveDataFromClickableUI().numberOfMeasures).toBe(2);
+    expect(button('None').getAttribute('aria-pressed')).toBe('true');
+
+    tap('Kick');
+
+    expect(gw.grooveDataFromClickableUI().numberOfMeasures).toBe(1);
+    // The kick row hides after the grid is drawn again for one bar.
+    const kickRows = [...document.querySelectorAll('.kick-container')];
+    expect(kickRows.map((row) => row.style.visibility)).toEqual(['hidden']);
+    expect(button('Kick').getAttribute('aria-pressed')).toBe('true');
+    expect(button('None').getAttribute('aria-pressed')).toBe('false');
+    const options = document.querySelector('#permutationsPanel #PermutationOptions');
+    expect(options.className).toContain('displayed');
+    expect(options.querySelector('#PermutationOptionsHeader')).not.toBeNull();
+
+    tap('None');
+
+    expect(button('None').getAttribute('aria-pressed')).toBe('true');
+    expect(options.className).not.toContain('displayed');
+    expect(options.innerHTML).toBe('');
+  });
+
+  it('a groove load clears the permutation and marks None again', () => {
+    tap('Snare');
+    expect(button('Snare').getAttribute('aria-pressed')).toBe('true');
+
+    gw.loadNewGroove(
+      '?TimeSig=4/4&Div=16&Tempo=90&Measures=1&H=|xxxxxxxxxxxxxxxx|&S=|----O-------O---|&K=|o-------o-------|'
+    );
+
+    expect(button('None').getAttribute('aria-pressed')).toBe('true');
+    expect(button('Snare').getAttribute('aria-pressed')).toBe('false');
+  });
+});
+
 // Deep coverage of the permutation-GENERATION engine (get_permutation_pre/post_ABC
 // and the kick/snare permutation array builders). These only run inside
 // generate_ABC's per-section loop when a section is "active", which requires the
