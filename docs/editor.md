@@ -96,6 +96,12 @@ Rules:
 - `index.html` preloads the sound file. `groove_utils.js` retries a failed or stalled download:
   waits of 1, 3 and 9 s, a 45 s stall timer that ends with the download, then a 30 s decode timer.
 - The docked library waits for the sound, but never more than 10 s (`main.js`).
+- The drum samples live in `soundfont/gunshot-ogg.js` and `gunshot-mp3.js`, keyed by note name
+  (MIDI 47 is `"B2"`). An empty slot plays silence. Put every new sample into both files, from
+  `soundfont/NewDrumSamples/`, without an ID3 tag. `tests/soundfont.test.js` checks that each
+  note in `js/constants.js` has a sample.
+- Toms: High tom (48) is "10 Tom", Mid tom (47) and the hidden tom 3 (45) are "Rack Tom", Floor
+  tom (43) is "Floor Tom".
 
 ## Wake lock
 
