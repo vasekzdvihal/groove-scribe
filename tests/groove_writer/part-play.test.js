@@ -56,6 +56,8 @@ const selectedCells = () =>
   [...document.querySelectorAll('.bg-highlight.is-part-selected')].map((el) =>
     Number(el.id.replace('bg-highlight', ''))
   );
+// The kick array holds false for a rest and a note string for a note.
+const kickOn = (index) => gw.grooveDataFromClickableUI().kick_array[index] !== false;
 const range = (from, to) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 
 let gw;
@@ -293,10 +295,36 @@ describe('what keeps the selection', () => {
   });
 
   it('keeps it on undo of a note click', () => {
+    expect(kickOn(20)).toBe(false);
     gw.noteLeftClick(ev, 'kick', 20);
+    expect(kickOn(20)).toBe(true);
     gw.undoCommand();
+    expect(kickOn(20)).toBe(false);
     expect(gw.getPartPlay()).toEqual({ first: 4, last: 7 });
     expect(selectedCells()).toEqual(range(16, 31));
+  });
+
+  it('keeps it on redo of a note click', () => {
+    gw.noteLeftClick(ev, 'kick', 20);
+    gw.undoCommand();
+    expect(kickOn(20)).toBe(false);
+    gw.redoCommand();
+    expect(kickOn(20)).toBe(true);
+    expect(gw.getPartPlay()).toEqual({ first: 4, last: 7 });
+    expect(selectedCells()).toEqual(range(16, 31));
+  });
+});
+
+describe('what clears the selection on redo', () => {
+  it('clears it on redo of an added bar', () => {
+    gw.addMeasureButtonClick(ev);
+    gw.undoCommand();
+    expect(gw.numberOfMeasures()).toBe(4);
+    gw.setPartPlay({ first: 4, last: 7 });
+    gw.redoCommand();
+    expect(gw.numberOfMeasures()).toBe(5);
+    expect(gw.getPartPlay()).toBeNull();
+    expect(selectedCells()).toEqual([]);
   });
 });
 
