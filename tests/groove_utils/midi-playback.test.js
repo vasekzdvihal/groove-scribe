@@ -703,6 +703,47 @@ describe('GrooveUtils MIDI playback controls', () => {
       ).not.toThrow();
     });
 
+    describe('mapPlaybackPercent (part play)', () => {
+      const kickAtHalf = { now: 500, end: 1000, message: 144, note: 35, channel: 9, velocity: 100 };
+
+      function spyOnTargets() {
+        gu.highlightNoteInABCSVGFromPercentComplete = vi.fn();
+        gu.midiEventCallbacks.notePlaying = vi.fn();
+        gu.midiEventCallbacks.percentProgress = vi.fn();
+      }
+
+      it('is null by default, and the percent goes through unchanged', () => {
+        const cb = captureCallback();
+        spyOnTargets();
+        expect(gu.mapPlaybackPercent).toBeNull();
+        cb(kickAtHalf);
+        expect(gu.highlightNoteInABCSVGFromPercentComplete).toHaveBeenCalledWith(0.5);
+        expect(gu.midiEventCallbacks.notePlaying).toHaveBeenCalledWith(
+          gu.midiEventCallbacks.classRoot,
+          'kick',
+          0.5
+        );
+      });
+
+      it('the percent map changes the highlight percent', () => {
+        const cb = captureCallback();
+        spyOnTargets();
+        gu.mapPlaybackPercent = (p) => 0.5 + p / 4;
+        cb(kickAtHalf);
+        expect(gu.highlightNoteInABCSVGFromPercentComplete).toHaveBeenCalledWith(0.625);
+        expect(gu.midiEventCallbacks.notePlaying).toHaveBeenCalledWith(
+          gu.midiEventCallbacks.classRoot,
+          'kick',
+          0.625
+        );
+        // The progress bar shows progress through what plays: the raw percent.
+        expect(gu.midiEventCallbacks.percentProgress).toHaveBeenCalledWith(
+          gu.midiEventCallbacks.classRoot,
+          50
+        );
+      });
+    });
+
     it('at song end with shouldMIDIRepeat=false, calls MIDI.Player.stop (stop path, no restart)', () => {
       const cb = captureCallback();
       gu.shouldMIDIRepeat = false;

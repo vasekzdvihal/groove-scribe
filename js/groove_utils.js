@@ -303,6 +303,10 @@ function GrooveUtils() {
   // start with last in the rotation so the next rotation brings it to '1'
   root.metronomeOffsetClickStartRotation = 0;
 
+  // Part play: maps the percent through the playing MIDI to the percent through the whole
+  // groove, for the note highlight. null = the MIDI plays the whole groove.
+  root.mapPlaybackPercent = null;
+
   root.isLegendVisable = false;
 
   // integration with third party components
@@ -1196,8 +1200,8 @@ function GrooveUtils() {
     root.midiEventCallbacks.noteHasChangedSinceLastDataLoad = false;
   };
 
-  root.MIDI_build_midi_url_count_in_track = function (timeSigTop, timeSigBottom) {
-    return _MIDI_build_midi_url_count_in_track(root, timeSigTop, timeSigBottom);
+  root.MIDI_build_midi_url_count_in_track = function (timeSigTop, timeSigBottom, leadBeats) {
+    return _MIDI_build_midi_url_count_in_track(root, timeSigTop, timeSigBottom, leadBeats);
   };
 
   /*
@@ -1209,6 +1213,7 @@ function GrooveUtils() {
    *                      class_notes_per_measure
    *
    * The arrays passed in contain the ABC notation for a given note value or false for a rest.
+   * slotRange: optional {from, to}; plays only the slots from..to-1 of the bar (part play).
    */
   root.MIDI_from_HH_Snare_Kick_Arrays = function (
     midiTrack,
@@ -1222,7 +1227,8 @@ function GrooveUtils() {
     num_notes_for_swing,
     swing_percentage,
     timeSigTop,
-    timeSigBottom
+    timeSigBottom,
+    slotRange
   ) {
     return _MIDI_from_HH_Snare_Kick_Arrays(
       root,
@@ -1237,7 +1243,8 @@ function GrooveUtils() {
       num_notes_for_swing,
       swing_percentage,
       timeSigTop,
-      timeSigBottom
+      timeSigBottom,
+      slotRange
     );
   };
 
@@ -1519,12 +1526,15 @@ function GrooveUtils() {
       }
       if (note_type) {
         global_total_midi_notes++;
+        var groovePercent = root.mapPlaybackPercent
+          ? root.mapPlaybackPercent(percentComplete)
+          : percentComplete;
         root.midiEventCallbacks.notePlaying(
           root.midiEventCallbacks.classRoot,
           note_type,
-          percentComplete
+          groovePercent
         );
-        root.highlightNoteInABCSVGFromPercentComplete(percentComplete);
+        root.highlightNoteInABCSVGFromPercentComplete(groovePercent);
         if (root.noteCallback) {
           root.noteCallback(note_type);
         }

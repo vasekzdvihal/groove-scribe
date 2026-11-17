@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { newGrooveUtils, installMidiGlobal } from '../helpers/legacyLoader.js';
+import { coverageGrooves } from '../fixtures/coverage-grooves.js';
 
 // Regression coverage for the MIDI-generation functions in groove_utils.js:
 //   - create_MIDIURLFromGrooveData      (main entry: grooveData -> data: URL)
@@ -326,7 +327,166 @@ describe('GrooveUtils MIDI generation', () => {
     });
   });
 
+  describe('MIDI_from_HH_Snare_Kick_Arrays with a slot range (part play)', () => {
+    const METRONOME_1 = 76;
+    const METRONOME_NORMAL = 77;
+
+    // A real Midi.Track that also records each note call with its absolute time.
+    // The first call (the leading blank spacer) sets no time: absolute times start after it.
+    function recordingTrack() {
+      const track = new globalThis.Midi.Track();
+      const notes = [];
+      let now = 0;
+      let first = true;
+      const wrap = (on, original) =>
+        function (channel, pitch, time, velocity) {
+          if (first) first = false;
+          else now += time;
+          notes.push({ on, channel, pitch, velocity, at: now });
+          return original.call(track, channel, pitch, time, velocity);
+        };
+      track.addNoteOn = wrap(true, track.addNoteOn);
+      track.addNoteOff = wrap(false, track.addNoteOff);
+      track.notes = notes;
+      return track;
+    }
+
+    // A full-size 4/4 bar: 32 slots, a hi-hat on every 16th, snare on 2 and 4, kick on 1 and 3.
+    function fullBar() {
+      const HH = new Array(32).fill(false);
+      const Snare = new Array(32).fill(false);
+      const Kick = new Array(32).fill(false);
+      for (let i = 0; i < 32; i += 2) HH[i] = '^g';
+      Snare[8] = 'c';
+      Snare[24] = 'c';
+      Kick[0] = 'F';
+      Kick[16] = 'F';
+      return { HH, Snare, Kick };
+    }
+
+    function build(track, { metronome = 8, swing = 0, slotRange } = {}) {
+      const { HH, Snare, Kick } = fullBar();
+      gu.MIDI_from_HH_Snare_Kick_Arrays(
+        track,
+        HH,
+        Snare,
+        Kick,
+        false,
+        'general_MIDI',
+        metronome,
+        32,
+        16,
+        swing,
+        4,
+        4,
+        slotRange
+      );
+      return track.notes;
+    }
+
+    const noteOns = (notes) => notes.filter((n) => n.on);
+    const clicks = (notes) =>
+      noteOns(notes).filter((n) => n.pitch === METRONOME_1 || n.pitch === METRONOME_NORMAL);
+
+    it('a slot range gives the same events as the same slots of a full bar', () => {
+      const full = noteOns(build(recordingTrack(), { swing: 0.3 }));
+      const part = noteOns(
+        build(recordingTrack(), { swing: 0.3, slotRange: { from: 16, to: 32 } })
+      );
+
+      const tail = full.slice(full.length - part.length);
+      // Slot 16 starts after 16 slots of 16 ticks; swing only moves notes inside a beat.
+      expect(tail[0].at).toBeCloseTo(256, 6);
+      expect(part[0].at).toBe(0);
+      expect(part.length).toBeLessThan(full.length);
+      part.forEach((n, k) => {
+        expect(n.pitch).toBe(tail[k].pitch);
+        expect(n.velocity).toBe(tail[k].velocity);
+        expect(n.at).toBeCloseTo(tail[k].at - tail[0].at, 6);
+      });
+    });
+
+    it('a range that starts on beat 3 clicks beat 3 as a normal click', () => {
+      const part = build(recordingTrack(), { metronome: 4, slotRange: { from: 16, to: 32 } });
+      expect(clicks(part).map((n) => n.pitch)).toEqual([METRONOME_NORMAL, METRONOME_NORMAL]);
+      expect(clicks(part)[0].at).toBe(0);
+    });
+
+    it('a range with the click on the & keeps the offset', () => {
+      gu.metronomeOffsetClickStart = 'AND';
+      const part = build(recordingTrack(), { metronome: 4, slotRange: { from: 16, to: 32 } });
+      // With the offset, the full bar clicks on the & of each beat: slots 4 (the "1"), 12, 20
+      // and 28. The range keeps slots 20 and 28 (4 slots of 16 ticks after slot 16) as normal
+      // clicks; a range that counted from its own start would click the "1" on slot 20.
+      expect(clicks(part).map((n) => [n.pitch, n.at])).toEqual([
+        [METRONOME_NORMAL, 64],
+        [METRONOME_NORMAL, 192],
+      ]);
+    });
+
+    it('a range that starts on beat 1 clicks the 1', () => {
+      const part = build(recordingTrack(), { metronome: 4, slotRange: { from: 0, to: 16 } });
+      expect(clicks(part).map((n) => n.pitch)).toEqual([METRONOME_1, METRONOME_NORMAL]);
+    });
+
+    it('a slot range in a triplet bar keeps the triplet timing', () => {
+      const HH = new Array(48).fill('^g');
+      const none = new Array(48).fill(false);
+      const track = recordingTrack();
+      gu.MIDI_from_HH_Snare_Kick_Arrays(
+        track,
+        HH,
+        none,
+        none,
+        false,
+        'general_MIDI',
+        0,
+        48,
+        12,
+        0,
+        4,
+        4,
+        { from: 12, to: 24 }
+      );
+      const ons = noteOns(track.notes);
+      expect(ons).toHaveLength(12);
+      expect(ons[1].at).toBeCloseTo(10.666, 6);
+    });
+
+    it('no range keeps the bytes', () => {
+      const pinned = {
+        'Swing 50 straight 16ths':
+          'data:audio/midi;base64,TVRoZAAAAAYAAAABAIBNVHJrAAAAagD/UQMKLCoAwBMBiTxaAIkuWgCZKlUAmSNVMJkqVRCZKlUwmSpVEJkqVQCZFlUwmSpVEJkqVTCZKlUQmSpVAJkjVTCZKlUQmSpVMJkqVRCZKlUAmRZVMJkqVRCZKlUwmSpVD4A8WgD/LwA=',
+        'Three measures triplet':
+          'data:audio/midi;base64,TVRoZAAAAAYAAAABAIBNVHJrAAAA9gD/UQMKLCoAwBMBiTxaAIkuWgCZM1UAmSNVKpkzVSqZM1UqmTNVAJkWVSqZM1UAmSNVKpkzVSqZM1UqmTNVKpkzVQCZFlUAmSNVKpkzVSqZM1UqmTNVKYA8WgCJLloAmTNVAJkjVSqZM1UqmTNVKpkzVQCZFlUqmTNVAJkjVSqZM1UqmTNVKpkzVSqZM1UAmRZVAJkjVSqZM1UqmTNVKpkzVSmAPFoAiS5aAJkzVQCZI1UqmTNVKpkzVSqZM1UAmRZVKpkzVQCZI1UqmTNVKpkzVSqZM1UqmTNVAJkWVQCZI1UqmTNVKpkzVSqZM1UpgDxaAP8vAA==',
+        'Metronome freq 8':
+          'data:audio/midi;base64,TVRoZAAAAAYAAAABAIBNVHJrAAAAigD/UQMKLCoAwBMBiTxaAJlMeACJLloAmSpVAJkjVSCZKlUgmU14AJkqVSCZKlUgmU14AJkqVQCZFlUgmSpVIJlNeACZKlUgmSpVIJlNeACZKlUAmSNVIJkqVSCZTXgAmSpVIJkqVSCZTXgAmSpVAJkWVSCZKlUgmU14AJkqVSCZKlUfgDxaAP8vAA==',
+      };
+      for (const [name, url] of Object.entries(pinned)) {
+        const groove = coverageGrooves.find((g) => g.name === name);
+        expect(gu.create_MIDIURLFromGrooveData(grooveFromUrl(groove.url), 0), name).toBe(url);
+      }
+    });
+  });
+
   describe('MIDI_build_midi_url_count_in_track', () => {
+    it('lead beats add clicks after the count-in', () => {
+      const addNoteOn = vi.spyOn(globalThis.Midi.Track.prototype, 'addNoteOn');
+      gu.MIDI_build_midi_url_count_in_track(4, 4, 2);
+      const pitches = addNoteOn.mock.calls.map((call) => call[1]);
+      addNoteOn.mockRestore();
+      expect(pitches).toEqual([76, 77, 77, 77, 77, 77]);
+    });
+
+    it('no lead beats keeps the bytes', () => {
+      expect(gu.MIDI_build_midi_url_count_in_track(4, 4)).toBe(
+        'data:audio/midi;base64,TVRoZAAAAAYAAAABAIBNVHJrAAAANgD/UQMLcbAAwBMBiTxaAJlMVYEAiUxaAJlNVYEAiU1aAJlNVYEAiU1aAJlNVYEAiU1aAP8vAA=='
+      );
+      expect(gu.MIDI_build_midi_url_count_in_track(4, 4, 0)).toBe(
+        gu.MIDI_build_midi_url_count_in_track(4, 4)
+      );
+    });
+
     it('returns a data:audio/midi;base64,... URL starting with the MThd header', () => {
       const url = gu.MIDI_build_midi_url_count_in_track(4, 4);
       expect(url.startsWith('data:audio/midi;base64,')).toBe(true);
