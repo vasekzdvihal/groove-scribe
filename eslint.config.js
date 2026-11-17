@@ -118,6 +118,7 @@ export default [
       'js/confirmDialog.js',
       'js/sidePanel.js',
       'js/backToEditor.js',
+      'js/partPlay.js',
       'js/cloud/**/*.js',
     ],
     languageOptions: {
