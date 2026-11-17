@@ -111,11 +111,21 @@ describe('nextSelection', () => {
       anchor: null,
     });
   });
-  it('keeps one beat when the second tap hits the anchor', () => {
+  it('clears the selection when the second tap hits the anchor', () => {
     const state = nextSelection(empty, { type: 'tap', beat: 5 });
-    expect(nextSelection(state, { type: 'tap', beat: 5 })).toEqual({
-      range: { first: 5, last: 5 },
-      anchor: null,
+    expect(nextSelection(state, { type: 'tap', beat: 5 })).toEqual(empty);
+  });
+  it('clears a range on a tap inside it', () => {
+    const state = { range: { first: 2, last: 5 }, anchor: null };
+    expect(nextSelection(state, { type: 'tap', beat: 2 })).toEqual(empty);
+    expect(nextSelection(state, { type: 'tap', beat: 4 })).toEqual(empty);
+    expect(nextSelection(state, { type: 'tap', beat: 5 })).toEqual(empty);
+  });
+  it('starts a new range on a tap outside a range', () => {
+    const state = { range: { first: 2, last: 5 }, anchor: null };
+    expect(nextSelection(state, { type: 'tap', beat: 6 })).toEqual({
+      range: { first: 6, last: 6 },
+      anchor: 6,
     });
   });
   it('selects the dragged range', () => {
@@ -126,6 +136,17 @@ describe('nextSelection', () => {
   });
   it('selects a whole bar', () => {
     expect(nextSelection(empty, { type: 'bar', bar: 1, numBeats: 4 })).toEqual({
+      range: { first: 4, last: 7 },
+      anchor: null,
+    });
+  });
+  it('clears the bar on a second tap of the same bar', () => {
+    const state = nextSelection(empty, { type: 'bar', bar: 1, numBeats: 4 });
+    expect(nextSelection(state, { type: 'bar', bar: 1, numBeats: 4 })).toEqual(empty);
+  });
+  it('selects the whole bar on a tap of a bar that is partly selected', () => {
+    const state = { range: { first: 4, last: 5 }, anchor: null };
+    expect(nextSelection(state, { type: 'bar', bar: 1, numBeats: 4 })).toEqual({
       range: { first: 4, last: 7 },
       anchor: null,
     });

@@ -100,6 +100,22 @@ test('two taps select from one beat to the other', async ({ page }) => {
   );
 });
 
+test('a tap on the selection clears it', async ({ page }) => {
+  await openEditor(page, FOUR_BARS);
+  await page.locator('.bar-ruler-beat[data-beat="2"]').click();
+  await page.locator('.bar-ruler-beat[data-beat="5"]').click();
+  await page.locator('.bar-ruler-beat[data-beat="3"]').click();
+  expect(await shaded(page)).toEqual([]);
+  await expect(chip(page)).toBeHidden();
+
+  const bar = page.getByRole('button', { name: 'Bar 2', exact: true });
+  await bar.click();
+  await expect(chip(page)).toBeVisible();
+  await bar.click();
+  expect(await shaded(page)).toEqual([]);
+  await expect(chip(page)).toBeHidden();
+});
+
 test('view mode hides the rulers and keeps the chip', async ({ page }) => {
   await openEditor(page, FOUR_BARS);
   await page.getByRole('button', { name: 'Bar 3', exact: true }).click();

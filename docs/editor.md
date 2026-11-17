@@ -101,6 +101,8 @@ is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groo
   one beat over the cells of each beat. Drag along a ruler to select beats. Tap "Bar N" to select
   the bar. Tap a beat, then tap another beat, also in another bar, to select all beats between
   them. The selected cells get a light shade, lighter than the playhead.
+- How to clear: as with selected text, tap the selection again. A tap on a selected beat, or on
+  "Bar N" of the selected bar, clears it. A tap outside the selection starts a new one.
 - The Remove bar button sits over the right end of the last beat. Tap the last beat to the left
   of it. A drag looks through the button, so it also reaches a last beat that is too narrow to
   tap (one cell, as in 6/8 in 1/8 notes).
@@ -122,7 +124,7 @@ is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groo
 - A press on a ruler ends at its release anywhere on the page, at a cancel, or at a lost
   pointer capture. A drag keeps the last beat it crossed. A new press replaces a press that never
   ended.
-- What clears the selection: the chip's ×, another groove, a bar added or removed, a new time
+- What clears the selection: a tap on it, the chip's ×, another groove, a bar added or removed, a new time
   signature or division, and a permutation. Note edits keep it.
 - The selection is never saved: not in the URL, the library or the undo steps.
 - `renderNoteGrid()` makes the rulers again with the grid, so the pointer events are delegated
