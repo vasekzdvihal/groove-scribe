@@ -8,6 +8,7 @@
 // its HTMLforStaffContainer / HTMLforPermutationOptions methods here.
 
 import { constant_MAX_MEASURES } from './constants.js';
+import { beatsPerBarFit } from './partPlay.js';
 
 // One tom lane (High tom = 1, Mid tom = 2, Floor tom = 4) of a bar in the note grid.
 function tomLaneHTML(tomNum, baseindex, indexStartForNotes, ctx) {
@@ -70,12 +71,61 @@ function tomLaneHTML(tomNum, baseindex, indexStartForNotes, ctx) {
   return newHTML;
 }
 
+/**
+ * The part play ruler of one bar, in the header row above it: "Bar N" over the label column,
+ * then one beat per beat over the cells. It has the same flex parts as the lanes (opening
+ * space, group gaps, end space), and each beat is as wide as its cells, so each beat lines up
+ * with its cells. No ruler when the bar does not split into whole beats.
+ * @param {number} baseindex  the 1-based bar number
+ * @param {{ notesPerMeasure: number, numBeatsPerMeasure: number, noteGrouping: number }} ctx
+ * @returns {string}
+ */
+function barRulerHTML(baseindex, ctx) {
+  var numBeats = ctx.numBeatsPerMeasure;
+  if (!beatsPerBarFit(ctx.notesPerMeasure, numBeats)) return '';
+  var notesPerBeat = ctx.notesPerMeasure / numBeats;
+  var bar = baseindex - 1;
+  var html =
+    '<div class="bar-ruler" data-bar="' +
+    bar +
+    '"><button type="button" class="bar-ruler-bar" title="Play only bar ' +
+    baseindex +
+    '">Bar ' +
+    baseindex +
+    '</button><div class="bar-ruler-beats"><div class="opening_note_space"></div>';
+  for (var beat = 0; beat < numBeats; beat++) {
+    var firstNote = beat * notesPerBeat;
+    // The group gaps inside this beat: after each full group, except at the end of the beat.
+    var innerGaps = 0;
+    for (var note = firstNote + 1; note < firstNote + notesPerBeat; note++) {
+      if (note % ctx.noteGrouping === 0) innerGaps++;
+    }
+    html +=
+      '<span class="bar-ruler-beat" data-beat="' +
+      (bar * numBeats + beat) +
+      '" style="--beat-cells:' +
+      notesPerBeat +
+      ';--beat-gaps:' +
+      innerGaps +
+      '"><span class="bar-ruler-track"></span><span class="bar-ruler-num">' +
+      (beat + 1) +
+      '</span></span>';
+    var nextNote = firstNote + notesPerBeat;
+    if (nextNote < ctx.notesPerMeasure && nextNote % ctx.noteGrouping === 0) {
+      html += '<div class="space_between_note_groups"></div>';
+    }
+  }
+  return html + '<div class="end_note_space"></div></div></div>';
+}
+
 export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
   var newHTML =
     '\
 						<div class="staff-container" id="staff-container' +
     baseindex +
-    '">\
+    '">' +
+    barRulerHTML(baseindex, ctx) +
+    '\
 							<div class="stickings-row-container">\
 								<div class="line-labels">\
 									<div class="stickings-label" onClick="myGrooveWriter.noteLabelClick(event, \'stickings\', ' +

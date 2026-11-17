@@ -119,6 +119,7 @@ export default [
       'js/sidePanel.js',
       'js/backToEditor.js',
       'js/partPlay.js',
+      'js/partPlayControl.js',
       'js/cloud/**/*.js',
     ],
     languageOptions: {
