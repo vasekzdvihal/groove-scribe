@@ -1,0 +1,244 @@
+/* Part play: the ruler above each bar selects the beats that Play loops, the shade marks them in
+   the grid, and the chip in the playback bar says what plays. js/partPlayControl.js. */
+
+#measureContainer {
+  /* The playhead blue. The playhead (0.2, an inline style) replaces the shade on its cell. */
+  --part-shade: rgba(50, 126, 173, 0.09);
+  /* The playhead hue, darker: white beat numbers on it have 5.1:1 (WCAG AA). */
+  --part-blue: #1f73a8;
+  --ruler-track: #eef1f3;
+  --ruler-text: #5b6870;
+}
+
+/* The selected beats in the grid. Lighter than the playhead, so the playhead shows on top. */
+#musicalInput .bg-highlight.is-part-selected {
+  background: var(--part-shade);
+}
+
+/* The ruler is the 44 px header row above its bar. It takes no width from the bar. */
+#musicalInput .bar-ruler {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  display: flex;
+  height: var(--touch-size);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* A permutation plays its own sections, so part play does not apply. */
+#measureContainer.has-permutation .bar-ruler {
+  display: none;
+}
+
+/* "Bar N" over the label column: it selects the whole bar. */
+#musicalInput .bar-ruler-bar {
+  flex: none;
+  box-sizing: border-box;
+  width: var(--label-width);
+  height: 100%;
+  margin: 0;
+  padding: 0 4px 0 8px;
+  border: 0;
+  background: none;
+  color: var(--ruler-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#musicalInput .bar-ruler-bar:focus-visible {
+  outline: 2px solid var(--part-blue);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* The beats, over the cells. Each beat has the flex size of its cells: their 56 px each at
+   most, their 22 px each at least, plus the group gaps inside it. */
+#musicalInput .bar-ruler-beats {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#musicalInput .bar-ruler-beat {
+  position: relative;
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  width: calc(var(--beat-cells) * var(--cell-max) + var(--beat-gaps) * var(--beat-gap));
+  min-width: calc(var(--beat-cells) * var(--cell-min) + var(--beat-gaps) * var(--beat-gap));
+  height: 100%;
+  container: bar-beat / inline-size;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* The track of the beat: a rounded bar with a 2 px gap to its neighbours. */
+#musicalInput .bar-ruler-track {
+  position: absolute;
+  top: 8px;
+  right: 2px;
+  bottom: 8px;
+  left: 2px;
+  border-radius: 6px;
+  background: var(--ruler-track);
+}
+
+/* The Remove button sits over the right end of the last beat (D1). The track stops before it. */
+#musicalInput
+  .staff-container:has(> .closeMeasureButton[id])
+  .bar-ruler-beat:last-of-type
+  .bar-ruler-track {
+  right: calc(var(--touch-size) + 2px);
+}
+
+/* A last beat that is too narrow for a track next to the Remove button (one cell, as in 6/8 in
+   1/8 notes) shows no track and no number. A drag still reaches it. */
+@container bar-beat (max-width: 80px) {
+  #musicalInput .staff-container:has(> .closeMeasureButton[id]) .bar-ruler-beat:last-of-type > * {
+    visibility: hidden;
+  }
+}
+
+/* The beat number sits over the first cell of the beat, where the beat starts. */
+#musicalInput .bar-ruler-num {
+  position: relative;
+  width: calc((100% - var(--beat-gaps) * var(--beat-gap)) / var(--beat-cells));
+  color: var(--ruler-text);
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Only a real mouse hovers. On a touch screen the hover colour would stay after a tap. */
+@media (hover: hover) {
+  #musicalInput .bar-ruler-beat:hover .bar-ruler-track {
+    background: #e1e8ec;
+  }
+
+  #musicalInput .bar-ruler-bar:hover {
+    color: var(--part-blue);
+  }
+}
+
+#musicalInput .bar-ruler-beat.is-selected .bar-ruler-track {
+  background: var(--part-blue);
+}
+
+#musicalInput .bar-ruler-beat.is-selected .bar-ruler-num {
+  color: #fff;
+}
+
+/* The first tap: the next tap selects everything from here. */
+#musicalInput .bar-ruler-beat.is-anchor .bar-ruler-track {
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 0 0 2px var(--part-blue);
+}
+
+/* The Remove button stays on top of the ruler. */
+#musicalInput .closeMeasureButton {
+  z-index: 1;
+}
+
+/* The chip is a group in the playback bar, styled like the click choices. Where the bar has room
+   it sits in the row of controls. Where it does not fit, partPlayControl.js gives the bar the
+   class has-chip-row: the bar gets taller and the chip takes its own row at the top of it. */
+#partPlayChip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 48px;
+  max-width: calc(100% - 24px);
+  padding: 0 2px 0 14px;
+  border-radius: 6px;
+  background: var(--bar-line);
+  color: var(--bar-text);
+  font-size: 18px;
+  white-space: nowrap;
+}
+
+/* The status is for screen readers only. */
+.part-play-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#partPlayChip[hidden] {
+  display: none;
+}
+
+#partPlayChip .fa-repeat {
+  color: #6cb8e6;
+}
+
+#partPlayChip .part-play-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#partPlayChip .part-play-clear {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-size);
+  height: var(--touch-size);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--bar-text);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  #partPlayChip .part-play-clear:hover {
+    background: var(--bar-playback-bg);
+  }
+}
+
+#partPlayChip .part-play-clear:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
+/* The chip row: 56 px more bar. The music ends at the top of the bar, so the chip covers no
+   note. */
+:root:has(#PlaybackBar.has-chip-row) {
+  --bar-playback-height: 152px;
+}
+
+#PlaybackBar.has-chip-row {
+  padding-top: 56px;
+}
+
+#PlaybackBar.has-chip-row #partPlayChip {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Narrow label column on a portrait tablet. */
+@container note-grid (max-width: 860px) {
+  #musicalInput .bar-ruler-bar {
+    padding: 0 2px;
+    font-size: 14px;
+  }
+}

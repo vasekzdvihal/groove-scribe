@@ -88,6 +88,7 @@ import {
 import * as _perm from './permutations.js';
 import * as _view from './viewHtml.js';
 import * as _grid from './gridState.js';
+import { barRanges, beatsPerBarFit, countInPercent, groovePercent, rangeFits } from './partPlay.js';
 
 // GrooveWriter class.   The only one in this file.
 
@@ -132,6 +133,11 @@ function GrooveWriter() {
   var class_metronome_auto_speed_up_active = false;
   var class_metronome_count_in_active = false;
   var class_metronome_count_in_is_playing = false;
+
+  // Part play: the selected beats (a BeatRange from partPlay.js) or null, and the groove shape
+  // it was made for. A grid with a new shape drops it.
+  var class_part_play = null;
+  var class_part_play_shape = null;
 
   // set debugMode immediately so we can use it in index.html
   root.myGrooveUtils.debugMode = parseInt(
@@ -616,7 +622,8 @@ function GrooveWriter() {
       // turn off old highlighting
       var bg_ele = document.getElementById('bg-highlight' + class_cur_all_notes_highlight_id);
       if (bg_ele) {
-        bg_ele.style.background = 'transparent';
+        // Remove the inline colour, so the part play shade from the CSS shows again.
+        bg_ele.style.background = '';
       }
     }
 
@@ -689,7 +696,8 @@ function GrooveWriter() {
       // turn off old highlighting
       var bg_ele = document.getElementById('bg-highlight' + class_cur_all_notes_highlight_id);
       if (bg_ele) {
-        bg_ele.style.background = 'transparent';
+        // Remove the inline colour, so the part play shade from the CSS shows again.
+        bg_ele.style.background = '';
       }
       class_cur_all_notes_highlight_id = false;
     }
@@ -1008,10 +1016,20 @@ function GrooveWriter() {
     drawPermutationChoice();
     document.getElementById('PermutationOptions').innerHTML = root.HTMLforPermutationOptions();
     addOrRemoveKeywordFromClassById('PermutationOptions', 'displayed', false);
+    showPermutationOnGrid();
+  }
+
+  // The part play ruler hides during a permutation. The CSS reads this class.
+  function showPermutationOnGrid() {
+    var container = document.getElementById('measureContainer');
+    if (container) container.classList.toggle('has-permutation', class_permutation_type != 'none');
   }
 
   root.permutationPopupClick = function (perm_type) {
     if (class_permutation_type == perm_type) return;
+
+    // A permutation plays its own sections, so a part play selection does not apply.
+    if (perm_type != 'none') clearPartPlay();
 
     class_permutation_type = perm_type;
 
@@ -1046,6 +1064,7 @@ function GrooveWriter() {
         break;
     }
 
+    showPermutationOnGrid();
     updateSheetMusic();
   };
 
@@ -1695,7 +1714,32 @@ function GrooveWriter() {
     );
   }
 
-  function createMidiUrlFromClickableUI(MIDI_type) {
+  // The playhead map for the MIDI that createMidiUrlFromClickableUI builds: from the percent
+  // through the part to the percent through the groove. null when it plays the whole groove.
+  function partPlayPercentMap() {
+    if (!class_part_play || class_permutation_type != 'none') return null;
+    var range = class_part_play;
+    var numBeats = class_num_beats_per_measure;
+    var numberOfMeasures = class_number_of_measures;
+    return function (p) {
+      return groovePercent(p, range, numBeats, numberOfMeasures);
+    };
+  }
+
+  // The playhead map for the count-in: no playhead in the full bar, then each lead beat on its
+  // cells. null without a selection: the playhead sweeps the groove, as it always did.
+  function countInPercentMap() {
+    if (!class_part_play || class_permutation_type != 'none') return null;
+    var range = class_part_play;
+    var numBeats = class_num_beats_per_measure;
+    var numberOfMeasures = class_number_of_measures;
+    return function (p) {
+      return countInPercent(p, range, numBeats, numberOfMeasures);
+    };
+  }
+
+  // playPart: build only the part play selection, if there is one (playback, not the export).
+  function createMidiUrlFromClickableUI(MIDI_type, playPart) {
     var Sticking_Array = get_empty_note_array_in_32nds();
     var HH_Array = get_empty_note_array_in_32nds();
     var Snare_Array = get_empty_note_array_in_32nds();
@@ -1816,51 +1860,51 @@ function GrooveWriter() {
         else
           num_notes_for_swing = (16 * class_num_beats_per_measure) / class_note_value_per_measure;
 
-        root.myGrooveUtils.MIDI_from_HH_Snare_Kick_Arrays(
-          midiTrack,
-          HH_Array,
-          Snare_Array,
-          Kick_Array,
-          Toms_Array,
-          MIDI_type,
-          metronomeFrequency,
-          num_notes,
-          num_notes_for_swing,
-          swing_percentage,
-          class_num_beats_per_measure,
-          class_note_value_per_measure
-        );
+        // With a part play selection, build only its bars, and in them only its slots.
+        var partSpans =
+          playPart && class_part_play
+            ? barRanges(class_part_play, class_num_beats_per_measure, num_notes)
+            : null;
 
-        for (i = 1; i < class_number_of_measures; i++) {
-          // reset arrays
-          Sticking_Array = get_empty_note_array_in_32nds();
-          HH_Array = get_empty_note_array_in_32nds();
-          Snare_Array = get_empty_note_array_in_32nds();
-          Kick_Array = get_empty_note_array_in_32nds();
-          Toms_Array = [
-            get_empty_note_array_in_32nds(),
-            get_empty_note_array_in_32nds(),
-            get_empty_note_array_in_32nds(),
-            get_empty_note_array_in_32nds(),
-          ];
+        for (i = 0; i < class_number_of_measures; i++) {
+          var slotRange = null;
+          if (partSpans) {
+            var span = partSpans.find((s) => s.bar === i);
+            if (!span) continue;
+            slotRange = { from: span.from, to: span.to };
+          }
 
-          // get another measure
-          get32NoteArrayFromClickableUI(
-            Sticking_Array,
-            HH_Array,
-            Snare_Array,
-            Kick_Array,
-            Toms_Array,
-            class_notes_per_measure * i
-          );
-          muteArrayFromClickableUI(
-            Sticking_Array,
-            HH_Array,
-            Snare_Array,
-            Kick_Array,
-            Toms_Array,
-            i
-          );
+          if (i > 0) {
+            // reset arrays (the first measure is already read above)
+            Sticking_Array = get_empty_note_array_in_32nds();
+            HH_Array = get_empty_note_array_in_32nds();
+            Snare_Array = get_empty_note_array_in_32nds();
+            Kick_Array = get_empty_note_array_in_32nds();
+            Toms_Array = [
+              get_empty_note_array_in_32nds(),
+              get_empty_note_array_in_32nds(),
+              get_empty_note_array_in_32nds(),
+              get_empty_note_array_in_32nds(),
+            ];
+
+            // get another measure
+            get32NoteArrayFromClickableUI(
+              Sticking_Array,
+              HH_Array,
+              Snare_Array,
+              Kick_Array,
+              Toms_Array,
+              class_notes_per_measure * i
+            );
+            muteArrayFromClickableUI(
+              Sticking_Array,
+              HH_Array,
+              Snare_Array,
+              Kick_Array,
+              Toms_Array,
+              i
+            );
+          }
 
           root.myGrooveUtils.MIDI_from_HH_Snare_Kick_Arrays(
             midiTrack,
@@ -1874,7 +1918,8 @@ function GrooveWriter() {
             num_notes_for_swing,
             swing_percentage,
             class_num_beats_per_measure,
-            class_note_value_per_measure
+            class_note_value_per_measure,
+            slotRange
           );
         }
         break;
@@ -3000,10 +3045,13 @@ function GrooveWriter() {
       var midiURL;
 
       if (playStarting && class_metronome_count_in_active) {
+        // With a part play selection, the count-in also clicks the beats before it in its bar.
         midiURL = root.myGrooveUtils.MIDI_build_midi_url_count_in_track(
           class_num_beats_per_measure,
-          class_note_value_per_measure
+          class_note_value_per_measure,
+          class_part_play ? class_part_play.first % class_num_beats_per_measure : 0
         );
+        root.myGrooveUtils.mapPlaybackPercent = countInPercentMap();
         root.myGrooveUtils.midiNoteHasChanged(); // this track is temporary
         class_metronome_count_in_is_playing = true;
       } else {
@@ -3012,7 +3060,8 @@ function GrooveWriter() {
           class_metronome_count_in_is_playing = false;
           root.myGrooveUtils.resetMetronomeOptionsOffsetClickStartRotation();
         }
-        midiURL = createMidiUrlFromClickableUI('our_MIDI');
+        midiURL = createMidiUrlFromClickableUI('our_MIDI', true);
+        root.myGrooveUtils.mapPlaybackPercent = partPlayPercentMap();
         root.myGrooveUtils.midiResetNoteHasChanged();
       }
       root.myGrooveUtils.loadMIDIFromURL(midiURL);
@@ -3855,6 +3904,7 @@ function GrooveWriter() {
   // nameWhenUntitled names the groove in the top bar when its URL has no title.
   root.loadNewGroove = function (encodedURLData, nameWhenUntitled) {
     grooveNameWhenUntitled = nameWhenUntitled || '';
+    clearPartPlay();
     applyGrooveData(root.myGrooveUtils.getGrooveDataFromUrlString(encodedURLData));
   };
 
@@ -4142,7 +4192,91 @@ function GrooveWriter() {
     );
     container.style.setProperty('--notes', String(class_notes_per_measure));
     container.style.setProperty('--groups', String(Math.ceil(class_notes_per_measure / grouping)));
+    showPermutationOnGrid();
+
+    // A selection made for another grid shape does not fit this one.
+    if (
+      class_part_play &&
+      (!sameShape(class_part_play_shape, root.partPlayShape()) ||
+        !rangeFits(class_part_play, class_num_beats_per_measure, class_number_of_measures))
+    ) {
+      clearPartPlay();
+    }
+    shadePartPlay();
   };
+
+  // ---- Part play: loop only the selected beats ----
+
+  // Called with the new selection (a BeatRange or null) after each change.
+  root.onPartPlayChange = null;
+
+  root.partPlayShape = function () {
+    return {
+      numBeats: class_num_beats_per_measure,
+      numberOfMeasures: class_number_of_measures,
+      notesPerMeasure: class_notes_per_measure,
+      rulerShown:
+        class_permutation_type == 'none' &&
+        beatsPerBarFit(class_notes_per_measure, class_num_beats_per_measure),
+    };
+  };
+
+  root.getPartPlay = function () {
+    return class_part_play ? { first: class_part_play.first, last: class_part_play.last } : null;
+  };
+
+  // Select the beats to loop, or null for the whole groove. A range that does not fit the
+  // groove, or a selection while the ruler is hidden, stores null. While the groove plays, the
+  // change starts at the next loop.
+  root.setPartPlay = function (range) {
+    var shape = root.partPlayShape();
+    var valid =
+      range &&
+      shape.rulerShown &&
+      Number.isInteger(range.first) &&
+      Number.isInteger(range.last) &&
+      range.first <= range.last &&
+      rangeFits(range, shape.numBeats, shape.numberOfMeasures);
+    class_part_play = valid ? { first: range.first, last: range.last } : null;
+    class_part_play_shape = valid ? shape : null;
+    shadePartPlay();
+    root.myGrooveUtils.midiNoteHasChanged();
+    if (root.onPartPlayChange) root.onPartPlayChange(root.getPartPlay());
+  };
+
+  // Drop the selection without a redraw. Tells the listener only when there was one.
+  function clearPartPlay() {
+    if (!class_part_play) return;
+    class_part_play = null;
+    class_part_play_shape = null;
+    shadePartPlay();
+    root.myGrooveUtils.midiNoteHasChanged();
+    if (root.onPartPlayChange) root.onPartPlayChange(null);
+  }
+
+  function sameShape(a, b) {
+    return (
+      !!a &&
+      a.numBeats === b.numBeats &&
+      a.numberOfMeasures === b.numberOfMeasures &&
+      a.notesPerMeasure === b.notesPerMeasure
+    );
+  }
+
+  // Shade the note cells of the selected beats.
+  function shadePartPlay() {
+    var notesPerBeat = class_notes_per_measure / class_num_beats_per_measure;
+    var total = class_notes_per_measure * class_number_of_measures;
+    for (var id = 0; id < total; id++) {
+      var cell = document.getElementById('bg-highlight' + id);
+      if (!cell) continue;
+      var beat = Math.floor(id / notesPerBeat);
+      cell.classList.toggle(
+        'is-part-selected',
+        !!class_part_play && beat >= class_part_play.first && beat <= class_part_play.last
+      );
+    }
+  }
 
   // a click on a permutation option checkbox
   root.permutationOptionClick = function (event) {

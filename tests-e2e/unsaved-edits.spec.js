@@ -13,6 +13,28 @@ async function pickBuiltIn(page, name) {
   await page.locator('#grooveListWrapper .grooveListLI', { hasText: name }).first().click();
 }
 
+// The notes on the grid, to prove that an answer did not also click a note.
+const notes = (page) =>
+  page.evaluate(() => {
+    const gd = window.myGrooveWriter.grooveDataFromClickableUI();
+    return JSON.stringify([gd.hh_array, gd.snare_array, gd.kick_array, gd.toms_array]);
+  });
+
+// Answer the discard question: 'Escape', or the name of a button. The answer waits until the
+// dialog is open, so a click cannot go to the grid cell under the button (#kick6 at 1280 px with
+// the docked panel). Keep editing must leave the notes as they were.
+async function answer(page, how) {
+  const dialog = discardDialog(page);
+  await expect(dialog).toHaveJSProperty('open', true);
+  const before = await notes(page);
+  if (how === 'Escape') await page.keyboard.press('Escape');
+  else await dialog.getByRole('button', { name: how }).click();
+  await expect(dialog).toBeHidden();
+  if (how !== 'Discard changes') {
+    expect(await notes(page), `the answer ${how} changed a note on the grid`).toBe(before);
+  }
+}
+
 const tempo = (page) => page.evaluate(() => window.myGrooveWriter.myGrooveUtils.getTempo());
 
 test('a built-in groove asks first when the groove has edits', async ({ page }) => {
@@ -23,18 +45,15 @@ test('a built-in groove asks first when the groove has edits', async ({ page }) 
   await pickBuiltIn(page, 'Train Beat');
   const dialog = discardDialog(page);
   await expect(dialog.getByRole('button', { name: 'Keep editing' })).toBeFocused();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
+  await answer(page, 'Escape');
   expect(page.url()).toBe(edited);
 
   await pickBuiltIn(page, 'Train Beat');
-  await dialog.getByRole('button', { name: 'Keep editing' }).click();
-  await expect(dialog).toBeHidden();
+  await answer(page, 'Keep editing');
   expect(page.url()).toBe(edited);
 
   await pickBuiltIn(page, 'Train Beat');
-  await dialog.getByRole('button', { name: 'Discard changes' }).click();
-  await expect(dialog).toBeHidden();
+  await answer(page, 'Discard changes');
   await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
 });
 
@@ -54,7 +73,7 @@ test('a loaded built-in groove is clean', async ({ page }) => {
   await loadGroove(page, '/index.html');
   await page.click('#snare4');
   await pickBuiltIn(page, 'Train Beat');
-  await discardDialog(page).getByRole('button', { name: 'Discard changes' }).click();
+  await answer(page, 'Discard changes');
   await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
 
   await pickBuiltIn(page, 'Jazz Shuffle');
@@ -69,7 +88,10 @@ test('a loaded built-in groove is clean', async ({ page }) => {
 test('a reload keeps the edits unsaved, and the Grooves menu still asks', async ({ page }) => {
   page.on('dialog', (dialog) => dialog.accept());
   await loadGroove(page, '/index.html');
+  const clean = page.url();
   await page.click('#snare4');
+  // The edit must be in the address before the reload, or the reload loses it.
+  await expect.poll(() => page.url()).not.toBe(clean);
   await page.reload();
   await page.waitForSelector('#svgTarget svg');
   await pickBuiltIn(page, 'Train Beat');
@@ -145,17 +167,14 @@ test('after Escape focus goes back to the Grooves tab, and a tap leaves no focus
   await loadGroove(page, '/index.html');
   await page.click('#snare4');
   const grooves = page.locator('#groovesTab');
-  const dialog = discardDialog(page);
   await pickBuiltIn(page, 'Train Beat');
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeHidden();
+  await answer(page, 'Escape');
   await expect(grooves).toBeFocused();
 
   for (const name of ['Keep editing', 'Discard changes']) {
     await page.click('#snare8');
     await pickBuiltIn(page, 'Train Beat');
-    await dialog.getByRole('button', { name }).click();
-    await expect(dialog).toBeHidden();
+    await answer(page, name);
     expect(await grooves.evaluate((node) => node.matches(':focus-visible')), name).toBe(false);
     await expect(grooves).not.toBeFocused();
   }
@@ -200,16 +219,13 @@ test('a pick with unsaved edits asks first', async ({ page }) => {
   await loadGroove(page, '/index.html');
   await page.click('#snare4');
   const edited = page.url();
-  const dialog = discardDialog(page);
 
   await pickBuiltIn(page, 'Train Beat');
-  await dialog.getByRole('button', { name: 'Keep editing' }).click();
-  await expect(dialog).toBeHidden();
+  await answer(page, 'Keep editing');
   expect(page.url()).toBe(edited);
   await expect(page.locator('#groovesTab')).toHaveAttribute('aria-pressed', 'true');
 
   await pickBuiltIn(page, 'Train Beat');
-  await dialog.getByRole('button', { name: 'Discard changes' }).click();
-  await expect(dialog).toBeHidden();
+  await answer(page, 'Discard changes');
   await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
 });

@@ -393,9 +393,17 @@
   white-space: normal;
 }
 
-/* Room above each bar for its 44 px Remove button. */
-#musicalInput .staff-container:has(> .closeMeasureButton[id]) {
+/* Room above each bar for its 44 px Remove button and its part play ruler (css/part-play.css).
+   A permutation hides the ruler, and leaves one bar with no Remove button. */
+#musicalInput .staff-container:has(> .closeMeasureButton[id]),
+#musicalInput .staff-container:has(> .bar-ruler) {
   margin-top: 44px;
+}
+
+#musicalInput
+  #measureContainer.has-permutation
+  .staff-container:not(:has(> .closeMeasureButton[id])) {
+  margin-top: 28px;
 }
 
 #musicalInput .stickings-row-container,

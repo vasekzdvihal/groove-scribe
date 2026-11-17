@@ -61,7 +61,17 @@ import {
 } from './constants.js';
 import { isTripletDivisionFromNotesPerMeasure, scaleNoteArrayToFullSize } from './musicMath.js';
 
-export function MIDI_build_midi_url_count_in_track(gu, timeSigTop, timeSigBottom) {
+/**
+ * Build a base64 data: URL for the count-in: one full bar of clicks, then `leadBeats` more
+ * normal clicks. Part play uses the lead beats for the beats before the selection in its bar.
+ *
+ * @param {Object} gu  The owning GrooveUtils instance (for the tempo).
+ * @param {number} timeSigTop
+ * @param {number} timeSigBottom
+ * @param {number} [leadBeats]  Normal clicks after the count-in bar.
+ * @returns {string}
+ */
+export function MIDI_build_midi_url_count_in_track(gu, timeSigTop, timeSigBottom, leadBeats = 0) {
   var midiFile = new Midi.File();
   var midiTrack = new Midi.Track();
   midiFile.addTrack(midiTrack);
@@ -82,7 +92,7 @@ export function MIDI_build_midi_url_count_in_track(gu, timeSigTop, timeSigBottom
   // add count in
   midiTrack.addNoteOn(9, constant_OUR_MIDI_METRONOME_1, 0, constant_OUR_MIDI_VELOCITY_NORMAL);
   midiTrack.addNoteOff(9, constant_OUR_MIDI_METRONOME_1, noteDelay);
-  for (var i = 1; i < timeSigTop; i++) {
+  for (var i = 1; i < timeSigTop + leadBeats; i++) {
     midiTrack.addNoteOn(
       9,
       constant_OUR_MIDI_METRONOME_NORMAL,
@@ -110,8 +120,13 @@ export function MIDI_from_HH_Snare_Kick_Arrays(
   num_notes_for_swing,
   swing_percentage,
   timeSigTop,
-  timeSigBottom
+  timeSigBottom,
+  slotRange
 ) {
+  // slotRange {from, to} plays only the slots from..to-1 of the full-size bar (part play).
+  // All index maths below use the real slot index, so swing and clicks stay where they are.
+  var firstSlot = slotRange ? slotRange.from : 0;
+  var endSlot = slotRange ? slotRange.to : num_notes;
   var prev_hh_note = 46; // default to open hi-hat so that the first hi-hat note also mutes any previous hh open.
   var midi_channel = 9; // percussion
 
@@ -131,7 +146,7 @@ export function MIDI_from_HH_Snare_Kick_Arrays(
   var offsetClickStartBeat = gu.getMetronomeOptionsOffsetClickStartRotation(isTriplets);
   var delay_for_next_note = 0;
 
-  for (var i = 0; i < num_notes; i++) {
+  for (var i = firstSlot; i < endSlot; i++) {
     var duration = 0;
 
     if (isTriplets) {

@@ -35,6 +35,8 @@
 		<link rel="modulepreload" href="js/permutations.js">
 		<link rel="modulepreload" href="js/viewHtml.js">
 		<link rel="modulepreload" href="js/gridState.js">
+		<link rel="modulepreload" href="js/partPlay.js">
+		<link rel="modulepreload" href="js/partPlayControl.js">
 		<link rel="modulepreload" href="js/grooves.js">
 		<link rel="modulepreload" href="js/editorChrome.js">
 		<link rel="modulepreload" href="js/wakeLock.js">
@@ -94,6 +96,7 @@
 		<link rel="stylesheet" type="text/css" href="css/groove_display_orange.css">
 		<link rel="stylesheet" type="text/css" href="css/editor-toolbars.css">
 		<link rel="stylesheet" type="text/css" href="css/side-panel.css">
+		<link rel="stylesheet" type="text/css" href="css/part-play.css">
 		<link rel="stylesheet" type="text/css" href="css/fonts.css">
 
 		<!--   Other peoples JS libraries    -->
@@ -172,6 +175,10 @@
 
 			<div id="PlaybackBar">
 				<div id="midiPlayer"><!-- space for the midiplayer to be attached by the javascript --></div>
+				<!-- Part play: what Play loops. It floats above the bar, and shows in view mode too. -->
+				<span id="partPlayChip" hidden><i class="fa fa-repeat" aria-hidden="true"></i><span class="part-play-label"></span><button type="button" class="part-play-clear" aria-label="Play the whole groove"><i class="fa fa-times" aria-hidden="true"></i></button></span>
+				<!-- What a screen reader says: the selection after a press ends, not each beat of a drag. -->
+				<span id="partPlayStatus" class="part-play-status" role="status"></span>
 				<span class="tool-sep"></span>
 				<span id="metronomeContainer">
 					<span id="metronomeLabel">Click</span>

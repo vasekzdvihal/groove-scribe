@@ -27,6 +27,10 @@ After you fix type errors, run `npm run typecheck -- --update` to lower the base
 - `scripts/test-server.py` adds `html_examples_and_tests/` on top for two embed tests. That folder
   never goes into `www/`.
 - `tests-e2e/fixtures.js` blocks every request that does not go to localhost, so runs are hermetic.
+- `tests-e2e/fixtures.js` also drops a mouseenter that carries Ctrl or Alt. On a Mac, Chrome
+  sends a mouseenter by itself when the element under a still mouse changes (a dialog closes),
+  and it takes the modifier keys from the real keyboard. A Ctrl held in a terminal during a run
+  then painted a note under the mouse (`noteOnMouseEnter`) and failed a test now and then.
 - `npm run test:e2e` uses port 8010 and `npm run test:cloud` uses 8001. `reuseExistingServer` is
   false, so a busy port fails the run. Stop the other process first.
 

@@ -18,6 +18,7 @@ import {
 } from './editorChrome.js';
 import { hasRememberedUser, initLibraryPanel } from './cloud/libraryPanel.js';
 import { createSidePanel } from './sidePanel.js';
+import { initPartPlay } from './partPlayControl.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
 import { askToClearNotes, askToDiscard } from './confirmDialog.js';
 import { createWakeLock } from './wakeLock.js';
@@ -125,6 +126,8 @@ if (utils.is_touch_device()) {
 fillContainer('PermutationOptions', myGrooveWriter.HTMLforPermutationOptions());
 
 myGrooveWriter.renderNoteGrid();
+// The rulers above the bars select the beats that Play loops. The chip says what plays.
+initPartPlay(myGrooveWriter);
 
 fillContainer('grooveListWrapper', grooves.getGroovesAsHTML());
 

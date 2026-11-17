@@ -13,7 +13,7 @@ Each bar holds the controls for what is next to it:
   switch, then the groove actions Save, Share and ⋯ (`#moreButton`). The groove actions stay in
   view mode.
 - The playback bar (`#PlaybackBar`), below the notes: play, the tempo knob, the click and swing
-  only.
+  only. While part play has a selection, the part play chip shows in it too (see "Part play").
 
 Rules:
 
@@ -90,6 +90,44 @@ Rules:
 - The label column is 100 px wide on a wide screen, so "Floor tom" fits on one line. Narrower
   columns let a tom name go onto two lines.
 - The metronome auto speed-up rewrites the newest undo step instead of adding one.
+
+## Part play
+
+Play can loop some of the beats only. `js/partPlay.js` holds the pure helpers,
+`js/partPlayControl.js` the rulers and the chip, `css/part-play.css` their styles. The writer API
+is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groove_writer.js`.
+
+- How to select: each bar has a ruler in its 44 px header row, with "Bar N" over the labels and
+  one beat over the cells of each beat. Drag along a ruler to select beats. Tap "Bar N" to select
+  the bar. Tap a beat, then tap another beat, also in another bar, to select all beats between
+  them. The selected cells get a light shade, lighter than the playhead.
+- The Remove bar button sits over the right end of the last beat. Tap the last beat to the left
+  of it. A drag looks through the button, so it also reaches a last beat that is too narrow to
+  tap (one cell, as in 6/8 in 1/8 notes).
+- The rulers show in edit mode only. They hide while a permutation is active, and when a bar does
+  not split into whole beats.
+- The chip is in the playback bar while there is a selection, in view mode too. It says what
+  plays. Its × plays the whole groove again. It never covers the music:
+  - When the bar has room, the chip sits in the row of controls, after the tempo knob.
+  - When the bar has no room, `placeChip()` gives the bar the class `has-chip-row`. An example is
+    a long label at 1024 px or narrower. The chip then gets its own row at the top of the bar. The
+    bar is 56 px taller (`--bar-playback-height` 152 px), so the music ends above it.
+  - `placeChip()` runs again when the bar or the chip changes size.
+- A screen reader hears the selection from `#partPlayStatus`, a hidden live region next to the
+  chip. It changes when a press ends, not at each beat that a drag crosses. The chip label is not
+  live.
+- With the count-in on, the count-in clicks one full bar and then the beats before the selection
+  in its bar. The playhead is off for the full bar, then shows each of those beats on its cells
+  (`countInPercent`). Without a selection the playhead sweeps the groove, as before.
+- A press on a ruler ends at its release anywhere on the page, at a cancel, or at a lost
+  pointer capture. A drag keeps the last beat it crossed. A new press replaces a press that never
+  ended.
+- What clears the selection: the chip's ×, another groove, a bar added or removed, a new time
+  signature or division, and a permutation. Note edits keep it.
+- The selection is never saved: not in the URL, the library or the undo steps.
+- `renderNoteGrid()` makes the rulers again with the grid, so the pointer events are delegated
+  on `#measureContainer`. `onPartPlayChange(null)` can come while a groove loads, so the listener
+  reads only its argument.
 
 ## Sound
 

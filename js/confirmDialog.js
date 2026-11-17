@@ -83,18 +83,56 @@ function ask(name, returnFocus) {
   }
   const shown = dialog;
   return new Promise((resolve) => {
-    shown.addEventListener(
-      'close',
-      () => {
-        restoreFocus(returnFocus);
-        resolve(shown.returnValue === 'yes');
-      },
-      { once: true }
-    );
-    if (shown.open) return; // already asking: both callers get the one answer
-    shown.returnValue = '';
-    shown.showModal();
+    let asking = askings.get(name);
+    // close() sets open to false at once, but its 'close' event comes later, as a task. A
+    // question that closed and did not get that event yet gets its answer now, before the
+    // dialog opens again and resets the answer.
+    if (asking && !shown.open) {
+      asking.settle();
+      asking = undefined;
+    }
+    if (!asking) asking = startAsking(name, shown);
+    asking.waiters.push({ resolve, returnFocus }); // already asking: all callers get the one answer
   });
+}
+
+/**
+ * @typedef {{resolve: (yes: boolean) => void, returnFocus: HTMLElement | null | undefined}} Waiter
+ * @typedef {{waiters: Waiter[], settle: () => void}} Asking
+ */
+
+/** @type {Map<string, Asking>} the open question of each dialog */
+const askings = new Map();
+
+/**
+ * Open the dialog for a new question.
+ *
+ * @param {string} name
+ * @param {HTMLDialogElement} shown
+ * @returns {Asking}
+ */
+function startAsking(name, shown) {
+  /** @type {Waiter[]} */
+  const waiters = [];
+  // A close event that comes while the dialog is open belongs to an earlier question.
+  const onClose = () => {
+    if (!shown.open) settle();
+  };
+  function settle() {
+    shown.removeEventListener('close', onClose);
+    if (askings.get(name) === asking) askings.delete(name);
+    const yes = shown.returnValue === 'yes';
+    for (const waiter of waiters) {
+      restoreFocus(waiter.returnFocus);
+      waiter.resolve(yes);
+    }
+  }
+  const asking = { waiters, settle };
+  askings.set(name, asking);
+  shown.addEventListener('close', onClose);
+  shown.returnValue = '';
+  shown.showModal();
+  return asking;
 }
 
 /** @returns {boolean} true while the discard question is on screen */
