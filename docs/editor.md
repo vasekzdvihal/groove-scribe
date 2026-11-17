@@ -113,6 +113,12 @@ is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groo
     a long label at 1024 px or narrower. The chip then gets its own row at the top of the bar. The
     bar is 56 px taller (`--bar-playback-height` 152 px), so the music ends above it.
   - `placeChip()` runs again when the bar or the chip changes size.
+- A screen reader hears the selection from `#partPlayStatus`, a hidden live region next to the
+  chip. It changes when a press ends, not at each beat that a drag crosses. The chip label is not
+  live.
+- With the count-in on, the count-in clicks one full bar and then the beats before the selection
+  in its bar. The playhead is off for the full bar, then shows each of those beats on its cells
+  (`countInPercent`). Without a selection the playhead sweeps the groove, as before.
 - A press on a ruler ends at its release anywhere on the page, at a cancel, or at a lost
   pointer capture. A drag keeps the last beat it crossed. A new press replaces a press that never
   ended.
