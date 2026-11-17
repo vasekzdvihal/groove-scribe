@@ -116,26 +116,35 @@ export function selectionLabel(range, numBeats) {
 }
 
 /**
- * The ruler state machine. A first tap sets an anchor. A second tap closes the range.
+ * The ruler state machine. A first tap sets an anchor. A second tap closes the range. As with
+ * selected text, a tap on the selection clears it: on the anchor, inside a closed range, or on
+ * "Bar N" of the bar that is the selection.
  * @param {TapState} state
  * @param {RulerEvent} event
  * @returns {TapState}
  */
 export function nextSelection(state, event) {
+  const none = { range: null, anchor: null };
   switch (event.type) {
-    case 'tap':
-      if (state.anchor === null) {
-        return { range: { first: event.beat, last: event.beat }, anchor: event.beat };
+    case 'tap': {
+      const { range, anchor } = state;
+      if (anchor !== null) {
+        return event.beat === anchor
+          ? none
+          : { range: normalizeRange(anchor, event.beat), anchor: null };
       }
-      return { range: normalizeRange(state.anchor, event.beat), anchor: null };
+      if (range && event.beat >= range.first && event.beat <= range.last) return none;
+      return { range: { first: event.beat, last: event.beat }, anchor: event.beat };
+    }
     case 'drag':
       return { range: normalizeRange(event.from, event.to), anchor: null };
-    case 'bar':
-      return {
-        range: { first: event.bar * event.numBeats, last: (event.bar + 1) * event.numBeats - 1 },
-        anchor: null,
-      };
+    case 'bar': {
+      const first = event.bar * event.numBeats;
+      const last = first + event.numBeats - 1;
+      if (state.range?.first === first && state.range.last === last) return none;
+      return { range: { first, last }, anchor: null };
+    }
     default:
-      return { range: null, anchor: null };
+      return none;
   }
 }
