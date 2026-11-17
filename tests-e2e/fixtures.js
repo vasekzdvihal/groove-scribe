@@ -24,6 +24,20 @@ export const test = base.extend({
       }
       return route.abort();
     });
+    // When the element under a still mouse changes (a dialog closes, the grid is drawn again),
+    // Chrome sends a mouseenter by itself. On a Mac that event takes the modifier keys from the
+    // real keyboard. A Ctrl or Alt held anywhere on the Mac, for example in a terminal, then
+    // makes the note under the mouse paint or clear itself (noteOnMouseEnter). No test hovers
+    // with a modifier, so the page does not get such an event.
+    await page.addInitScript(() => {
+      window.addEventListener(
+        'mouseenter',
+        (event) => {
+          if (event.isTrusted && (event.ctrlKey || event.altKey)) event.stopImmediatePropagation();
+        },
+        true
+      );
+    });
     await use(page);
   },
 });
