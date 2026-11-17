@@ -5,6 +5,7 @@ import {
   rangeFits,
   barRanges,
   groovePercent,
+  countInPercent,
   selectionLabel,
   nextSelection,
 } from '../js/partPlay.js';
@@ -58,6 +59,21 @@ describe('groovePercent', () => {
   });
   it('stays inside the part before its end', () => {
     expect(groovePercent(0.999, { first: 4, last: 7 }, 4, 4)).toBeLessThan(0.5);
+  });
+});
+
+describe('countInPercent', () => {
+  // 4/4, 4 bars, the selection starts on beat 3 of bar 2: the count-in clicks 4 + 2 times.
+  const range = { first: 6, last: 7 };
+  it('clears the playhead during the count-in bar', () => {
+    for (const click of [0, 1, 2, 3]) expect(countInPercent(click / 6, range, 4, 4)).toBe(-1);
+  });
+  it('shows each lead beat on its own beat in the bar of the selection', () => {
+    expect(countInPercent(4 / 6, range, 4, 4)).toBeCloseTo(4 / 16);
+    expect(countInPercent(5 / 6, range, 4, 4)).toBeCloseTo(5 / 16);
+  });
+  it('clears the playhead for the whole count-in when the selection starts a bar', () => {
+    expect(countInPercent(0.99, { first: 4, last: 7 }, 4, 4)).toBe(-1);
   });
 });
 

@@ -230,14 +230,30 @@ describe('the part MIDI', () => {
     gw.setPartPlay({ first: 5, last: 7 });
     const countIn = playedMidi(true);
     expect(countIn).toBe(gw.myGrooveUtils.MIDI_build_midi_url_count_in_track(4, 4, 1));
-    expect(gw.myGrooveUtils.mapPlaybackPercent).toBeNull();
     playedMidi(false);
     expect(gw.myGrooveUtils.mapPlaybackPercent(0)).toBe(5 / 16);
   });
 
-  it('counts in one plain bar without a selection', () => {
+  it('clears the playhead in the count-in bar and shows the lead beat in its cells', () => {
+    gw.metronomeOptionsMenuPopupClick('CountIn');
+    gw.setPartPlay({ first: 5, last: 7 });
+    playedMidi(true);
+    const map = gw.myGrooveUtils.mapPlaybackPercent;
+    expect([0, 1, 2, 3].map((click) => map(click / 5))).toEqual([-1, -1, -1, -1]);
+    expect(map(4 / 5)).toBeCloseTo(4 / 16);
+
+    const notePlaying = gw.myGrooveUtils.midiEventCallbacks.notePlaying;
+    notePlaying(gw, 'metronome', map(4 / 5));
+    expect(document.getElementById('bg-highlight16').style.background).not.toBe('');
+    notePlaying(gw, 'metronome', map(0));
+    expect(document.getElementById('bg-highlight16').style.background).toBe('');
+    expect(() => gw.myGrooveUtils.highlightNoteInABCSVGFromPercentComplete(-1)).not.toThrow();
+  });
+
+  it('counts in one plain bar without a selection, and the playhead sweeps the groove', () => {
     gw.metronomeOptionsMenuPopupClick('CountIn');
     expect(playedMidi(true)).toBe(gw.myGrooveUtils.MIDI_build_midi_url_count_in_track(4, 4));
+    expect(gw.myGrooveUtils.mapPlaybackPercent).toBeNull();
   });
 });
 

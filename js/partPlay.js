@@ -76,6 +76,24 @@ export function groovePercent(p, range, numBeats, numberOfMeasures) {
 }
 
 /**
+ * Map a position inside the count-in (0..1) to a position inside the groove (0..1). The
+ * count-in clicks one full bar and then the lead beats: the beats before the selection in its
+ * bar. The full bar gives -1, which clears the playhead. Each lead beat shows on its own beat.
+ * @param {number} p
+ * @param {BeatRange} range
+ * @param {number} numBeats
+ * @param {number} numberOfMeasures
+ * @returns {number}
+ */
+export function countInPercent(p, range, numBeats, numberOfMeasures) {
+  const lead = range.first % numBeats;
+  const clicks = p * (numBeats + lead);
+  if (clicks < numBeats) return -1;
+  const firstBar = Math.floor(range.first / numBeats);
+  return (firstBar * numBeats + clicks - numBeats) / (numBeats * numberOfMeasures);
+}
+
+/**
  * Name a selection for the user, with 1-based bars and beats.
  * @param {BeatRange} range
  * @param {number} numBeats

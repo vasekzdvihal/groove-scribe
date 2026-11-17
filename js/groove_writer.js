@@ -88,7 +88,7 @@ import {
 import * as _perm from './permutations.js';
 import * as _view from './viewHtml.js';
 import * as _grid from './gridState.js';
-import { barRanges, beatsPerBarFit, groovePercent, rangeFits } from './partPlay.js';
+import { barRanges, beatsPerBarFit, countInPercent, groovePercent, rangeFits } from './partPlay.js';
 
 // GrooveWriter class.   The only one in this file.
 
@@ -1726,6 +1726,18 @@ function GrooveWriter() {
     };
   }
 
+  // The playhead map for the count-in: no playhead in the full bar, then each lead beat on its
+  // cells. null without a selection: the playhead sweeps the groove, as it always did.
+  function countInPercentMap() {
+    if (!class_part_play || class_permutation_type != 'none') return null;
+    var range = class_part_play;
+    var numBeats = class_num_beats_per_measure;
+    var numberOfMeasures = class_number_of_measures;
+    return function (p) {
+      return countInPercent(p, range, numBeats, numberOfMeasures);
+    };
+  }
+
   // playPart: build only the part play selection, if there is one (playback, not the export).
   function createMidiUrlFromClickableUI(MIDI_type, playPart) {
     var Sticking_Array = get_empty_note_array_in_32nds();
@@ -3039,7 +3051,7 @@ function GrooveWriter() {
           class_note_value_per_measure,
           class_part_play ? class_part_play.first % class_num_beats_per_measure : 0
         );
-        root.myGrooveUtils.mapPlaybackPercent = null;
+        root.myGrooveUtils.mapPlaybackPercent = countInPercentMap();
         root.myGrooveUtils.midiNoteHasChanged(); // this track is temporary
         class_metronome_count_in_is_playing = true;
       } else {
