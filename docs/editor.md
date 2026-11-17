@@ -13,7 +13,7 @@ Each bar holds the controls for what is next to it:
   switch, then the groove actions Save, Share and ⋯ (`#moreButton`). The groove actions stay in
   view mode.
 - The playback bar (`#PlaybackBar`), below the notes: play, the tempo knob, the click and swing
-  only.
+  only. While part play has a selection, the part play chip shows in it too (see "Part play").
 
 Rules:
 
@@ -106,8 +106,16 @@ is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groo
   tap (one cell, as in 6/8 in 1/8 notes).
 - The rulers show in edit mode only. They hide while a permutation is active, and when a bar does
   not split into whole beats.
-- The chip floats above the playback bar while there is a selection, in view mode too. It says
-  what plays. Its × plays the whole groove again.
+- The chip is in the playback bar while there is a selection, in view mode too. It says what
+  plays. Its × plays the whole groove again. It never covers the music:
+  - When the bar has room, the chip sits in the row of controls, after the tempo knob.
+  - When the bar has no room, `placeChip()` gives the bar the class `has-chip-row`. An example is
+    a long label at 1024 px or narrower. The chip then gets its own row at the top of the bar. The
+    bar is 56 px taller (`--bar-playback-height` 152 px), so the music ends above it.
+  - `placeChip()` runs again when the bar or the chip changes size.
+- A press on a ruler ends at its release anywhere on the page, at a cancel, or at a lost
+  pointer capture. A drag keeps the last beat it crossed. A new press replaces a press that never
+  ended.
 - What clears the selection: the chip's ×, another groove, a bar added or removed, a new time
   signature or division, and a permutation. Note edits keep it.
 - The selection is never saved: not in the URL, the library or the undo steps.

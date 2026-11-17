@@ -1,5 +1,5 @@
 /* Part play: the ruler above each bar selects the beats that Play loops, the shade marks them in
-   the grid, and the chip above the playback bar says what plays. js/partPlayControl.js. */
+   the grid, and the chip in the playback bar says what plays. js/partPlayControl.js. */
 
 #measureContainer {
   /* The playhead blue. The playhead (0.2, an inline style) replaces the shade on its cell. */
@@ -147,27 +147,23 @@
   z-index: 1;
 }
 
-/* The chip floats above the playback bar, in the middle, so the bar keeps its layout. */
+/* The chip is a group in the playback bar, styled like the click choices. Where the bar has room
+   it sits in the row of controls. Where it does not fit, partPlayControl.js gives the bar the
+   class has-chip-row: the bar gets taller and the chip takes its own row at the top of it. */
 #partPlayChip {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  z-index: 1;
   display: flex;
+  flex: none;
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
   height: 48px;
   max-width: calc(100% - 24px);
-  margin-bottom: 8px;
-  padding: 0 2px 0 16px;
-  border-radius: 24px;
-  background: var(--bar-playback-bg);
+  padding: 0 2px 0 14px;
+  border-radius: 6px;
+  background: var(--bar-line);
   color: var(--bar-text);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  font-size: 17px;
+  font-size: 18px;
   white-space: nowrap;
-  transform: translateX(-50%);
 }
 
 #partPlayChip[hidden] {
@@ -193,34 +189,39 @@
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 4px;
   background: none;
   color: var(--bar-text);
   font-size: 20px;
   cursor: pointer;
 }
 
-#partPlayChip .part-play-clear:hover {
-  background: var(--bar-line);
+@media (hover: hover) {
+  #partPlayChip .part-play-clear:hover {
+    background: var(--bar-playback-bg);
+  }
 }
 
 #partPlayChip .part-play-clear:focus-visible {
-  outline: 2px solid #6cb8e6;
+  outline: 2px solid #fff;
   outline-offset: -2px;
 }
 
-/* While the chip shows, the music can scroll out from under it. */
-body:has(#partPlayChip:not([hidden])) #RightHandContent {
-  padding-bottom: 56px;
+/* The chip row: 56 px more bar. The music ends at the top of the bar, so the chip covers no
+   note. */
+:root:has(#PlaybackBar.has-chip-row) {
+  --bar-playback-height: 152px;
 }
 
-/* Below 680 px the playback bar scrolls sideways and would clip the chip, so it is fixed to the
-   screen. Same as the failed-sound button in editor-toolbars.css. */
-@media (max-width: 679px) {
-  #partPlayChip {
-    position: fixed;
-    bottom: var(--bar-playback-height);
-  }
+#PlaybackBar.has-chip-row {
+  padding-top: 56px;
+}
+
+#PlaybackBar.has-chip-row #partPlayChip {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 /* Narrow label column on a portrait tablet. */

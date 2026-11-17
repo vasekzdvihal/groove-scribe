@@ -82,7 +82,26 @@ export function initPartPlay(writer) {
       label.textContent = range ? selectionLabel(range, writer.partPlayShape().numBeats) : '';
     }
     markRulers(range);
+    placeChip();
   };
+
+  // The chip sits in the row of the playback controls while they all fit. Else the bar gets a
+  // row of its own for the chip (CSS: has-chip-row), so the bar never scrolls and the chip never
+  // covers the music. Try the row of controls first; both changes happen before a paint.
+  const bar = chip.parentElement;
+  function placeChip() {
+    if (!bar) return;
+    bar.classList.remove('has-chip-row');
+    if (!chip.hidden && bar.scrollWidth > bar.clientWidth + 0.5) {
+      bar.classList.add('has-chip-row');
+    }
+  }
+  // A new width (a turned tablet, the docked panel) or a label in a font that loaded late.
+  if (bar && typeof ResizeObserver === 'function') {
+    const resize = new ResizeObserver(placeChip);
+    resize.observe(bar);
+    resize.observe(chip);
+  }
 
   /**
    * Apply a ruler event. A range that does not fit the groove is not passed on: the writer
@@ -97,34 +116,26 @@ export function initPartPlay(writer) {
     writer.setPartPlay(next.range);
   }
 
+  // A press that never got its release (a lost pointer) does not block the next one: a new
+  // primary press replaces it. A drag shows live, so the old press has nothing to finish.
   container.addEventListener('pointerdown', (event) => {
-    if (press || !event.isPrimary || event.button !== 0) return;
+    if (!event.isPrimary || event.button !== 0) return;
     const beat = beatOf(event.target);
     if (beat === null) return;
     event.preventDefault();
     press = { pointerId: event.pointerId, from: beat, to: beat, dragged: false };
-    // Moves and the release come here also when the pointer leaves the ruler.
+    // Moves and the release come to the grid also when the pointer leaves the ruler.
     try {
       container.setPointerCapture?.(event.pointerId);
     } catch {
-      // A pointer that is gone cannot be captured. Its release or cancel ends the press.
+      // A pointer that is gone cannot be captured. The listeners on the document still see it.
     }
   });
 
-  container.addEventListener('pointermove', (event) => {
-    if (!press || event.pointerId !== press.pointerId) return;
-    const beat = beatAt(event.clientX, event.clientY);
-    if (beat === null || beat === press.to) return;
-    press.to = beat;
-    press.dragged = true;
-    // Show the selection while the pointer moves.
-    apply({ type: 'drag', from: press.from, to: press.to });
-  });
-
   /**
-   * End a press: a drag keeps what it crossed, a tap goes to the tap state machine.
+   * End a press: a drag keeps the last beat it crossed, a tap goes to the tap state machine.
    * @param {PointerEvent} event
-   * @param {boolean} cancelled
+   * @param {boolean} cancelled  a cancel or a lost capture: no tap
    */
   function release(event, cancelled) {
     if (!press || event.pointerId !== press.pointerId) return;
@@ -133,8 +144,21 @@ export function initPartPlay(writer) {
     if (done.dragged) apply({ type: 'drag', from: done.from, to: done.to });
     else if (!cancelled) apply({ type: 'tap', beat: done.from });
   }
-  container.addEventListener('pointerup', (event) => release(event, false));
-  container.addEventListener('pointercancel', (event) => release(event, true));
+
+  // On the document, not the grid: without a capture the release can happen anywhere.
+  document.addEventListener('pointermove', (event) => {
+    if (!press || event.pointerId !== press.pointerId) return;
+    const beat = beatAt(event.clientX, event.clientY);
+    if (beat === null || beat === press.to) return;
+    press.to = beat;
+    press.dragged = true;
+    // Show the selection while the pointer moves.
+    apply({ type: 'drag', from: press.from, to: press.to });
+  });
+  document.addEventListener('pointerup', (event) => release(event, false));
+  document.addEventListener('pointercancel', (event) => release(event, true));
+  // After a pointerup the press is over already, so this ends only a capture that was lost.
+  container.addEventListener('lostpointercapture', (event) => release(event, true));
 
   container.addEventListener('click', (event) => {
     const button = event.target instanceof Element && event.target.closest('.bar-ruler-bar');

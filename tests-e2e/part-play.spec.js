@@ -9,6 +9,7 @@ const K = '|o-------o-------|o--o--o--o--o---|o-o-o-o-o-o-o-o-|o---------------|
 // At 120 BPM a bar takes 2 s, so 3 s of play holds a loop back to the start of the part.
 const FOUR_BARS = `?TimeSig=4/4&Div=16&Tempo=120&Measures=4&H=${H}&S=${S}&K=${K}`;
 const EIGHTHS_TWO_BARS = '?TimeSig=4/4&Div=8&Tempo=80&Measures=2&H=|xxxxxxxx|xxxxxxxx|';
+const SIX_EIGHT_TWO_BARS = '?TimeSig=6/8&Div=8&Tempo=80&Measures=2&H=|xxxxxx|xxxxxx|';
 const ONE_BAR = '?TimeSig=4/4&Div=16&Tempo=80&Measures=1&H=|xxxxxxxxxxxxxxxx|';
 
 async function openEditor(page, query) {
@@ -213,24 +214,117 @@ for (const [width, height] of [
       expect(problems).toEqual([]);
     });
 
-    test('the chip has a 44 px clear button and stays on screen', async ({ page }) => {
+    test('6/8 in 1/8 notes: Remove stays free, and a drag reaches the last beat under it', async ({
+      page,
+    }) => {
+      await openEditor(page, SIX_EIGHT_TWO_BARS);
+      await expect(page.locator('.bar-ruler-beat')).toHaveCount(12);
+      const geometry = await page.evaluate(() => {
+        const remove = document.getElementById('closeMeasureButton1');
+        remove.scrollIntoView({ block: 'center' });
+        const r = remove.getBoundingClientRect();
+        // Every point of the button, 1 px in from its edges, hits the button.
+        const points = [1, r.width / 2, r.width - 1].flatMap((dx) =>
+          [1, r.height / 2, r.height - 1].map((dy) => [r.left + dx, r.top + dy])
+        );
+        const free = points.every(([x, y]) => remove.contains(document.elementFromPoint(x, y)));
+        const widths = [0, 1, 2, 3, 4].map((n) =>
+          Math.floor(
+            document.querySelector(`.bar-ruler-beat[data-beat="${n}"]`).getBoundingClientRect()
+              .width
+          )
+        );
+        return { free, big: r.width >= 44 && r.height >= 44, small: widths.filter((w) => w < 44) };
+      });
+      expect(geometry).toEqual({ free: true, big: true, small: [] });
+
+      const start = await page.locator('.bar-ruler-beat[data-beat="4"]').boundingBox();
+      const remove = await page.locator('#closeMeasureButton1').boundingBox();
+      const y = start.y + start.height / 2;
+      await page.mouse.move(start.x + start.width / 2, y);
+      await page.mouse.down();
+      await page.mouse.move(remove.x + remove.width - 2, y, { steps: 8 });
+      await page.mouse.up();
+      expect(await shaded(page)).toEqual(range(4, 5));
+      await expect(page.locator('#partPlayChip .part-play-label')).toHaveText('Bar 1, beats 5–6');
+    });
+  });
+}
+
+// The chip is part of the playback bar: inside its box, never over the music, and the bar does
+// not scroll. The longest kind of label, with a 44 px ×.
+for (const [width, height, docked, inline] of [
+  [1024, 768, false, null],
+  [768, 1024, false, false],
+  [1440, 900, false, true],
+  [1440, 900, true, null],
+]) {
+  test.describe(`the chip at ${width}x${height}${docked ? ' docked' : ''}`, () => {
+    test.use({ viewport: { width, height }, hasTouch: true });
+
+    test('sits in the playback bar and covers no music', async ({ page }) => {
       await openEditor(page, FOUR_BARS);
-      await page.locator('.bar-ruler-beat[data-beat="2"]').click();
-      await page.locator('.bar-ruler-beat[data-beat="13"]').click();
-      await expect(chip(page)).toBeVisible();
+      if (docked) {
+        await page.click('#groovesTab');
+        await expect(page.locator('#sidePanel')).toBeVisible();
+      }
+      await page.locator('.bar-ruler-beat[data-beat="6"]').click();
+      await page.locator('.bar-ruler-beat[data-beat="9"]').click();
+      await expect(page.locator('#partPlayChip .part-play-label')).toHaveText(
+        'Bar 2 beat 3 – bar 3 beat 2'
+      );
+      // The end of the music, scrolled into view.
+      await page.evaluate(() => {
+        const content = document.getElementById('RightHandContent');
+        content.scrollTop = content.scrollHeight;
+      });
       const layout = await page.evaluate(() => {
-        const box = (el) => el.getBoundingClientRect();
-        const c = box(document.getElementById('partPlayChip'));
-        const clear = box(document.querySelector('#partPlayChip button'));
-        const bar = box(document.getElementById('PlaybackBar'));
+        const box = (id) => document.getElementById(id).getBoundingClientRect();
+        const c = box('partPlayChip');
+        const bar = box('PlaybackBar');
+        const content = box('RightHandContent');
+        const grid = box('measureContainer');
+        // The part of the grid that shows on screen.
+        const seen = {
+          left: Math.max(grid.left, content.left),
+          right: Math.min(grid.right, content.right),
+          top: Math.max(grid.top, content.top),
+          bottom: Math.min(grid.bottom, content.bottom),
+        };
+        const clear = document.querySelector('#partPlayChip button').getBoundingClientRect();
+        const play = document.querySelector('.midiPlayImage').getBoundingClientRect();
+        const kicks = [...document.querySelectorAll('#musicalInput .kick')];
+        const lastKick = kicks.at(-1).getBoundingClientRect();
         return {
+          insideBar:
+            c.left >= bar.left - 0.5 &&
+            c.right <= bar.right + 0.5 &&
+            c.top >= bar.top - 0.5 &&
+            c.bottom <= bar.bottom + 0.5,
+          coversGrid:
+            c.left < seen.right &&
+            seen.left < c.right &&
+            c.top < seen.bottom &&
+            seen.top < c.bottom,
+          lastNoteFree: lastKick.bottom <= bar.top + 0.5,
           clear: clear.width >= 44 && clear.height >= 44,
-          onScreen: c.left >= 0 && c.right <= window.innerWidth,
-          aboveBar: c.bottom <= bar.top,
-          bar: document.getElementById('PlaybackBar').scrollWidth <= bar.width,
+          barScrolls: document.getElementById('PlaybackBar').scrollWidth > bar.width + 0.5,
+          inline: Math.abs((c.top + c.bottom) / 2 - (play.top + play.bottom) / 2) <= 2,
         };
       });
-      expect(layout).toEqual({ clear: true, onScreen: true, aboveBar: true, bar: true });
+      const { inline: isInline, ...rest } = layout;
+      expect(rest).toEqual({
+        insideBar: true,
+        coversGrid: false,
+        lastNoteFree: true,
+        clear: true,
+        barScrolls: false,
+      });
+      if (inline !== null) expect(isInline).toBe(inline);
+
+      // The × gives the bar back its height.
+      await page.getByRole('button', { name: 'Play the whole groove' }).click();
+      expect((await page.locator('#PlaybackBar').boundingBox()).height).toBe(96);
     });
   });
 }

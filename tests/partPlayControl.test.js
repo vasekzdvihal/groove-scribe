@@ -142,6 +142,40 @@ describe('selecting on the ruler', () => {
     expect(writer.setPartPlay).toHaveBeenLastCalledWith({ first: 6, last: 9 });
   });
 
+  it('ends a drag on a release outside the grid, and takes the next press', () => {
+    // No pointer capture: the release goes to the element under the pointer.
+    const outside = document.getElementById('midiPlayer');
+    pointer('pointerdown', 6);
+    pointer('pointermove', 8);
+    pointer('pointerup', 99, outside);
+    expect(writer.getPartPlay()).toEqual({ first: 6, last: 8 });
+    pointer('pointerdown', 2);
+    pointer('pointerup', 2);
+    expect(writer.getPartPlay()).toEqual({ first: 2, last: 2 });
+  });
+
+  it('ends a drag when the grid loses the pointer capture', () => {
+    pointer('pointerdown', 6);
+    pointer('pointermove', 9);
+    pointer('lostpointercapture', 9, document.getElementById('measureContainer'));
+    expect(writer.getPartPlay()).toEqual({ first: 6, last: 9 });
+    // The press is over: a later move changes nothing.
+    pointer('pointermove', 11);
+    expect(writer.getPartPlay()).toEqual({ first: 6, last: 9 });
+  });
+
+  it('a new press replaces a press that never ended', () => {
+    pointer('pointerdown', 6);
+    pointer('pointermove', 8);
+    // The release was lost. The next press, with a new pointer id, starts again.
+    for (const type of ['pointerdown', 'pointerup']) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, { pointerId: 2, isPrimary: true, button: 0, clientX: 3, clientY: 0 });
+      beat(3).dispatchEvent(event);
+    }
+    expect(writer.getPartPlay()).toEqual({ first: 3, last: 3 });
+  });
+
   it('keeps the beats crossed before a cancel', () => {
     pointer('pointerdown', 6);
     pointer('pointermove', 7);
