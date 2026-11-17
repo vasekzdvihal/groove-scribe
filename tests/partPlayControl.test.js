@@ -42,12 +42,24 @@ function buildPage(ctx = CTX) {
     '<span id="partPlayChip" hidden><i class="fa fa-repeat" aria-hidden="true"></i>' +
     '<span class="part-play-label"></span>' +
     '<button type="button" class="part-play-clear" aria-label="Play the whole groove">×</button>' +
-    '</span></div>';
+    '</span><span id="partPlayStatus" role="status"></span></div>';
 }
 
 const beat = (n) => document.querySelector(`.bar-ruler-beat[data-beat="${n}"]`);
 const chip = () => document.getElementById('partPlayChip');
 const chipLabel = () => chip().querySelector('.part-play-label').textContent;
+const status = () => document.getElementById('partPlayStatus');
+
+/** Count the changes of the status text, as a screen reader hears them. */
+function statusChanges() {
+  const heard = [];
+  new MutationObserver(() => heard.push(status().textContent)).observe(status(), {
+    childList: true,
+    characterData: true,
+    subtree: true,
+  });
+  return heard;
+}
 
 // The test puts the pointer "over" a beat with clientX = the beat number. elementsFromPoint
 // (jsdom has none) answers with that beat.
@@ -311,6 +323,38 @@ describe('the chip', () => {
     };
     writer.onPartPlayChange(null);
     expect(chip().hidden).toBe(true);
+  });
+});
+
+describe('the status for screen readers', () => {
+  it('speaks a drag over 4 beats once, when the press ends', async () => {
+    const heard = statusChanges();
+    pointer('pointerdown', 6);
+    for (const n of [7, 8, 9]) pointer('pointermove', n);
+    expect(chipLabel()).toBe('Bar 2 beat 3 – bar 3 beat 2');
+    await Promise.resolve();
+    expect(heard).toEqual([]);
+    pointer('pointerup', 9);
+    await Promise.resolve();
+    expect(heard).toEqual(['Bar 2 beat 3 – bar 3 beat 2']);
+  });
+
+  it('speaks a tap, Bar N and a selection that the writer sets', () => {
+    pointer('pointerdown', 6);
+    pointer('pointerup', 6);
+    expect(status().textContent).toBe('Bar 2, beat 3');
+    document.querySelector('.bar-ruler[data-bar="0"] .bar-ruler-bar').click();
+    expect(status().textContent).toBe('Bar 1');
+    writer.setPartPlay(null);
+    expect(status().textContent).toBe('');
+  });
+
+  it('is the only live text: the chip label is not live', () => {
+    const html = readFileSync(join(process.cwd(), 'index.html'), 'utf8');
+    const chipHtml = /<span id="partPlayChip"[\s\S]*?<\/button><\/span>/.exec(html)?.[0] ?? '';
+    expect(chipHtml).toContain('part-play-label');
+    expect(chipHtml).not.toContain('aria-live');
+    expect(html).toMatch(/<span id="partPlayStatus"[^>]*role="status"/);
   });
 });
 

@@ -55,6 +55,7 @@ export function initPartPlay(writer) {
   const chip = document.getElementById('partPlayChip');
   if (!container || !chip) return;
   const label = chip.querySelector('.part-play-label');
+  const status = document.getElementById('partPlayStatus');
 
   /** @type {TapState} */
   let state = { range: null, anchor: null };
@@ -78,12 +79,21 @@ export function initPartPlay(writer) {
   writer.onPartPlayChange = (range) => {
     if (!range) state = { range: null, anchor: null };
     chip.hidden = !range;
-    if (label) {
-      label.textContent = range ? selectionLabel(range, writer.partPlayShape().numBeats) : '';
-    }
+    const text = range ? selectionLabel(range, writer.partPlayShape().numBeats) : '';
+    if (label) label.textContent = text;
+    // A drag changes the selection on each beat it crosses. The status waits for the release.
+    if (!press) announce(text);
     markRulers(range);
     placeChip();
   };
+
+  /**
+   * Tell a screen reader what plays. The status is a live region: each change is spoken.
+   * @param {string} text
+   */
+  function announce(text) {
+    if (status && status.textContent !== text) status.textContent = text;
+  }
 
   // The chip sits in the row of the playback controls while they all fit. Else the bar gets a
   // row of its own for the chip (CSS: has-chip-row), so the bar never scrolls and the chip never
@@ -143,6 +153,8 @@ export function initPartPlay(writer) {
     press = null;
     if (done.dragged) apply({ type: 'drag', from: done.from, to: done.to });
     else if (!cancelled) apply({ type: 'tap', beat: done.from });
+    // The drag showed its last range already, so the writer may not call back again.
+    announce(label?.textContent ?? '');
   }
 
   // On the document, not the grid: without a capture the release can happen anywhere.
