@@ -91,6 +91,30 @@ Rules:
   columns let a tom name go onto two lines.
 - The metronome auto speed-up rewrites the newest undo step instead of adding one.
 
+## Part play
+
+Play can loop some of the beats only. `js/partPlay.js` holds the pure helpers,
+`js/partPlayControl.js` the rulers and the chip, `css/part-play.css` their styles. The writer API
+is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groove_writer.js`.
+
+- How to select: each bar has a ruler in its 44 px header row, with "Bar N" over the labels and
+  one beat over the cells of each beat. Drag along a ruler to select beats. Tap "Bar N" to select
+  the bar. Tap a beat, then tap another beat, also in another bar, to select all beats between
+  them. The selected cells get a light shade, lighter than the playhead.
+- The Remove bar button sits over the right end of the last beat. Tap the last beat to the left
+  of it. A drag looks through the button, so it also reaches a last beat that is too narrow to
+  tap (one cell, as in 6/8 in 1/8 notes).
+- The rulers show in edit mode only. They hide while a permutation is active, and when a bar does
+  not split into whole beats.
+- The chip floats above the playback bar while there is a selection, in view mode too. It says
+  what plays. Its × plays the whole groove again.
+- What clears the selection: the chip's ×, another groove, a bar added or removed, a new time
+  signature or division, and a permutation. Note edits keep it.
+- The selection is never saved: not in the URL, the library or the undo steps.
+- `renderNoteGrid()` makes the rulers again with the grid, so the pointer events are delegated
+  on `#measureContainer`. `onPartPlayChange(null)` can come while a groove loads, so the listener
+  reads only its argument.
+
 ## Sound
 
 - `index.html` preloads the sound file. `groove_utils.js` retries a failed or stalled download:
