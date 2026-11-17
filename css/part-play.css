@@ -4,7 +4,8 @@
 #measureContainer {
   /* The playhead blue. The playhead (0.2, an inline style) replaces the shade on its cell. */
   --part-shade: rgba(50, 126, 173, 0.09);
-  --part-blue: #2484c0;
+  /* The playhead hue, darker: white beat numbers on it have 5.1:1 (WCAG AA). */
+  --part-blue: #1f73a8;
   --ruler-track: #eef1f3;
   --ruler-text: #5b6870;
 }

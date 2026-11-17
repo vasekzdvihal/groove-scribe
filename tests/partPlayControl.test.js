@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { buildStaffContainerHTML } from '../js/viewHtml.js';
 import { initPartPlay } from '../js/partPlayControl.js';
 
@@ -309,5 +311,24 @@ describe('the chip', () => {
     };
     writer.onPartPlayChange(null);
     expect(chip().hidden).toBe(true);
+  });
+});
+
+describe('the part blue', () => {
+  // White beat numbers (15 px bold) sit on the part blue: WCAG AA wants 4.5:1.
+  const luminance = (hex) => {
+    const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const [r, g, b] = channels.map((c) =>
+      c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+    );
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+
+  it('has a contrast of 4.5:1 or more with white text', () => {
+    const css = readFileSync(join(process.cwd(), 'css/part-play.css'), 'utf8');
+    const blue = /--part-blue:\s*(#[0-9a-f]{6})/i.exec(css)?.[1];
+    expect(blue).toBeDefined();
+    const contrast = 1.05 / (luminance(blue) + 0.05);
+    expect(contrast).toBeGreaterThanOrEqual(4.5);
   });
 });
