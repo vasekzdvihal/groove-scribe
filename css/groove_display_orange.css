@@ -5,11 +5,11 @@
   --bpm-bg-color: #222222;
   --side-bg-color: #393939;
   --bottom-bg-color: #393939;
-  --side-highlight-bg-color: #2484c0;
+  --side-highlight-bg-color: #1f73a8;
   --note-overlay-bg-color: #bdebdd;
 
-  --highlight-color: #2484c0;
-  --highlight-color-on-white: #2484c0;
+  --highlight-color: #1f73a8;
+  --highlight-color-on-white: #1f73a8;
 }
 
 /* this is for debugging layout issues - puts a read border around everything */
@@ -308,6 +308,10 @@ input[type='range']:after {
 input[type='range']:focus {
   outline: none;
 }
+input[type='range']:focus-visible {
+  outline: 2px solid #1f73a8;
+  outline-offset: 2px;
+}
 input[type='range']::-webkit-slider-runnable-track {
   width: 100%;
   height: 8px;
@@ -437,7 +441,7 @@ input[type='range']:active::-webkit-slider-thumb {
 .soundRetry:focus-visible {
   outline: 3px solid #ffffff;
   outline-offset: 2px;
-  box-shadow: 0 0 0 5px #2484c0;
+  box-shadow: 0 0 0 5px #1f73a8;
 }
 /* The small player is only 90 px wide, so the button goes beside it on one line. */
 .playerControl.small {

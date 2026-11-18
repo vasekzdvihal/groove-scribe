@@ -369,7 +369,6 @@ function initTempoField(utils, player, tempoField) {
 export function initPlaybackControls(utils) {
   const player = document.getElementById('midiPlayer');
   const tempoField = player.querySelector('.tempoTextField');
-  tempoField.setAttribute('aria-label', 'Beats per minute');
   const tempo = initTempoField(utils, player, tempoField);
 
   const holder = document.createElement('span');

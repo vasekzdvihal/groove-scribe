@@ -4,8 +4,6 @@
 #measureContainer {
   /* The playhead blue. The playhead (0.2, an inline style) replaces the shade on its cell. */
   --part-shade: rgba(50, 126, 173, 0.09);
-  /* The playhead hue, darker: white beat numbers on it have 5.1:1 (WCAG AA). */
-  --part-blue: #1f73a8;
   --ruler-track: #eef1f3;
   --ruler-text: #5b6870;
 }
@@ -53,7 +51,7 @@
 }
 
 #musicalInput .bar-ruler-bar:focus-visible {
-  outline: 2px solid var(--part-blue);
+  outline: 2px solid var(--bar-selected);
   outline-offset: -2px;
   border-radius: 6px;
 }
@@ -124,12 +122,12 @@
   }
 
   #musicalInput .bar-ruler-bar:hover {
-    color: var(--part-blue);
+    color: var(--bar-selected);
   }
 }
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-track {
-  background: var(--part-blue);
+  background: var(--bar-selected);
 }
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-num {
@@ -140,7 +138,7 @@
 #musicalInput .bar-ruler-beat.is-anchor .bar-ruler-track {
   box-shadow:
     inset 0 0 0 2px #fff,
-    0 0 0 2px var(--part-blue);
+    0 0 0 2px var(--bar-selected);
 }
 
 /* The Remove button stays on top of the ruler. */

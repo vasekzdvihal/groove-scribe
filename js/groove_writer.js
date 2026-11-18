@@ -160,11 +160,11 @@ function GrooveWriter() {
   // colors the gridState readers also compare against now live in constants.js)
   var constant_note_on_color_hex = '#000000'; // black
   var constant_note_off_color_hex = '#FFF';
-  var constant_note_border_color_hex = '#999';
-  var constant_hihat_note_off_color_hex = '#CCC';
+  var constant_note_border_color_hex = '#8c8c8c';
+  var constant_hihat_note_off_color_hex = '#8c8c8c';
   var constant_note_hidden_color_rgb = 'transparent';
-  var constant_sticking_right_off_color_rgb = 'rgb(204, 204, 204)';
-  var constant_sticking_left_off_color_rgb = 'rgb(204, 204, 204)';
+  var constant_sticking_right_off_color_rgb = 'rgb(140, 140, 140)';
+  var constant_sticking_left_off_color_rgb = 'rgb(140, 140, 140)';
   var constant_snare_accent_on_color_hex = '#FFF';
 
   // functions below
@@ -3593,6 +3593,13 @@ function GrooveWriter() {
       '</sup>/<sub>' +
       class_note_value_per_measure +
       '</sub>';
+    // The name of a button must hold its visible text.
+    var timeButton = document.getElementById('timeLabel');
+    if (timeButton)
+      timeButton.setAttribute(
+        'aria-label',
+        'Time signature ' + class_num_beats_per_measure + '/' + class_note_value_per_measure
+      );
   };
 
   // A division that does not fit a time signature gets a message that says why. Null means it fits.
@@ -4006,7 +4013,12 @@ function GrooveWriter() {
     var divisionButton = document.getElementById('subdivision_' + division + 'ths');
     selectButton(divisionButton);
     var label = document.getElementById('divisionMenuLabel');
-    if (label && divisionButton) label.textContent = divisionButton.textContent;
+    if (label && divisionButton) {
+      label.textContent = divisionButton.textContent;
+      // The name of a button must hold its visible text.
+      var menuButton = document.getElementById('divisionMenuButton');
+      if (menuButton) menuButton.setAttribute('aria-label', 'Note division ' + label.textContent);
+    }
   }
 
   root.expandAuthoringViewWhenNecessary = function (numNotesPerMeasure, numberOfMeasures) {

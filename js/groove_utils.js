@@ -1088,13 +1088,20 @@ function GrooveUtils() {
     return root.getGrooveUtilsBaseLocation() + 'images/';
   };
 
+  // The Play control is a span with a CSS icon. The class draws the icon. The name says what
+  // a press does: Pause while it plays, Play otherwise.
+  function setPlayState(icon, state) {
+    icon.className = 'midiPlayImage ' + state;
+    icon.setAttribute('aria-label', state === 'Playing' ? 'Pause' : 'Play');
+  }
+
   root.midiEventCallbackClass = function (classRoot) {
     this.classRoot = classRoot;
     this.noteHasChangedSinceLastDataLoad = false;
 
     this.playEvent = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Playing';
+      if (icon) setPlayState(icon, 'Playing');
       if (root.playEventCallback) {
         root.playEventCallback();
       }
@@ -1118,13 +1125,13 @@ function GrooveUtils() {
     };
     this.pauseEvent = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Paused';
+      if (icon) setPlayState(icon, 'Paused');
     };
 
     this.resumeEvent = function (root) {};
     this.stopEvent = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Stopped';
+      if (icon) setPlayState(icon, 'Stopped');
     };
     this.repeatChangeEvent = function (root, newValue) {
       if (newValue)
@@ -1139,7 +1146,7 @@ function GrooveUtils() {
 
     this.midiInitialized = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Stopped';
+      if (icon) setPlayState(icon, 'Stopped');
       document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex).onclick = function (
         event
       ) {
@@ -1883,7 +1890,7 @@ function GrooveUtils() {
       '	<div class="playerControlsRow" id="playerControlsRow' +
       root.grooveUtilsUniqueIndex +
       '">' +
-      '		<span title="Play/Pause" class="midiPlayImage" id="midiPlayImage' +
+      '		<span title="Play/Pause" class="midiPlayImage" role="button" tabindex="0" aria-label="Play" id="midiPlayImage' +
       root.grooveUtilsUniqueIndex +
       '"></span>' +
       '       <span class="MIDIPlayTime" id="MIDIPlayTime' +
@@ -1907,10 +1914,10 @@ function GrooveUtils() {
       '">' +
       '			<div class="tempoRow">' +
       '				<span class="tempoLabel">BPM</span>' +
-      '				<input type="text" for="tempo" class="tempoTextField" pattern="\\d+" id="tempoTextField' +
+      '				<input type="text" for="tempo" class="tempoTextField" aria-label="Beats per minute" pattern="\\d+" id="tempoTextField' +
       root.grooveUtilsUniqueIndex +
       '" value="80"></input>' +
-      '				<input type=range min=30 max=300 value=90 class="tempoInput' +
+      '				<input type=range min=30 max=300 value=90 aria-label="Tempo" class="tempoInput' +
       (root.is_touch_device() ? ' touch' : '') +
       '" id="tempoInput' +
       root.grooveUtilsUniqueIndex +
@@ -1921,7 +1928,7 @@ function GrooveUtils() {
       '				<span for="swingAmount" class="swingOutput" id="swingOutput' +
       root.grooveUtilsUniqueIndex +
       '">0% swing</span>' +
-      '				<input type=range min=0 max=50 value=0 class="swingInput' +
+      '				<input type=range min=0 max=50 value=0 aria-label="Swing" class="swingInput' +
       (root.is_touch_device() ? ' touch' : '') +
       '" id="swingInput' +
       root.grooveUtilsUniqueIndex +
@@ -1961,6 +1968,17 @@ function GrooveUtils() {
     if (browserInfo.browser == 'MSIE' && browserInfo.version < 12) isIE10 = true;
 
     // now attach the onclicks
+    // Enter presses Play, as for a button. Space plays through the document hot key.
+    var playControl = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
+    if (playControl) {
+      playControl.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          playControl.click();
+        }
+      });
+    }
+
     html_element = document.getElementById('tempoInput' + root.grooveUtilsUniqueIndex);
     if (html_element) {
       if (isIE10) html_element.addEventListener('click', root.tempoUpdateFromSlider, false);
