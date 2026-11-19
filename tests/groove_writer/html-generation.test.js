@@ -246,13 +246,13 @@ describe('HTMLforStaffContainer', () => {
       for (let i = 1; i < 9; i++) swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
       expect(gw.numberOfMeasures()).toBe(9);
       const below = gw.HTMLforStaffContainer(9, 0);
-      expect(below).toContain('title="Add measure"');
+      expect(below).toContain('title="Add a bar"');
       expect(below).not.toContain('aria-disabled');
 
       swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
       expect(gw.numberOfMeasures()).toBe(10);
       const atLimit = gw.HTMLforStaffContainer(10, 0);
-      expect(atLimit).toContain('title="Maximum is 10 measures"');
+      expect(atLimit).toContain('title="Add a bar. You can have 10 bars at most"');
       expect(atLimit).toContain('aria-disabled="true"');
     });
 
@@ -286,7 +286,7 @@ describe('HTMLforStaffContainer', () => {
 
       expect(gw.numberOfMeasures()).toBe(9);
       const html = gw.HTMLforStaffContainer(9, 0);
-      expect(html).toContain('title="Add measure"');
+      expect(html).toContain('title="Add a bar"');
       expect(html).not.toContain('aria-disabled');
     });
   });

@@ -220,15 +220,21 @@ test('the add and remove bar buttons work by keyboard', async ({ page }) => {
   await openEditor(page, ONE_BAR);
   await tabTo(page, '#addMeasureButton');
   await expect(focused(page)).toHaveAccessibleName('Add a bar');
+  await expect(focused(page)).toHaveAttribute('title', 'Add a bar');
   await page.keyboard.press('Enter');
   await expect(page.locator('.staff-container')).toHaveCount(2);
-  // The focus stays on Add a bar, so the next key goes on from there.
+  // The focus stays on Add a bar, so the next key goes on from there. The status says what
+  // changed, because the focus alone says only "Add a bar".
   await expect(page.locator('#addMeasureButton')).toBeFocused();
+  await expect(page.locator('#barStatus')).toHaveText('Bar 2 added');
   await tabTo(page, '#closeMeasureButton2', 'Shift+Tab');
   await expect(focused(page)).toHaveAccessibleName('Remove bar 2');
+  await expect(focused(page)).toHaveAttribute('title', 'Remove bar 2');
   await page.keyboard.press('Enter');
   await expect(page.locator('.staff-container')).toHaveCount(1);
   await expect(page.locator('#addMeasureButton')).toBeFocused();
+  await expect(page.locator('#barStatus')).toHaveText('Bar 2 removed');
+  await expect(page.locator('#barStatus')).toHaveAttribute('role', 'status');
 });
 
 test('a tap on Add a bar or Remove bar leaves no focus, so Space plays', async ({ page }) => {
@@ -238,6 +244,8 @@ test('a tap on Add a bar or Remove bar leaves no focus, so Space plays', async (
   await page.locator('#closeMeasureButton2').click();
   await expect(page.locator('.staff-container')).toHaveCount(1);
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  // A tap shows its result, so the status stays quiet.
+  await expect(page.locator('#barStatus')).toHaveText('');
   await page.keyboard.press(' ');
   await expect.poll(() => isPlaying(page)).toBe(true);
   await page.keyboard.press(' ');
@@ -248,7 +256,8 @@ test('Add a bar at the limit says why it does nothing', async ({ page }) => {
   await openEditor(page, '?TimeSig=4/4&Div=16&Tempo=80&Measures=10');
   const add = page.locator('#addMeasureButton');
   await expect(add).toHaveAttribute('aria-disabled', 'true');
-  await expect(add).toHaveAccessibleName('Add a bar. The limit is 10 bars');
+  await expect(add).toHaveAccessibleName('Add a bar. You can have 10 bars at most');
+  await expect(add).toHaveAttribute('title', 'Add a bar. You can have 10 bars at most');
 });
 
 test('every beat is reachable by keyboard, also the one under Remove bar in 6/8', async ({

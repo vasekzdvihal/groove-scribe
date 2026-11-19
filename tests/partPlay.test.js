@@ -189,6 +189,10 @@ describe('nextSelection extend', () => {
     expect(
       nextSelection({ range: { first: 3, last: 3 }, anchor: 3 }, { type: 'extend', from: 3, to: 1 })
     ).toEqual({ range: { first: 1, last: 3 }, anchor: null }));
+  it('keeps a first tap as the fixed end when the focus is on another beat', () =>
+    expect(
+      nextSelection({ range: { first: 2, last: 6 }, anchor: 2 }, { type: 'extend', from: 6, to: 7 })
+    ).toEqual({ range: { first: 2, last: 7 }, anchor: null }));
   it('starts again from a beat outside the range', () =>
     expect(
       nextSelection(

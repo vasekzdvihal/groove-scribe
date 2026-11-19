@@ -310,5 +310,5 @@ exports[`HTMLforStaffContainer > canonical default grid (4/4, 16th notes, 1 meas
 													<span class="unmuteKickButton" id="unmutekickButton1" onClick='myGrooveWriter.muteInstrument("kick", 1, false)'><span class="fa-stack unmuteStack"><i class="fa fa-ban fa-stack-2x" style="color:red"></i><i class="fa fa-volume-down fa-stack-1x"></i></span><div class="end_note_space"></div>
 </div>
 								</div>							</div>						</span>
-<span class="closeMeasureButton" aria-hidden="true"><i class="fa">&nbsp;&nbsp;&nbsp;</i></span><button type="button" id="addMeasureButton" title="Add measure" aria-label="Add a bar" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button></div>"
+<span class="closeMeasureButton" aria-hidden="true"><i class="fa">&nbsp;&nbsp;&nbsp;</i></span><button type="button" id="addMeasureButton" title="Add a bar" aria-label="Add a bar" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button></div>"
 `;

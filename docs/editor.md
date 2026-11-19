@@ -53,8 +53,9 @@ Rules:
   itself.
 - So a tap must not leave the focus on a button. The `mousedown` guard in `initPopovers` stops
   the buttons of the bars, the popovers, Help (`#helpAnchor`), the popups, the old menu items,
-  the part play rulers and the add and remove bar buttons from taking the focus. Fields and selects take it as usual. A popup that a tap opened and
-  closed also drops the focus that the editor put into it (the share link).
+  the part play rulers and the add and remove bar buttons from taking the focus. Fields and
+  selects take it as usual. A popup that a tap opened and closed also drops the focus that the
+  editor put into it (the share link).
 - Popovers, the old menus and the popups take the focus only when a key opened them
   (`lastInputWasKeyboard()` in `js/editorChrome.js`). A tap opens them as before and leaves the
   focus where it is, so Space still plays on the tablet.
@@ -192,9 +193,11 @@ is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groo
   - The status region speaks each change. Every beat is reachable, also a last beat under the
     Remove bar button: its focus ring goes over the button.
 - Add a bar (`#addMeasureButton`) and Remove bar N (`.closeMeasureButton[id]`) are `button`s that
-  look as the old spans did. At the limit, Add a bar keeps its tab stop with `aria-disabled` and
-  says the limit. A key press on either moves the focus to the new Add a bar button after the
-  grid is drawn again. A tap leaves no focus (the `mousedown` guard), so Space still plays.
+  look as the old spans did. The title of each is the same as its name. At the limit, Add a bar
+  keeps its tab stop with `aria-disabled` and says "You can have 10 bars at most". A key press on
+  either moves the focus to the new Add a bar button after the grid is drawn again, and
+  `#barStatus` (a hidden live region next to `#partPlayStatus`) says "Bar N added" or "Bar N
+  removed". A tap leaves no focus (the `mousedown` guard) and says nothing, so Space still plays.
 - The rulers show in edit mode only. They hide while a permutation is active, and when a bar does
   not split into whole beats.
 - The chip is in the playback bar while there is a selection, in view mode too. It says what
@@ -216,9 +219,9 @@ is `setPartPlay`, `getPartPlay`, `partPlayShape` and `onPartPlayChange` in `groo
 - What clears the selection: a tap on it, the chip's ×, another groove, a bar added or removed, a new time
   signature or division, and a permutation. Note edits keep it.
 - The selection is never saved: not in the URL, the library or the undo steps.
-- `renderNoteGrid()` makes the rulers again with the grid, so the pointer and key events are delegated
-  on `#measureContainer`. `onPartPlayChange(null)` can come while a groove loads, so the listener
-  reads only its argument.
+- `renderNoteGrid()` makes the rulers again with the grid, so the pointer and key events are
+  delegated on `#measureContainer`. `onPartPlayChange(null)` can come while a groove loads, so the
+  listener reads only its argument.
 
 ## Sound
 

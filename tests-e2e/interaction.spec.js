@@ -113,7 +113,7 @@ test.describe('add measure', () => {
     await open(page, ten);
     await expect(page.locator('#addMeasureButton')).toHaveAttribute(
       'title',
-      'Maximum is 10 measures'
+      'Add a bar. You can have 10 bars at most'
     );
     await expect(page.locator('#addMeasureButton')).toBeDisabled();
     // Force the click: a disabled button is not clickable by default.
@@ -127,7 +127,7 @@ test.describe('add measure', () => {
     const add = page.locator('#addMeasureButton');
     await open(page, empty(16, 9));
     await expect(add).toBeEnabled();
-    await expect(add).toHaveAttribute('title', 'Add measure');
+    await expect(add).toHaveAttribute('title', 'Add a bar');
 
     await add.click();
     await expectQuery(page, empty(16, 10));

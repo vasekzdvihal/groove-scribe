@@ -558,7 +558,9 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
 
   if (ctx.numberOfMeasures > 1)
     newHTML +=
-      '<button type="button" title="Remove Measure" aria-label="Remove bar ' +
+      '<button type="button" title="Remove bar ' +
+      baseindex +
+      '" aria-label="Remove bar ' +
       baseindex +
       '" id="closeMeasureButton' +
       baseindex +
@@ -574,14 +576,14 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
     // disabled. aria-disabled, not disabled: the button keeps its tab stop and says the limit.
     if (ctx.numberOfMeasures >= constant_MAX_MEASURES)
       newHTML +=
-        '<button type="button" id="addMeasureButton" title="Maximum is ' +
+        '<button type="button" id="addMeasureButton" title="Add a bar. You can have ' +
         constant_MAX_MEASURES +
-        ' measures" aria-disabled="true" aria-label="Add a bar. The limit is ' +
+        ' bars at most" aria-disabled="true" aria-label="Add a bar. You can have ' +
         constant_MAX_MEASURES +
-        ' bars" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button>';
+        ' bars at most" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button>';
     else
       newHTML +=
-        '<button type="button" id="addMeasureButton" title="Add measure" aria-label="Add a bar" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button>';
+        '<button type="button" id="addMeasureButton" title="Add a bar" aria-label="Add a bar" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button>';
   }
 
   newHTML += '</div>';

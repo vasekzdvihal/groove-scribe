@@ -2720,6 +2720,19 @@ function GrooveWriter() {
     if (add) add.focus({ preventScroll: preventScroll });
   }
 
+  // The focus on "Add a bar" does not say what changed, so the status region says it. It is
+  // empty first for a moment, so the same text twice ("Bar 2 removed") is spoken twice.
+  var barStatusTimer = null;
+  function announceBarChange(text) {
+    var status = document.getElementById('barStatus');
+    if (!status) return;
+    status.textContent = '';
+    clearTimeout(barStatusTimer);
+    barStatusTimer = setTimeout(function () {
+      status.textContent = text;
+    }, 100);
+  }
+
   // remove a measure from the page
   // measureNum is indexed starting at 1, not 0
   root.closeMeasureButtonClick = function (measureNum) {
@@ -2768,7 +2781,10 @@ function GrooveWriter() {
       uiSnare,
       uiKick
     );
-    if (refocus) focusAddBarButton(false);
+    if (refocus) {
+      focusAddBarButton(false);
+      announceBarChange('Bar ' + measureNum + ' removed');
+    }
 
     updateSheetMusic();
   };
@@ -2833,7 +2849,10 @@ function GrooveWriter() {
     var add_measure_button = document.getElementById('addMeasureButton');
     if (add_measure_button)
       add_measure_button.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    if (refocus) focusAddBarButton(true);
+    if (refocus) {
+      focusAddBarButton(true);
+      announceBarChange('Bar ' + class_number_of_measures + ' added');
+    }
 
     updateSheetMusic();
 
