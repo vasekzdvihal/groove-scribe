@@ -201,6 +201,11 @@ for (const [name, url] of [
     if (name === 'editor') {
       await openGrooves(page);
       expect(await landmarkViolations(page)).toEqual([]);
+      // The Swing popover is outside the playback bar, but inside the Playback region.
+      await page.click('#sidePanelClose');
+      await page.click('#swingButton');
+      await expect(page.locator('#swingPopover')).toBeVisible();
+      expect(await landmarkViolations(page)).toEqual([]);
     }
   });
 }
@@ -225,15 +230,21 @@ test('the embed content is in a main landmark', async ({ page }) => {
 });
 
 test.describe('at 1440x900', () => {
+  // The page has 22 stops from its start to Play: the top bar, the panel, the tools, the grid.
+  const MAX_STOPS = 30;
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test('the panel comes before the tools in the tab order', async ({ page }) => {
     await waitForPage(page, '/index.html' + GROOVE);
     await openGrooves(page);
-    // Tab from the Grooves tab in the top bar, and give each stop a kind.
-    await page.locator('#groovesTab').focus();
+    // Tab from the start of the page, and give each stop a kind.
+    await page.evaluate(() => {
+      document.body.tabIndex = -1;
+      document.body.focus();
+      document.body.removeAttribute('tabindex');
+    });
     const order = [];
-    for (let i = 0; i < 400 && order.at(-1) !== 'play'; i++) {
+    for (let i = 0; i < MAX_STOPS && order.at(-1) !== 'play'; i++) {
       await page.keyboard.press('Tab');
       order.push(
         await page.evaluate(() => {
@@ -335,3 +346,32 @@ test.describe('at 320x640', () => {
     expect(await page.evaluate(() => window.scrollX)).toBe(0);
   });
 });
+
+// A bar of 1/32 notes does not fit at tablet widths either. The grid scrolls in its own area,
+// and no cell is cut off.
+const THIRTY_SECONDS = '?TimeSig=4/4&Div=32&Measures=1&H=|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|';
+for (const [width, height] of [
+  [600, 800],
+  [768, 1024],
+]) {
+  test.describe(`1/32 notes at ${width}x${height}`, () => {
+    test.use({ viewport: { width, height } });
+
+    test(`the last 1/32 cell is not cut off at ${width} px`, async ({ page }) => {
+      await waitForPage(page, '/index.html' + THIRTY_SECONDS);
+      const cell = page.locator('#hi-hat31');
+      await cell.scrollIntoViewIfNeeded();
+      const seen = await page.evaluate(() => {
+        const r = document.getElementById('hi-hat31').getBoundingClientRect();
+        const clip = document.getElementById('measureContainer').getBoundingClientRect();
+        const grid = document.getElementById('musicalInput').getBoundingClientRect();
+        return {
+          notClipped: r.right <= clip.right && r.left >= clip.left,
+          inGrid: r.left >= grid.left && r.right <= grid.right,
+          pageScrolls: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        };
+      });
+      expect(seen).toEqual({ notClipped: true, inGrid: true, pageScrolls: false });
+    });
+  });
+}

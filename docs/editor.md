@@ -20,8 +20,9 @@ Rules:
 - Landmarks: the top bar is a `<header>` (banner) with the page `<h1>` in it. The `<h1>` is
   `.visually-hidden`: screen readers find it, but it takes no room. The tools bar and its
   popovers, the music, and the old menus and popups are in `<main id="editorMain">`. The playback
-  bar is a `<section aria-label="Playback">`, with the Swing popover after it. Each bar is in its
-  own `.nonPrintable` box. All three bars and the music are `position: fixed`, so this outline
+  bar and the Swing popover after it are in `<section class="nonPrintable" aria-label="Playback">`.
+  The popover is not inside `#PlaybackBar`: that bar can scroll sideways and would clip it. Each
+  bar is in its own `.nonPrintable` box. All three bars and the music are `position: fixed`, so this outline
   does not change the layout. Keep new content inside a landmark: axe checks it
   (`tests-e2e/a11y.spec.js`).
 - The page never scrolls sideways, also at 320 px. `#GrooveWriter` has no minimum width.
@@ -123,10 +124,10 @@ Rules:
 - The grid has rows for toms 1, 2 and 4: High, Mid and Floor tom, in sheet-music order. A loaded
   groove keeps tom 3 in `class_kept_toms`, valid for one bar layout, with the same visibility
   rule as the other toms.
-- Below 480 px a bar of 1/16 notes does not fit, even with the smallest cells (`--cell-min`).
-  `#measureContainer` then gets a `min-width` of one bar with the smallest cells, and the grid
-  scrolls sideways in `#musicalInput`. No cell is cut off, and a cell that gets the keyboard focus
-  scrolls into view.
+- `#measureContainer` has a `min-width` of one bar with the smallest cells (`--cell-min`). Where
+  a bar does not fit (1/16 notes below 480 px, 1/32 notes below 768 px), the grid scrolls
+  sideways in `#musicalInput`. No cell is cut off, and a cell that gets the keyboard focus scrolls
+  into view. Where a bar fits, the `min-width` does nothing.
 - The label column is 100 px wide on a wide screen, so "Floor tom" fits on one line. Narrower
   columns let a tom name go onto two lines.
 - The metronome auto speed-up rewrites the newest undo step instead of adding one.

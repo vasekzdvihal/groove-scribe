@@ -693,17 +693,16 @@
   }
 }
 
-/* Below 480 px a bar of 1/16 notes does not fit, even with the smallest cells. The grid is
-   never narrower than a bar with the smallest cells, and scrolls sideways in #musicalInput, so no
-   cell is cut off. A cell that gets the keyboard focus scrolls into view. The page itself does
-   not scroll sideways. A min-width, because the intrinsic width of the grid counts the widest
-   cells (--cell-max). */
-@media (max-width: 479px) {
-  #musicalInput #measureContainer {
-    min-width: calc(
-      var(--label-width) + var(--notes) * var(--cell-min) + (var(--groups) - 1) * var(--beat-gap)
-    );
-  }
+/* When a bar does not fit, even with the smallest cells (1/16 notes below 480 px, 1/32 notes
+   on a tablet), the grid is never narrower than one bar with the smallest cells. It scrolls
+   sideways in #musicalInput, so no cell is cut off. Where a bar fits, this does nothing. A cell
+   that gets the keyboard focus scrolls into view. The page itself does not scroll sideways.
+   A min-width, because the intrinsic width of the grid counts the widest cells (--cell-max).
+   The label width and the beat gap come from the container queries. */
+#musicalInput #measureContainer {
+  min-width: calc(
+    var(--label-width) + var(--notes) * var(--cell-min) + (var(--groups) - 1) * var(--beat-gap)
+  );
 }
 
 /* Tablet portrait: an 8 px gutter on each side, then the labels and sixteen 44 px cells fill

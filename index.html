@@ -534,8 +534,8 @@
 			</div>
 		</main>
 
-		<div class="nonPrintable">
-			<section id="PlaybackBar" aria-label="Playback">
+		<section class="nonPrintable" aria-label="Playback">
+			<div id="PlaybackBar">
 				<div id="midiPlayer"><!-- space for the midiplayer to be attached by the javascript --></div>
 				<!-- Part play: what Play loops. It floats above the bar, and shows in view mode too. -->
 				<span id="partPlayChip" hidden><i class="fa fa-repeat" aria-hidden="true"></i><span class="part-play-label"></span><button type="button" class="part-play-clear" aria-label="Play the whole groove"><i class="fa fa-times" aria-hidden="true"></i></button></span>
@@ -554,10 +554,10 @@
 				</span>
 				<span class="tool-sep"></span>
 				<button type="button" class="tool tool-caret" id="swingButton" data-popover="swingPopover"><span class="tool-in"><span id="swingButtonLabel">Swing</span></span></button>
-			</section>
+			</div>
 
 			<div class="tool-popover" id="swingPopover" hidden><!-- js/editorChrome.js moves the swing row of the player here. --></div>
-		</div>
+		</section>
 
 
 		<!-- App entry point: ES module that boots the app and runs page-load init. -->
