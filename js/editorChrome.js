@@ -1,6 +1,8 @@
 // Behavior for the editor's bars: small popover menus, the tempo knob, and swing.
 // The other menus are the older context menus, opened by GrooveWriter.
 
+import { lastInputWasKeyboard, trackInput } from './inputModality.js';
+
 // The bars are fixed to the screen, so a popover uses screen coordinates. A toolbar that
 // scrolls sideways on a narrow screen cannot clip it this way.
 function placePopover(popover, trigger) {
@@ -11,24 +13,6 @@ function placePopover(popover, trigger) {
   popover.style.left = Math.max(margin, left) + 'px';
   popover.style.top =
     (opensUpward ? rect.top - popover.offsetHeight - margin : rect.bottom + margin) + 'px';
-}
-
-// Whether the last input was a key, not a mouse, a pen or a finger. A menu or a popover that a
-// key opens takes the focus. A tap leaves the focus where it is, so the tablet flow stays as it
-// was and Space still plays.
-let keyboardInput = false;
-let inputTracked = false;
-
-function trackInput() {
-  if (inputTracked) return;
-  inputTracked = true;
-  window.addEventListener('keydown', () => (keyboardInput = true), true);
-  window.addEventListener('pointerdown', () => (keyboardInput = false), true);
-}
-
-/** @returns {boolean} */
-function lastInputWasKeyboard() {
-  return keyboardInput;
 }
 
 const FOCUSABLE =
@@ -270,6 +254,14 @@ export function initContextMenus(utils) {
     event.stopPropagation();
   }
   menus.forEach((menu) => menu.addEventListener('keydown', onMenuKey));
+
+  // A tap opened the menu, so the focus is on the page, not in the menu. Escape closes it and
+  // leaves the focus where it is.
+  document.addEventListener('keydown', (event) => {
+    const menu = utils.visible_context_menu;
+    if (event.key !== 'Escape' || !menu || menu.contains(document.activeElement)) return;
+    utils.hideContextMenu(menu);
+  });
 }
 
 // The popups of the editor. Each one closes with its own Cancel or close button, which Escape

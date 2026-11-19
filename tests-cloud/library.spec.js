@@ -647,6 +647,25 @@ test.describe('the keyboard in a groove menu', () => {
     await expect(page.locator('#sidePanel')).not.toHaveCSS('transform', 'none');
   });
 
+  test('Escape closes a menu that a tap opened and keeps the overlay panel open', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1000, height: 800 });
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await grooveMore(page).click();
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(1);
+    // A tap leaves the focus on the page, not in the menu.
+    await page.evaluate(() => /** @type {HTMLElement} */ (document.activeElement)?.blur());
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(0);
+    await expect(page.locator('#sidePanel')).toHaveCSS('transform', 'none');
+    // With no menu open, the next Escape closes the overlay panel.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#sidePanel')).not.toHaveCSS('transform', 'none');
+  });
+
   test('Escape in a lesson menu closes it, focus goes to its ⋯, and the panel stays open', async ({
     page,
   }) => {

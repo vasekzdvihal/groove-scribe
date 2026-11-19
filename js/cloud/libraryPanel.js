@@ -944,11 +944,18 @@ function startLibrary({
     return canUpdate ? groove : null;
   }
 
-  // Escape in an open ⋯ menu, or on its ⋯, closes the menu, and focus goes to the ⋯ of its row.
+  // Escape in an open ⋯ menu, on its ⋯, or on the page after a tap, closes the menu, and focus goes to the ⋯ of its row.
   // The redraw puts focus there: the control that had it is gone, and the ⋯ is the fallback.
   // Returns true when it closed a menu.
   function closeRowMenuOf(target) {
     if (!openMenu || !(target instanceof Element)) return false;
+    // A tap opened the menu: the focus is on the page. Escape closes the menu and leaves the
+    // focus there.
+    if (target === document.body || target === document.documentElement) {
+      openMenu = null;
+      render();
+      return true;
+    }
     const control = target.closest('.lp-actions, .lp-more[aria-expanded="true"]');
     if (!control || !byId('lpLessons').contains(control)) return false;
     openMenu = null;

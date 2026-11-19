@@ -74,6 +74,21 @@ test('a tap on a popover button does not move focus', async ({ page }) => {
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
 });
 
+test('Escape closes a menu that a tap opened, and Space then plays', async ({ page }) => {
+  await loadGroove(page, GROOVE);
+  await page.click('#stickingsButton');
+  const menu = page.locator('#stickingsContextMenu');
+  await expect(menu).toBeVisible();
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(page.locator('#stickingsButton')).toHaveAttribute('aria-expanded', 'false');
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(true);
+  await stopPlaying(page);
+});
+
 test('Stickings opens a menu by keyboard', async ({ page }) => {
   await loadGroove(page, GROOVE);
   const button = page.locator('#stickingsButton');

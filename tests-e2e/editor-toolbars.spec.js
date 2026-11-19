@@ -155,6 +155,12 @@ for (const [name, width, height] of [
         await page.focus('#sidePanelClose');
         await page.keyboard.press('Enter');
         await expect(tab).toBeFocused();
+        await expect(panel).toBeHidden();
+        // Pressed by tap, it moves the focus to the page, so Space plays and does not press the tab.
+        await tab.click();
+        await expect(panel).toBeVisible();
+        await page.click('#sidePanelClose');
+        await expect(tab).not.toBeFocused();
       }
       await expect(panel).toBeHidden();
       await expect(tab).toHaveAttribute('aria-pressed', 'false');

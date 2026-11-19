@@ -80,7 +80,7 @@ if (typeof grooves === 'undefined') var grooves = {};
     for (var key in arrayToPrint) {
       if (root.isArray(arrayToPrint[key])) {
         closeItems();
-        HTML += '<h2 class="grooveListHeader">' + key + '</h2>\n';
+        HTML += '<h3 class="grooveListHeader">' + key + '</h3>\n';
         HTML += root.arrayAsHTMLList(arrayToPrint[key]);
       } else {
         items +=

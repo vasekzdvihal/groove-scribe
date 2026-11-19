@@ -112,6 +112,7 @@ export default [
       'js/groove_writer.js',
       'js/grooves.js',
       'js/groove_display.js',
+      'js/inputModality.js',
       'js/editorChrome.js',
       'js/wakeLock.js',
       'js/registerServiceWorker.js',

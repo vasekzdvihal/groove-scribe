@@ -6,6 +6,7 @@
 // panel slides over the editor, like a dialog. Turning a tablet closes an overlay panel, and a
 // docked panel that the user left open comes back when the tablet turns back.
 import { isAskingToDiscard } from './confirmDialog.js';
+import { lastInputWasKeyboard, trackInput } from './inputModality.js';
 
 // The docked panel is open. The key is older than the side panel: the library panel used it.
 // The side panel uses it only when it has a Library tab. Without one, the key is not used, and
@@ -66,6 +67,7 @@ function tabButton(tab) {
  * @param {{ tabs: Tab[] }} options  the tabs, in display order
  */
 export function createSidePanel({ tabs }) {
+  trackInput();
   const docked = window.matchMedia(DOCKED_QUERY);
   const byTab = new Map(tabs.map((tab) => [tab.id, tab]));
   const storesKeepOpen = byTab.has('library');
@@ -170,11 +172,6 @@ export function createSidePanel({ tabs }) {
     if (byUser && !docked.matches) closeButton.focus();
   }
 
-  // The last input before a close: a pointer or a key.
-  let lastInputWasPointer = false;
-  document.addEventListener('pointerdown', () => (lastInputWasPointer = true), true);
-  document.addEventListener('keydown', () => (lastInputWasPointer = false), true);
-
   function close() {
     if (shownTab === null) return;
     const button = buttons.get(shownTab);
@@ -184,7 +181,7 @@ export function createSidePanel({ tabs }) {
     const inPanel = panel.contains(document.activeElement);
     rememberDockedChoice(false);
     setShown(null);
-    if (inPanel && !lastInputWasPointer) button.focus();
+    if (inPanel && lastInputWasKeyboard()) button.focus();
     else if (inPanel) /** @type {HTMLElement} */ (document.activeElement).blur();
   }
 

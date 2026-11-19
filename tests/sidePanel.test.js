@@ -298,6 +298,8 @@ describe('createSidePanel', () => {
     panel.show('grooves');
     // An overlay panel is a dialog: focus goes into it.
     expect(document.activeElement?.id).toBe('sidePanelClose');
+    // A key picked the item, so the focus goes back to the tab.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     panel.afterPick();
     expect(panel.isOpen()).toBe(false);
     expect(document.activeElement).toBe(tab('grooves'));

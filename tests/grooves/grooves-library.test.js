@@ -83,8 +83,8 @@ describe('groove library HTML helpers', () => {
   describe('arrayAsHTMLList / getGroovesAsHTML', () => {
     it('renders a heading and a <ul> per category, with a button in each groove item', () => {
       const html = grooves.getGroovesAsHTML();
-      expect(html.startsWith('<h2 class="grooveListHeader">')).toBe(true);
-      expect(html).toContain('<h2 class="grooveListHeader">Rock grooves</h2>');
+      expect(html.startsWith('<h3 class="grooveListHeader">')).toBe(true);
+      expect(html).toContain('<h3 class="grooveListHeader">Rock grooves</h3>');
       expect(html).toContain('<ul class="grooveListUL">');
       // A list inside a list is not valid markup for the list rules of a screen reader.
       expect(html).not.toMatch(/<ul[^>]*>\s*<ul/);

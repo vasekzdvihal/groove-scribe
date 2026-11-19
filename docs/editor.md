@@ -95,12 +95,14 @@ Rules:
   plus 300 px (the comment in `css/side-panel.css` has the numbers). Measure again when a tool
   is added to the bar.
 - Below 1100 px the panel slides over the editor like a dialog, with a backdrop and a Close panel
-  button. A pick by keyboard (Enter on a groove) or Escape closes the panel and puts focus on the tab. After a tap the focus is not in the panel, so it stays where it is, and Space plays instead of pressing the tab (`close()` in `js/sidePanel.js` looks at the last input, a pointer or a key). A
-  permutation choice keeps the panel open, because its options show in the same panel. Docked,
-  both picks move focus out of the panel. Escape closes the overlay panel, but not when it is
-  pressed in an old menu (`.noteContextMenu`) or a popup (`[role="dialog"]`): it closes that
-  menu or popup only.
-- The Grooves tab is a heading (`h2.grooveListHeader`) and a list (`ul.grooveListUL`) per
+  button. A pick by keyboard (Enter on a groove) or Escape closes the panel and puts focus on the
+  tab. After a tap, `close()` moves the focus out of the panel to the page, so Space plays instead
+  of pressing the tab (`close()` in `js/sidePanel.js` looks at the last input, a pointer or a key,
+  from `js/inputModality.js`). A permutation choice keeps the panel open, because its options show
+  in the same panel. Docked, both picks move focus out of the panel. Escape closes the overlay
+  panel, but not when it is pressed in an old menu (`.noteContextMenu`) or a popup
+  (`[role="dialog"]`): it closes that menu or popup only.
+- The Grooves tab is a heading (`h3.grooveListHeader`) and a list (`ul.grooveListUL`) per
   group. Each groove is a `li.grooveListLI[data-groove]` with a `button.grooveListButton`, so the
   keyboard reaches it. The button fills the row and looks like the old plain row. `main.js`
   handles the click through `closest('.grooveListLI')`. A tapped groove button must not keep
