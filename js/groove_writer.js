@@ -2704,11 +2704,28 @@ function GrooveWriter() {
     return false; // don't follow the link
   };
 
+  // The bar buttons go away when the grid is drawn again. A key press on one of them gives the
+  // focus to the new "Add a bar" button, so the focus does not fall back to the page start. A
+  // tap does not focus the buttons (editorChrome.js), so after a tap nothing gets the focus.
+  function barButtonHasFocus() {
+    var focused = document.activeElement;
+    return (
+      !!focused && (focused.id === 'addMeasureButton' || focused.matches('.closeMeasureButton'))
+    );
+  }
+
+  // preventScroll: Add a bar scrolls itself into view with a smooth scroll already.
+  function focusAddBarButton(preventScroll) {
+    var add = document.getElementById('addMeasureButton');
+    if (add) add.focus({ preventScroll: preventScroll });
+  }
+
   // remove a measure from the page
   // measureNum is indexed starting at 1, not 0
   root.closeMeasureButtonClick = function (measureNum) {
     // a groove always keeps at least one measure
     if (class_number_of_measures <= 1) return;
+    var refocus = barButtonHasFocus();
 
     var uiStickings = '';
     var uiHH = '';
@@ -2751,6 +2768,7 @@ function GrooveWriter() {
       uiSnare,
       uiKick
     );
+    if (refocus) focusAddBarButton(false);
 
     updateSheetMusic();
   };
@@ -2762,6 +2780,7 @@ function GrooveWriter() {
     // The URL parser clamps to constant_MAX_MEASURES, so a longer groove would lose
     // its extra measures on reload. The button is disabled at the limit; stop here too.
     if (class_number_of_measures >= constant_MAX_MEASURES) return;
+    var refocus = barButtonHasFocus();
 
     var uiStickings = '';
     var uiHH = '';
@@ -2814,6 +2833,7 @@ function GrooveWriter() {
     var add_measure_button = document.getElementById('addMeasureButton');
     if (add_measure_button)
       add_measure_button.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (refocus) focusAddBarButton(true);
 
     updateSheetMusic();
 

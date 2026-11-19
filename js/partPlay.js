@@ -8,6 +8,7 @@
  * @typedef {{ range: BeatRange | null, anchor: number | null }} TapState
  * @typedef {{ type: 'tap', beat: number }
  *   | { type: 'drag', from: number, to: number }
+ *   | { type: 'extend', from: number, to: number }
  *   | { type: 'bar', bar: number, numBeats: number }
  *   | { type: 'clear' }} RulerEvent
  */
@@ -116,9 +117,25 @@ export function selectionLabel(range, numBeats) {
 }
 
 /**
+ * The end of the selection that an extend from a beat keeps: a first tap, else the other end
+ * when the beat is an end, else the beat itself.
+ * @param {TapState} state
+ * @param {number} from
+ * @returns {number}
+ */
+function fixedEnd({ range, anchor }, from) {
+  if (anchor !== null) return anchor;
+  if (range && from === range.last) return range.first;
+  if (range && from === range.first) return range.last;
+  return from;
+}
+
+/**
  * The ruler state machine. A first tap sets an anchor. A second tap closes the range. As with
  * selected text, a tap on the selection clears it: on the anchor, inside a closed range, or on
- * "Bar N" of the bar that is the selection.
+ * "Bar N" of the bar that is the selection. An extend (Shift and an arrow key) moves one end of
+ * the selection from the focused beat to the next one: the end that is not at the focused beat
+ * stays, as does a first tap. From a beat that is not an end, it starts a new range.
  * @param {TapState} state
  * @param {RulerEvent} event
  * @returns {TapState}
@@ -138,6 +155,8 @@ export function nextSelection(state, event) {
     }
     case 'drag':
       return { range: normalizeRange(event.from, event.to), anchor: null };
+    case 'extend':
+      return { range: normalizeRange(fixedEnd(state, event.from), event.to), anchor: null };
     case 'bar': {
       const first = event.bar * event.numBeats;
       const last = first + event.numBeats - 1;

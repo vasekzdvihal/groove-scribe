@@ -116,6 +116,157 @@ test('a tap on the selection clears it', async ({ page }) => {
   await expect(chip(page)).toBeHidden();
 });
 
+// The keyboard. The ruler beats are a list per bar, with one tab stop for all of them.
+const focused = (page) => page.locator(':focus');
+const isPlaying = (page) => page.evaluate(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
+
+async function tabTo(page, selector, key = 'Tab') {
+  const target = page.locator(selector);
+  for (let i = 0; i < 120; i++) {
+    await page.keyboard.press(key);
+    if (await target.evaluate((el) => el === document.activeElement)) return;
+  }
+  throw new Error(`Tab did not reach ${selector}`);
+}
+
+test('the ruler beats are one tab stop', async ({ page }) => {
+  await openEditor(page, FOUR_BARS);
+  await page.getByRole('button', { name: 'Bar 1', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(focused(page)).toHaveAttribute('aria-label', 'Bar 1, beat 1');
+  // The next stops are the grid and Remove bar 1, then Bar 2: no other beat.
+  const stops = [];
+  for (let i = 0; i < 6; i++) {
+    await page.keyboard.press('Tab');
+    const stop = await page.evaluate(() => {
+      const el = document.activeElement;
+      return {
+        role: el.getAttribute('role'),
+        name: el.getAttribute('aria-label') ?? el.textContent,
+      };
+    });
+    stops.push(stop);
+    if (stop.name === 'Bar 2') break;
+  }
+  expect(stops.at(-1).name).toBe('Bar 2');
+  expect(stops.filter((stop) => stop.role === 'option')).toEqual([]);
+});
+
+test('Enter selects a beat, and Enter on another beat selects the beats between', async ({
+  page,
+}) => {
+  await openEditor(page, FOUR_BARS);
+  await page.locator('.bar-ruler-beat[data-beat="0"]').focus();
+  await page.keyboard.press('Enter');
+  for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+  await expect(focused(page)).toHaveAttribute('aria-label', 'Bar 2, beat 2');
+  await page.keyboard.press('Enter');
+  expect(await shaded(page)).toEqual(range(0, 23));
+  await expect(page.locator('#partPlayChip .part-play-label')).toHaveText(
+    'Bar 1 beat 1 – bar 2 beat 2'
+  );
+  await expect(page.locator('#partPlayStatus')).toHaveText('Bar 1 beat 1 – bar 2 beat 2');
+  await expect(page.locator('.bar-ruler-beat[aria-selected="true"]')).toHaveCount(6);
+});
+
+test('Shift+Right extends the selection across a bar', async ({ page }) => {
+  await openEditor(page, FOUR_BARS);
+  await page.locator('.bar-ruler-beat[data-beat="3"]').focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('Shift+ArrowRight');
+  expect(await shaded(page)).toEqual(range(12, 23));
+  await expect(page.locator('#partPlayChip .part-play-label')).toHaveText(
+    'Bar 1 beat 4 – bar 2 beat 2'
+  );
+});
+
+test('Enter on the selection clears it', async ({ page }) => {
+  await openEditor(page, FOUR_BARS);
+  await page.locator('.bar-ruler-beat[data-beat="4"]').focus();
+  await page.keyboard.press('Enter');
+  await expect(chip(page)).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(chip(page)).toBeHidden();
+  expect(await shaded(page)).toEqual([]);
+});
+
+test('arrow keys on the ruler do not change the tempo, and Space does not play', async ({
+  page,
+}) => {
+  await openEditor(page, FOUR_BARS);
+  await page.locator('.bar-ruler-beat[data-beat="2"]').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('ArrowLeft');
+  expect(await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.getTempo())).toBe(120);
+  await expect(focused(page)).toHaveAttribute('aria-label', 'Bar 1, beat 2');
+  await page.keyboard.press(' ');
+  await expect(page.locator('#partPlayChip .part-play-label')).toHaveText('Bar 1, beat 2');
+  expect(await isPlaying(page)).toBe(false);
+});
+
+test('a tap on a beat or on Bar N leaves no focus, so Space plays', async ({ page }) => {
+  await openEditor(page, FOUR_BARS);
+  await page.getByRole('button', { name: 'Bar 2', exact: true }).click();
+  await page.locator('.bar-ruler-beat[data-beat="9"]').click();
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(true);
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(false);
+});
+
+test('the add and remove bar buttons work by keyboard', async ({ page }) => {
+  await openEditor(page, ONE_BAR);
+  await tabTo(page, '#addMeasureButton');
+  await expect(focused(page)).toHaveAccessibleName('Add a bar');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.staff-container')).toHaveCount(2);
+  // The focus stays on Add a bar, so the next key goes on from there.
+  await expect(page.locator('#addMeasureButton')).toBeFocused();
+  await tabTo(page, '#closeMeasureButton2', 'Shift+Tab');
+  await expect(focused(page)).toHaveAccessibleName('Remove bar 2');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.staff-container')).toHaveCount(1);
+  await expect(page.locator('#addMeasureButton')).toBeFocused();
+});
+
+test('a tap on Add a bar or Remove bar leaves no focus, so Space plays', async ({ page }) => {
+  await openEditor(page, ONE_BAR);
+  await page.locator('#addMeasureButton').click();
+  await expect(page.locator('.staff-container')).toHaveCount(2);
+  await page.locator('#closeMeasureButton2').click();
+  await expect(page.locator('.staff-container')).toHaveCount(1);
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(true);
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(false);
+});
+
+test('Add a bar at the limit says why it does nothing', async ({ page }) => {
+  await openEditor(page, '?TimeSig=4/4&Div=16&Tempo=80&Measures=10');
+  const add = page.locator('#addMeasureButton');
+  await expect(add).toHaveAttribute('aria-disabled', 'true');
+  await expect(add).toHaveAccessibleName('Add a bar. The limit is 10 bars');
+});
+
+test('every beat is reachable by keyboard, also the one under Remove bar in 6/8', async ({
+  page,
+}) => {
+  await openEditor(page, SIX_EIGHT_TWO_BARS);
+  await page.locator('.bar-ruler-beat[data-beat="0"]').focus();
+  for (let n = 1; n < 12; n++) {
+    await page.keyboard.press('ArrowRight');
+    await expect(focused(page)).toHaveAttribute('data-beat', String(n));
+  }
+  await page.keyboard.press('Home');
+  await page.keyboard.press('End');
+  await expect(focused(page)).toHaveAttribute('aria-label', 'Bar 2, beat 6');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#partPlayChip .part-play-label')).toHaveText('Bar 2, beat 6');
+});
+
 test('view mode hides the rulers and keeps the chip', async ({ page }) => {
   await openEditor(page, FOUR_BARS);
   await page.getByRole('button', { name: 'Bar 3', exact: true }).click();

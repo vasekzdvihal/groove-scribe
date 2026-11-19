@@ -391,3 +391,14 @@ for (const [name, open, shown] of [
     expect(seriousOrWorse(await axeScan(page))).toEqual([]);
   });
 }
+
+test('the part play rulers with a selection have no serious or critical axe violation', async ({
+  page,
+}) => {
+  const H = '|x-x-x-x-x-x-x-x-|xxxxxxxxxxxxxxxx|x---x---x---x---|x-x-x-x-x-x-x-x-|';
+  await waitForPage(page, `/index.html?TimeSig=4/4&Div=16&Tempo=120&Measures=4&H=${H}`);
+  await page.locator('.bar-ruler-beat[data-beat="2"]').click();
+  await page.locator('.bar-ruler-beat[data-beat="9"]').click();
+  await expect(page.locator('#partPlayChip')).toBeVisible();
+  expect(seriousOrWorse(await axeScan(page, { include: '#measureContainer' }))).toEqual([]);
+});

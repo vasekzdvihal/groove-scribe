@@ -151,7 +151,9 @@ function barRulerHTML(baseindex, ctx) {
     baseindex +
     '">Bar ' +
     baseindex +
-    '</button><div class="bar-ruler-beats"><div class="opening_note_space"></div>';
+    '</button><div class="bar-ruler-beats" role="listbox" aria-multiselectable="true" aria-label="Beats of bar ' +
+    baseindex +
+    '"><div class="opening_note_space"></div>';
   for (var beat = 0; beat < numBeats; beat++) {
     var firstNote = beat * notesPerBeat;
     // The group gaps inside this beat: after each full group, except at the end of the beat.
@@ -160,7 +162,11 @@ function barRulerHTML(baseindex, ctx) {
       if (note % ctx.noteGrouping === 0) innerGaps++;
     }
     html +=
-      '<span class="bar-ruler-beat" data-beat="' +
+      '<span class="bar-ruler-beat" role="option" tabindex="-1" aria-selected="false" aria-label="Bar ' +
+      baseindex +
+      ', beat ' +
+      (beat + 1) +
+      '" data-beat="' +
       (bar * numBeats + beat) +
       '" style="--beat-cells:' +
       notesPerBeat +
@@ -552,23 +558,30 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
 
   if (ctx.numberOfMeasures > 1)
     newHTML +=
-      '<span title="Remove Measure" id="closeMeasureButton' +
+      '<button type="button" title="Remove Measure" aria-label="Remove bar ' +
+      baseindex +
+      '" id="closeMeasureButton' +
       baseindex +
       '" onClick="myGrooveWriter.closeMeasureButtonClick(' +
       baseindex +
-      ')" class="closeMeasureButton"><i class="fa fa-times-circle"></i></span>';
-  else newHTML += '<span class="closeMeasureButton"><i class="fa">&nbsp;&nbsp;&nbsp;</i></span>';
+      ')" class="closeMeasureButton"><i class="fa fa-times-circle"></i></button>';
+  else
+    newHTML +=
+      '<span class="closeMeasureButton" aria-hidden="true"><i class="fa">&nbsp;&nbsp;&nbsp;</i></span>';
 
   if (baseindex == ctx.numberOfMeasures) {
-    // add new measure button. At the limit the span stays (layout does not move) but is disabled.
+    // add new measure button. At the limit the button stays (layout does not move) but is
+    // disabled. aria-disabled, not disabled: the button keeps its tab stop and says the limit.
     if (ctx.numberOfMeasures >= constant_MAX_MEASURES)
       newHTML +=
-        '<span id="addMeasureButton" role="button" title="Maximum is ' +
+        '<button type="button" id="addMeasureButton" title="Maximum is ' +
         constant_MAX_MEASURES +
-        ' measures" aria-disabled="true" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></span>';
+        ' measures" aria-disabled="true" aria-label="Add a bar. The limit is ' +
+        constant_MAX_MEASURES +
+        ' bars" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button>';
     else
       newHTML +=
-        '<span id="addMeasureButton" role="button" title="Add measure" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></span>';
+        '<button type="button" id="addMeasureButton" title="Add measure" aria-label="Add a bar" onClick="myGrooveWriter.addMeasureButtonClick(event)"><i class="fa fa-plus"></i></button>';
   }
 
   newHTML += '</div>';

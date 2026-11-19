@@ -187,7 +187,9 @@ describe('HTMLforStaffContainer', () => {
       // class_number_of_measures(1) is not > 1 -> close-measure button is the
       // inert "&nbsp;&nbsp;&nbsp;" placeholder, not a clickable id'd button.
       expect(html).not.toMatch(/id="closeMeasureButton\d+"/);
-      expect(html).toContain('class="closeMeasureButton"><i class="fa">&nbsp;&nbsp;&nbsp;</i>');
+      expect(html).toContain(
+        'class="closeMeasureButton" aria-hidden="true"><i class="fa">&nbsp;&nbsp;&nbsp;</i>'
+      );
     });
   });
 

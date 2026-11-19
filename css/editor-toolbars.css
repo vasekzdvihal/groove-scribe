@@ -665,6 +665,20 @@
   height: var(--touch-size);
   margin: 0;
   padding: 0;
+  /* Both are buttons: no button look, and the font and line height of the page. */
+  border: 0;
+  background: none;
+  font-family: inherit;
+  line-height: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+#musicalInput .closeMeasureButton:focus-visible,
+#musicalInput #addMeasureButton:focus-visible {
+  outline: 2px solid var(--bar-selected);
+  outline-offset: -2px;
+  border-radius: 6px;
 }
 
 /* With one measure the Remove slot is an empty placeholder. */

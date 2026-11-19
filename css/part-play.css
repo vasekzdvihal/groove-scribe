@@ -103,6 +103,16 @@
   #musicalInput .staff-container:has(> .closeMeasureButton[id]) .bar-ruler-beat:last-of-type > * {
     visibility: hidden;
   }
+
+  /* With the keyboard focus, the ring goes round the whole beat, over the Remove button. */
+  #musicalInput
+    .staff-container:has(> .closeMeasureButton[id])
+    .bar-ruler-beat:last-of-type:focus-visible
+    > .bar-ruler-track {
+    right: 2px;
+    background: none;
+    visibility: visible;
+  }
 }
 
 /* The beat number sits over the first cell of the beat, where the beat starts. */
@@ -132,6 +142,18 @@
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-num {
   color: #fff;
+}
+
+/* The keyboard focus: a ring 2 px out from the track, so it does not hide the beat number and
+   shows also around a selected (blue) track. The focused beat paints over the Remove button. */
+#musicalInput .bar-ruler-beat:focus-visible {
+  z-index: 2;
+  outline: none;
+}
+
+#musicalInput .bar-ruler-beat:focus-visible .bar-ruler-track {
+  outline: 2px solid var(--bar-selected);
+  outline-offset: 2px;
 }
 
 /* The first tap: the next tap selects everything from here. */

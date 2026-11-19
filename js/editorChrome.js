@@ -109,6 +109,12 @@ export function initPopovers() {
     '#timeSigPopup button',
     '#fullURLPopup button',
     '#metronomeAutoSpeedupConfiguration button',
+    // The part play ruler and the bar buttons. A key press on a bar button moves the focus to
+    // the new "Add a bar" button (groove_writer.js). A tap must not count as a key press there.
+    '.bar-ruler-bar',
+    '.bar-ruler-beat',
+    '#addMeasureButton',
+    '.closeMeasureButton',
     // A tapped menu item: the menu closes, and the focus must not stay on the hidden item.
     '.noteContextMenu li',
   ].join(', ');

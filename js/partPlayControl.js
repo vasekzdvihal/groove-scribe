@@ -2,7 +2,12 @@
 // chip in the playback bar says what plays, with an × that plays the whole groove again.
 //
 // The rulers are part of the note grid markup (js/viewHtml.js), and renderNoteGrid() makes them
-// again with the grid. So the pointer events are delegated on #measureContainer, which stays.
+// again with the grid. So the pointer and key events are delegated on #measureContainer, which
+// stays.
+//
+// By keyboard the beats of each bar are a listbox. All the rulers together are one tab stop
+// (a roving tabindex): the focused beat, else the first selected beat, else the last focused
+// beat, else beat 0.
 
 import { nextSelection, rangeFits, selectionLabel } from './partPlay.js';
 
@@ -61,17 +66,38 @@ export function initPartPlay(writer) {
   let state = { range: null, anchor: null };
   /** @type {{ pointerId: number, from: number, to: number, dragged: boolean } | null} */
   let press = null;
+  /** The beat that had the focus last, for the tab stop. */
+  let lastFocused = 0;
 
   /**
-   * Mark the selected beats and the first tap on the rulers.
+   * Mark the selected beats and the first tap on the rulers, and put the tab stop on the first
+   * selected beat, else on the beat that had the focus last, else on beat 0. A beat that has
+   * the focus keeps the tab stop, or Shift+Tab would go back into the ruler.
    * @param {BeatRange | null} range
    */
   function markRulers(range) {
-    for (const element of container.querySelectorAll(BEAT)) {
-      const beat = Number(/** @type {HTMLElement} */ (element).dataset.beat);
-      element.classList.toggle('is-selected', !!range && beat >= range.first && beat <= range.last);
+    const beats = /** @type {HTMLElement[]} */ ([...container.querySelectorAll(BEAT)]);
+    const focused = beats.find((element) => element === document.activeElement);
+    let stop = range && !focused ? range.first : lastFocused;
+    if (!beats.some((element) => Number(element.dataset.beat) === stop)) stop = 0;
+    for (const element of beats) {
+      const beat = Number(element.dataset.beat);
+      const selected = !!range && beat >= range.first && beat <= range.last;
+      element.classList.toggle('is-selected', selected);
       element.classList.toggle('is-anchor', beat === state.anchor);
+      setAttribute(element, 'aria-selected', String(selected));
+      setAttribute(element, 'tabindex', beat === stop ? '0' : '-1');
     }
+  }
+
+  /**
+   * Set an attribute only when it changes, so the screen reader hears no change that is none.
+   * @param {Element} element
+   * @param {string} name
+   * @param {string} value
+   */
+  function setAttribute(element, name, value) {
+    if (element.getAttribute(name) !== value) element.setAttribute(name, value);
   }
 
   // The writer calls this after each change, also with null while a groove loads. So it uses
@@ -182,8 +208,68 @@ export function initPartPlay(writer) {
 
   chip.querySelector('button')?.addEventListener('click', () => writer.setPartPlay(null));
 
+  // A focused beat takes the tab stop, so Tab comes back to it.
+  container.addEventListener('focusin', (event) => {
+    if (!(event.target instanceof HTMLElement) || !event.target.matches(BEAT)) return;
+    lastFocused = Number(event.target.dataset.beat);
+    for (const element of container.querySelectorAll(BEAT)) {
+      setAttribute(element, 'tabindex', element === event.target ? '0' : '-1');
+    }
+  });
+
+  /**
+   * The beat element of a beat number, or null.
+   * @param {number} beat
+   * @returns {HTMLElement | null}
+   */
+  function beatElement(beat) {
+    return container.querySelector(BEAT + '[data-beat="' + beat + '"]');
+  }
+
+  // The keys on a focused beat. The page keys (tempo on the arrows, Play on Space) do not run.
+  container.addEventListener('keydown', (event) => {
+    if (!(event.target instanceof HTMLElement) || !event.target.matches(BEAT)) return;
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    const beat = Number(event.target.dataset.beat);
+    const beats = /** @type {HTMLElement[]} */ ([...container.querySelectorAll(BEAT)]);
+    const last = beats.length ? Number(beats[beats.length - 1].dataset.beat) : 0;
+    /** @type {number | null} */
+    let to = null;
+    switch (event.key) {
+      case 'ArrowLeft':
+        to = Math.max(beat - 1, 0);
+        break;
+      case 'ArrowRight':
+        to = Math.min(beat + 1, last);
+        break;
+      case 'Home':
+        if (event.shiftKey) return;
+        to = 0;
+        break;
+      case 'End':
+        if (event.shiftKey) return;
+        to = last;
+        break;
+      case 'Enter':
+      case ' ':
+        if (event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        // A held key would select and clear again and again.
+        if (!event.repeat) apply({ type: 'tap', beat });
+        return;
+      default:
+        return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    beatElement(to)?.focus();
+    if (event.shiftKey && to !== beat) apply({ type: 'extend', from: beat, to });
+  });
+
   // renderNoteGrid() makes the rulers again. Mark the selection on the new ones.
   new MutationObserver(() => markRulers(writer.getPartPlay())).observe(container, {
     childList: true,
   });
+  markRulers(writer.getPartPlay());
 }

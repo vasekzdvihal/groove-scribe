@@ -156,3 +156,44 @@ describe('nextSelection', () => {
     expect(nextSelection(state, { type: 'clear' })).toEqual({ range: null, anchor: null });
   });
 });
+
+describe('nextSelection extend', () => {
+  const none = { range: null, anchor: null };
+  it('starts a range at the focused beat', () =>
+    expect(nextSelection(none, { type: 'extend', from: 3, to: 4 })).toEqual({
+      range: { first: 3, last: 4 },
+      anchor: null,
+    }));
+  it('grows from the last beat', () =>
+    expect(
+      nextSelection(
+        { range: { first: 2, last: 5 }, anchor: null },
+        { type: 'extend', from: 5, to: 6 }
+      ).range
+    ).toEqual({ first: 2, last: 6 }));
+  it('grows from the first beat', () =>
+    expect(
+      nextSelection(
+        { range: { first: 2, last: 5 }, anchor: null },
+        { type: 'extend', from: 2, to: 1 }
+      ).range
+    ).toEqual({ first: 1, last: 5 }));
+  it('shrinks from the last beat', () =>
+    expect(
+      nextSelection(
+        { range: { first: 2, last: 5 }, anchor: null },
+        { type: 'extend', from: 5, to: 4 }
+      ).range
+    ).toEqual({ first: 2, last: 4 }));
+  it('keeps a first tap as the fixed end', () =>
+    expect(
+      nextSelection({ range: { first: 3, last: 3 }, anchor: 3 }, { type: 'extend', from: 3, to: 1 })
+    ).toEqual({ range: { first: 1, last: 3 }, anchor: null }));
+  it('starts again from a beat outside the range', () =>
+    expect(
+      nextSelection(
+        { range: { first: 2, last: 5 }, anchor: null },
+        { type: 'extend', from: 8, to: 9 }
+      ).range
+    ).toEqual({ first: 8, last: 9 }));
+});
