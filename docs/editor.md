@@ -51,6 +51,10 @@ Rules:
   There Space presses or types, as on any page. A range slider and the page itself (nothing
   focused, as after a tap) still play. Play is a `role="button"` span: it handles Enter and Space
   itself.
+- So a tap must not leave the focus on a button. The `mousedown` guard in `initPopovers` stops
+  the buttons of the bars, the popovers, Help (`#helpAnchor`), the popups and the old menu items
+  from taking the focus. Fields and selects take it as usual. A popup that a tap opened and
+  closed also drops the focus that the editor put into it (the share link).
 - Popovers, the old menus and the popups take the focus only when a key opened them
   (`lastInputWasKeyboard()` in `js/editorChrome.js`). A tap opens them as before and leaves the
   focus where it is, so Space still plays on the tablet.

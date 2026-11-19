@@ -99,12 +99,21 @@ export function initPopovers() {
   });
 
   // Space plays the groove. A tapped button must not keep focus, or space would press it again.
+  // Fields and selects take the focus as usual.
+  const tapNoFocus = [
+    '.panel-tab',
+    '#ToolBar button',
+    '#PlaybackBar button',
+    '.tool-popover button',
+    '#helpAnchor',
+    '#timeSigPopup button',
+    '#fullURLPopup button',
+    '#metronomeAutoSpeedupConfiguration button',
+    // A tapped menu item: the menu closes, and the focus must not stay on the hidden item.
+    '.noteContextMenu li',
+  ].join(', ');
   document.addEventListener('mousedown', (event) => {
-    if (
-      event.target.closest('.panel-tab, #ToolBar button, #PlaybackBar button, .tool-popover button')
-    ) {
-      event.preventDefault();
-    }
+    if (event.target.closest(tapNoFocus)) event.preventDefault();
   });
 }
 
@@ -293,8 +302,10 @@ function watchPopup(popup, first, onChange) {
 
   function closed() {
     const active = document.activeElement;
-    // The focus was in the popup, or nowhere: it goes back. A focus that moved on stays.
+    // The focus was in the popup, or nowhere: it goes back. A focus that moved on stays. With no
+    // place to go back to (a tap opened it), the focus leaves the hidden popup for the page.
     if (opener && (!focusedControl(active) || popup.contains(active))) focusBack(opener);
+    else if (active instanceof HTMLElement && popup.contains(active)) active.blur();
     opener = cameFrom = null;
   }
 

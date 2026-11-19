@@ -403,3 +403,46 @@ test.describe('with the overlay side panel open', () => {
     await expect(page.locator('#groovesTab')).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+test.describe('Space plays after a mouse click on a menu or popup button', () => {
+  test('Help menu', async ({ page }) => {
+    await loadGroove(page, GROOVE);
+    await page.click('#helpAnchor');
+    const menu = page.locator('#helpContextMenu');
+    await expect(menu).toBeVisible();
+    await page.waitForTimeout(200); // the page click that closes the menu arms after 100 ms
+    // A click on a tool closes the menu. A tool does not take the focus, so before the fix
+    // the Help button kept it, and Space opened the menu again.
+    await page.click('#undoButton', { force: true }); // Undo is off: it does nothing
+    await expect(menu).toBeHidden();
+    await page.keyboard.press(' ');
+    await expect.poll(() => isPlaying(page)).toBe(true);
+    await expect(menu).toBeHidden();
+    await stopPlaying(page);
+  });
+
+  for (const [name, open, close] of [
+    ['time signature', '#timeLabel', '#timeSigPopupOK'],
+    ['share', '#shareSaveButton', '#fullURLPopupCloseButton'],
+  ]) {
+    test(`${name} popup`, async ({ page }) => {
+      await loadGroove(page, GROOVE);
+      await page.click(open);
+      await page.click(close);
+      await page.keyboard.press(' ');
+      await expect.poll(() => isPlaying(page)).toBe(true);
+      await stopPlaying(page);
+    });
+  }
+
+  test('auto speed up popup', async ({ page }) => {
+    await loadGroove(page, GROOVE);
+    await page.click('#metronomeOptionsAnchor');
+    await page.click('#metronomeOptionsContextMenuSpeedUp');
+    await page.click('#metronomeAutoSpeedupConfigurationCloseButton');
+    await expect(page.locator('#metronomeAutoSpeedupConfiguration')).toBeHidden();
+    await page.keyboard.press(' ');
+    await expect.poll(() => isPlaying(page)).toBe(true);
+    await stopPlaying(page);
+  });
+});
