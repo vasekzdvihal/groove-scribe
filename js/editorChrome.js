@@ -117,6 +117,8 @@ export function initPopovers() {
     '.closeMeasureButton',
     // A tapped menu item: the menu closes, and the focus must not stay on the hidden item.
     '.noteContextMenu li',
+    // A tapped groove row: the panel closes, and the focus must not stay on the hidden button.
+    '.grooveListButton',
   ].join(', ');
   document.addEventListener('mousedown', (event) => {
     if (event.target.closest(tapNoFocus)) event.preventDefault();

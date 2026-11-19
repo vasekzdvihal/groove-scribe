@@ -943,6 +943,30 @@ function startLibrary({
     return canUpdate ? groove : null;
   }
 
+  // Escape in an open ⋯ menu, or on its ⋯, closes the menu, and focus goes to the ⋯ of its row.
+  // The redraw puts focus there: the control that had it is gone, and the ⋯ is the fallback.
+  // Returns true when it closed a menu.
+  function closeRowMenuOf(target) {
+    if (!openMenu || !(target instanceof Element)) return false;
+    const control = target.closest('.lp-actions, .lp-more[aria-expanded="true"]');
+    if (!control || !byId('lpLessons').contains(control)) return false;
+    openMenu = null;
+    render();
+    return true;
+  }
+
+  // The same window listener as for a tool form: it hears Escape before the side panel does, so
+  // the panel stays open.
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.key === 'Escape' && !isAskingToDiscard() && closeRowMenuOf(event.target)) {
+        event.stopPropagation();
+      }
+    },
+    true
+  );
+
   function render() {
     // See onPointerDown: a click on the list or a tool form is in progress.
     if (pointerDown) {

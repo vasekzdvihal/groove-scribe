@@ -68,23 +68,30 @@ if (typeof grooves === 'undefined') var grooves = {};
     return str.indexOf('Object') > -1;
   };
 
+  // A heading and a list per group. The grooves are buttons in the list items, so the keyboard
+  // reaches them. The editor handles the click, so it can ask before it drops unsaved edits.
   root.arrayAsHTMLList = function (arrayToPrint) {
-    var HTML = '<ul class="grooveListUL">\n';
+    var HTML = '';
+    var items = '';
+    var closeItems = function () {
+      if (items) HTML += '<ul class="grooveListUL">\n' + items + '</ul>\n';
+      items = '';
+    };
     for (var key in arrayToPrint) {
       if (root.isArray(arrayToPrint[key])) {
-        HTML += '<li class="grooveListHeaderLI">' + key + '</li>\n';
+        closeItems();
+        HTML += '<h3 class="grooveListHeader">' + key + '</h3>\n';
         HTML += root.arrayAsHTMLList(arrayToPrint[key]);
       } else {
-        // The editor handles the click, so it can ask before it drops unsaved edits.
-        HTML +=
+        items +=
           '<li class="grooveListLI" data-groove="' +
           arrayToPrint[key].replace(/&/g, '&amp;').replace(/"/g, '&quot;') +
-          '">' +
+          '"><button type="button" class="grooveListButton">' +
           key +
-          '</li>\n';
+          '</button></li>\n';
       }
     }
-    HTML += '</ul>\n';
+    closeItems();
 
     return HTML;
   };

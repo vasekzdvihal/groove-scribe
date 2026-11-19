@@ -231,7 +231,8 @@ test('the embed content is in a main landmark', async ({ page }) => {
 
 test.describe('at 1440x900', () => {
   // The page has 22 stops from its start to Play: the top bar, the panel, the tools, the grid.
-  const MAX_STOPS = 30;
+  // The open Grooves tab adds one stop for each groove.
+  const MAX_STOPS = 200;
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test('the panel comes before the tools in the tab order', async ({ page }) => {
@@ -401,4 +402,38 @@ test('the part play rulers with a selection have no serious or critical axe viol
   await page.locator('.bar-ruler-beat[data-beat="9"]').click();
   await expect(page.locator('#partPlayChip')).toBeVisible();
   expect(seriousOrWorse(await axeScan(page, { include: '#measureContainer' }))).toEqual([]);
+});
+
+test('the Grooves tab has no serious or critical axe violation', async ({ page }) => {
+  await waitForPage(page, '/index.html');
+  await openGrooves(page);
+  expect(seriousOrWorse(await axeScan(page, { include: '#sidePanel' }))).toEqual([]);
+});
+
+test('a groove in the Grooves tab opens by keyboard', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await waitForPage(page, '/index.html');
+  const before = page.url();
+  await page.focus('#groovesTab');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#sidePanel')).toHaveCSS('transform', 'none');
+  await page.keyboard.press('Tab');
+  const first = page.locator('#groovesPanel .grooveListButton').first();
+  await expect(first).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#sidePanel')).not.toHaveCSS('transform', 'none');
+  await expect.poll(() => page.url()).not.toBe(before);
+  await expect(page.locator('#groovesTab')).toBeFocused();
+});
+
+test('a tapped groove row does not keep focus', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await waitForPage(page, '/index.html');
+  await openGrooves(page);
+  // Tap the second groove: the panel stays open here, so look at the focus before it closes.
+  await page.locator('#groovesPanel .grooveListButton').nth(1).hover();
+  await page.mouse.down();
+  const focused = await page.evaluate(() => document.activeElement?.className ?? '');
+  await page.mouse.up();
+  expect(focused).not.toContain('grooveListButton');
 });

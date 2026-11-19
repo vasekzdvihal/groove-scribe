@@ -100,6 +100,11 @@ Rules:
   both picks move focus out of the panel. Escape closes the overlay panel, but not when it is
   pressed in an old menu (`.noteContextMenu`) or a popup (`[role="dialog"]`): it closes that
   menu or popup only.
+- The Grooves tab is a heading (`h3.grooveListHeader`) and a list (`ul.grooveListUL`) per
+  group. Each groove is a `li.grooveListLI[data-groove]` with a `button.grooveListButton`, so the
+  keyboard reaches it. The button fills the row and looks like the old plain row. `main.js`
+  handles the click through `closest('.grooveListLI')`. A tapped groove button must not keep
+  focus (`tapNoFocus` in `js/editorChrome.js`), or Space would press it again instead of playing.
 - In the DOM the panel (`#sidePanel`, after its backdrop) is right after the top bar's
   `.nonPrintable` box, before `<main>`. So the tab order is the tabs, the panel, then the tools,
   the grid and the playback bar. A page without `#TopNav` gets the panel at the end of `<body>`.

@@ -7,7 +7,7 @@ All suites must stay green after every change. Run them one after another: they 
 | Command                   | What it checks                                                                                                       |
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `npm test`                | Vitest unit suite (jsdom), `tests/`. See [`../tests/README.md`](../tests/README.md).                                 |
-| `npm run test:e2e`        | Playwright, `tests-e2e/`: golden master (byte-identical SVG and MIDI) plus UI tests. Linux only.                     |
+| `npm run test:e2e`        | Playwright, `tests-e2e/`: golden master (byte-identical SVG and MIDI), UI tests and the axe scan. Linux only.        |
 | `npm run test:e2e:verify` | The same on a Mac. See "Golden master on a Mac" below.                                                               |
 | `npm run test:cloud`      | The library panel in Chromium against the Auth and Firestore emulators, `tests-cloud/`. Needs Java.                  |
 | `npm run test:rules`      | `firestore.rules` against the Firestore emulator, `tests-rules/`. Needs Java.                                        |

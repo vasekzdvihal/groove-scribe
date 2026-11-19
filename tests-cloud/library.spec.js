@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { axeScan, seriousOrWorse } from '../tests-e2e/a11y-helpers.js';
 
 const QUERY = '?TimeSig=4/4&Div=16&Title=Paradiddle&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
 const EDITOR = '/index.html?emulator=1';
@@ -244,7 +245,10 @@ test('a lesson lists grooves in the order they were saved', async ({ page }) => 
 test('a short link gets a clear message and saves nothing', async ({ page }) => {
   await signedInPanel(page);
   await page.getByRole('button', { name: 'Add link', exact: true }).click();
-  await page.getByLabel('Groove link', { exact: true }).fill('https://gscribe.com/share/abc123');
+  await page
+    .locator('#lpLinkForm')
+    .getByLabel('Groove link', { exact: true })
+    .fill('https://gscribe.com/share/abc123');
   await page.getByRole('button', { name: 'Add groove' }).click();
   await expect(page.getByRole('alert')).toContainText('short link');
   await expect(page.getByText('Your library is empty.')).toBeVisible();
@@ -300,7 +304,7 @@ test.describe('the tool buttons', () => {
   test('Escape in a form closes it, and the panel stays open', async ({ page }) => {
     await signedInPanel(page);
     await toolButton(page, 'Add link').click();
-    await page.getByLabel('Groove link', { exact: true }).focus();
+    await page.locator('#lpLinkForm').getByLabel('Groove link', { exact: true }).focus();
     await page.keyboard.press('Escape');
     await expect(page.locator('#lpLinkForm')).toBeHidden();
     await expect(toolButton(page, 'Add link')).toBeFocused();
@@ -605,6 +609,60 @@ test('the top bar shows the library name of a groove without a title', async ({ 
   await page.getByRole('button', { name: 'No title', exact: true }).click();
   await expect(page.locator('#grooveTitleDisplay')).toHaveText('No title');
   await expect(page.locator('#tuneTitle')).toHaveValue('');
+});
+
+test.describe('the keyboard in a groove menu', () => {
+  const grooveMore = (page) =>
+    page.getByRole('button', { name: 'Options for Paradiddle', exact: true });
+
+  test('Escape in a groove menu closes it, focus goes to ⋯, and the panel stays open', async ({
+    page,
+  }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await grooveMore(page).click();
+    await expect(grooveMore(page)).toHaveAttribute('aria-expanded', 'true');
+    await page.getByRole('button', { name: 'Rename', exact: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(0);
+    await expect(grooveMore(page)).toBeFocused();
+    await expect(grooveMore(page)).toHaveAttribute('aria-expanded', 'false');
+    // The viewport is narrower than the docked width, so the panel is an overlay.
+    await expect(page.locator('#sidePanel')).toHaveCSS('transform', 'none');
+    // Escape on the ⋯ of an open menu closes the menu too.
+    await grooveMore(page).click();
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(0);
+    await expect(grooveMore(page)).toBeFocused();
+    await expect(page.locator('#sidePanel')).toHaveCSS('transform', 'none');
+    // With no menu open, Escape closes the overlay panel as before.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#sidePanel')).not.toHaveCSS('transform', 'none');
+  });
+
+  test('Escape in a lesson menu closes it, focus goes to its ⋯, and the panel stays open', async ({
+    page,
+  }) => {
+    await signedInPanel(page);
+    await createLesson(page, 'Week 1');
+    const more = page.getByRole('button', { name: 'Options for Week 1', exact: true });
+    await more.click();
+    await page.getByRole('button', { name: 'Rename lesson' }).focus();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Rename lesson' })).toHaveCount(0);
+    await expect(more).toBeFocused();
+    await expect(page.locator('#sidePanel')).toHaveCSS('transform', 'none');
+  });
+
+  test('the signed-in library has no serious or critical axe violation', async ({ page }) => {
+    await signedInPanel(page);
+    await createLesson(page, 'Week 1');
+    await addLink(page, QUERY, 'Paradiddle');
+    await grooveMore(page).click();
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(1);
+    expect(seriousOrWorse(await axeScan(page, { include: '#sidePanel' }))).toEqual([]);
+  });
 });
 
 const UNTITLED_QUERY = '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
@@ -1660,7 +1718,9 @@ test.describe('without a network', () => {
       await goOffline(page);
       await addLink(page, QUERY, 'Paradiddle');
       await expect(syncLabel(page, 'Paradiddle')).toHaveText(WILL_SYNC);
-      await expect(page.getByLabel('Groove link', { exact: true })).toHaveValue('');
+      await expect(
+        page.locator('#lpLinkForm').getByLabel('Groove link', { exact: true })
+      ).toHaveValue('');
       await expect(alert(page)).toBeHidden();
 
       await goOnline(page);

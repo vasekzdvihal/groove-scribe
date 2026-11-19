@@ -950,7 +950,7 @@ ul.list a:hover {
   background: #eeeeee;
   color: #000;
 }
-.grooveListHeaderLI {
+.grooveListHeader {
   padding: 15px;
   background: var(--highlight-color);
   font-size: 18px;

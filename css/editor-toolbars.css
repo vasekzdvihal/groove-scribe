@@ -1262,18 +1262,37 @@
   background: none;
 }
 
-.grooveListHeaderLI {
+.grooveListHeader {
+  margin: 0;
   padding: 16px 16px 4px;
   color: var(--lp-muted);
   background: none;
+  font: inherit;
   font-size: 14px;
   font-weight: 700;
 }
 
 .grooveListLI {
-  min-height: 24px;
-  padding: 10px 16px;
+  padding: 0;
   border-bottom: 0;
+}
+
+/* The button fills the row, so a tap or a click anywhere in the row picks the groove. The
+   name sits at the top, as it did in the plain list item. */
+.grooveListButton {
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 16px;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
 }
 
