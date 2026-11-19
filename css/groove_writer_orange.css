@@ -1023,7 +1023,7 @@ hr {
   font-size: 16px;
   font-weight: 500;
   background: #fff;
-  color: #ccc;
+  color: #767676; /* 4.5:1 on white */
   border: 0px;
   border-radius: 5px;
   padding: 5px 10px;
@@ -1045,6 +1045,18 @@ hr {
   font-size: 100%;
   float: right;
   cursor: pointer;
+  /* A button, so that the keyboard reaches it. It looks as the icon alone did. */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  line-height: inherit;
+}
+#fullURLPopupCloseButton:focus-visible {
+  outline: 2px solid #1f73a8;
+  outline-offset: 2px;
 }
 #fullURLPopupCloseButton:hover {
   color: #444;

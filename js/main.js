@@ -12,8 +12,10 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import {
   initBarScroll,
+  initContextMenus,
   initPlaybackControls,
   initPopovers,
+  initPopups,
   initSaveButton,
 } from './editorChrome.js';
 import { hasRememberedUser, initLibraryPanel } from './cloud/libraryPanel.js';
@@ -261,6 +263,8 @@ if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(wind
 }
 
 initPopovers();
+initContextMenus(utils);
+initPopups();
 initBarScroll();
 
 // Back can bring this page out of the back-forward cache after another page in the tab wrote

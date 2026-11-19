@@ -375,3 +375,19 @@ for (const [width, height] of [
     });
   });
 }
+
+// The older menus and the popups, open. A tap opens each one, as on the tablet.
+for (const [name, open, shown] of [
+  ['the Stickings menu', '#stickingsButton', '#stickingsContextMenu'],
+  ['the time signature popup', '#timeLabel', '#timeSigPopup'],
+  ['the share popup', '#shareSaveButton', '#fullURLPopup'],
+]) {
+  test(`the editor with ${name} open has no serious or critical axe violation`, async ({
+    page,
+  }) => {
+    await waitForPage(page, '/index.html' + GROOVE);
+    await page.click(open);
+    await expect(page.locator(shown)).toBeVisible();
+    expect(seriousOrWorse(await axeScan(page))).toEqual([]);
+  });
+}

@@ -1217,6 +1217,20 @@
   background: #e7ecef;
 }
 
+/* "Rotate through" stays on one line, next to its check mark. */
+#metronomeOptionsOffsetClickContextMenu,
+#metronomeOptionsOffsetClickForTripletsContextMenu {
+  width: max-content;
+  min-width: 150px;
+  white-space: nowrap;
+}
+
+/* The keyboard focus on a menu item. Inset, so the round corners of the menu do not cut it. */
+.noteContextMenu > ul.list li:focus-visible {
+  outline: 2px solid #1f73a8;
+  outline-offset: -2px;
+}
+
 /* The groove list fills the Grooves tab of the side panel. The section scrolls, not the list. */
 #grooveListWrapper {
   position: static;

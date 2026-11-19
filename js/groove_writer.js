@@ -853,20 +853,17 @@ function GrooveWriter() {
     }
   };
 
-  // the user has clicked on the download menu (at bottom)
-  root.DownloadAnchorClick = function (event) {
+  // The Download item of the More popover opens the download menu below the More button. A tap
+  // and a key both open it there, in view.
+  root.DownloadAnchorClick = function () {
     var contextMenu = document.getElementById('downloadContextMenu');
-    if (contextMenu) {
-      var anchorPoint = document.getElementById('downloadButton');
-
-      if (anchorPoint) {
-        if (!event) event = window.event;
-        if (event.clientX || event.clientY) {
-          contextMenu.style.top = event.clientY - 150 + 'px';
-          contextMenu.style.left = event.clientX - 150 + 'px';
-        }
-      }
-      root.myGrooveUtils.showContextMenu(contextMenu);
+    if (!contextMenu) return;
+    root.myGrooveUtils.showContextMenu(contextMenu);
+    var moreButton = document.getElementById('moreButton');
+    if (moreButton) {
+      var moreRect = moreButton.getBoundingClientRect();
+      contextMenu.style.top = moreRect.bottom + 4 + 'px';
+      contextMenu.style.left = Math.max(0, moreRect.right - contextMenu.offsetWidth) + 'px';
     }
   };
 

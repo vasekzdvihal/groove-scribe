@@ -46,6 +46,22 @@ Rules:
   scrolls into view (`initBarScroll` in `js/editorChrome.js`).
 - Two filled buttons side by side keep at least 4 px between them, so a focus ring does not
   touch the next button.
+- Popovers, the old menus and the popups take the focus only when a key opened them
+  (`lastInputWasKeyboard()` in `js/editorChrome.js`). A tap opens them as before and leaves the
+  focus where it is, so Space still plays on the tablet.
+  - A popover (`initPopovers`) gives the focus to its first shown control. Escape, or an item with
+    `data-popover-close`, gives it back to the button. Tab out of the popover closes it.
+  - The old menus (`.noteContextMenu > ul`) are ARIA menus (`initContextMenus`, which wraps
+    `showContextMenu` and `hideContextMenu`). The first item gets the focus. Up and Down wrap,
+    Home and End go to the ends, Enter or Space picks, Escape closes, Tab closes and goes on. When
+    the menu closes, the focus goes back to the control that had it: a menu button
+    (`aria-haspopup="menu"`, with `aria-expanded`) or a note cell in Note types mode. A sub-menu
+    (Offset click) keeps the first menu button.
+  - The Download menu opens below ⋯ (`#moreButton`), for a tap and for a key: Download is in
+    that popover, which closes.
+  - The time signature, share and auto speed-up popups are non-modal dialogs (`initPopups`).
+    The first control gets the focus. Escape presses their own Cancel or close button. On close,
+    the focus goes back to the control that opened them. There is no focus trap.
 - `groove_writer.css` sets `transition: all` on old buttons. A control whose size changes with
   the window width must limit its transition to colours, or tests measure it mid-change.
 

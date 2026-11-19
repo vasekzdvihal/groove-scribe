@@ -147,7 +147,7 @@
 				<span id="upperRight">
 					<a id="helpLink" href="gscribe_help.html" aria-label="Help"><i class="fa fa-question-circle" aria-hidden="true"></i></a>
 					<!-- The library panel turns this into the account button. Without the panel it is a menu with Help and About. -->
-					<button type="button" id="helpAnchor" aria-label="Help menu" onclick="myGrooveWriter.helpAnchorClick(event);"><i class="fa fa-ellipsis-v" aria-hidden="true"></i></button>
+					<button type="button" id="helpAnchor" aria-label="Help menu" aria-haspopup="menu" aria-expanded="false" onclick="myGrooveWriter.helpAnchorClick(event);"><i class="fa fa-ellipsis-v" aria-hidden="true"></i></button>
 				</span>
 			</header>
 		</div>
@@ -163,7 +163,7 @@
 					<button type="button" class="tool edit-block" id="redoButton" aria-disabled="true" aria-label="Redo" onclick="myGrooveWriter.redoCommand();"><span class="tool-in"><i class="fa fa-repeat"></i><span class="tool-label">Redo</span></span></button>
 					<span class="tool-sep edit-block"></span>
 					<button type="button" class="tool edit-block" id="showHideTomsButton" onclick="event.preventDefault(); myGrooveWriter.showHideToms(false, false);"><span class="tool-in">Toms</span></button>
-					<button type="button" class="tool tool-caret grooveDB_hidden" id="stickingsButton" onclick="myGrooveWriter.stickingsAnchorClick();"><span class="tool-in">Stickings</span></button>
+					<button type="button" class="tool tool-caret grooveDB_hidden" id="stickingsButton" aria-haspopup="menu" aria-expanded="false" onclick="myGrooveWriter.stickingsAnchorClick();"><span class="tool-in">Stickings</span></button>
 					<!-- Populated by js/main.js after load (was document.write). -->
 					<span id="advancedEditSlot"></span>
 					<span class="tool-grow"></span>
@@ -462,10 +462,10 @@
 			<div id="PermutationOptions"></div>
 
 			<!-- dialog for the TIME label, hidden by default -->
-			<div id="timeSigPopup">
+			<div id="timeSigPopup" role="dialog" aria-labelledby="timeSigPopupTitle">
 				<div id="timeSigPopupTitle">Choose a Time Signature</div>
 				<div id="timeSigPopupOptions">
-				 <select id="timeSigPopupTimeSigTop">
+				 <select id="timeSigPopupTimeSigTop" aria-label="Beats in a bar">
 				  <option value="2">2</option>
 				  <option value="3">3</option>
 				  <option selected value="4">4</option>
@@ -482,7 +482,7 @@
 				  <option value="15">15</option>
 				</select>
 				<b id="timeSigPopupSlash">/</b>
-				<select id="timeSigPopupTimeSigBottom">
+				<select id="timeSigPopupTimeSigBottom" aria-label="Note value of a beat">
 				  <option selected value="4">4</option>
 				  <option value="8">8</option>
 				  <option value="16">16</option>
@@ -495,15 +495,15 @@
 			</div>
 
 			<!-- this is used by the share/save button, and is hidden by default -->
-			<div id="fullURLPopup">
-				<span id="fullURLPopupCloseButton" onclick="myGrooveWriter.close_FullURLPopup();"><i class="fa fa-lg fa-times-circle"></i></span>
+			<div id="fullURLPopup" role="dialog" aria-labelledby="fullURLPopupTitle">
+				<button type="button" id="fullURLPopupCloseButton" aria-label="Close" onclick="myGrooveWriter.close_FullURLPopup();"><i class="fa fa-lg fa-times-circle" aria-hidden="true"></i></button>
 				<div id="fullURLPopupTitle">Share Your Groove</div>
 				<div id="fullURLPopupSubTitle">Use this URL to share or save this groove</div>
 				<div id="fullURLPopupSubSubTitle">(You can also bookmark this page)</div>
 				<div id="fullURLPopupCheckboxes">
 					<span><label id="embedCodeLabel" class="fullURLPopupCheckboxLabel"><input type="checkbox" id="embedCodeCheckbox" onchange="myGrooveWriter.embedCodeCheckboxChanged();">Embed Code</label></span>
 				</div>
-				<div id="fullURLPopupTextFieldContainer"><input type="text" id="fullURLPopupTextField"></div>
+				<div id="fullURLPopupTextFieldContainer"><input type="text" id="fullURLPopupTextField" aria-label="Groove link"></div>
 				<br>
 				<div id="shareButtonContainer">
 					<button id="fullURLPopupCopyButton" onclick="myGrooveWriter.copyShareURLToClipboard();">&nbsp;<i class="fa fa-copy"></i> &nbsp;COPY&nbsp;</button>
@@ -514,7 +514,7 @@
 
 
 			<!-- this is used by the metronome auto speed up option menu, and is hidden by default -->
-			<div id="metronomeAutoSpeedupConfiguration">
+			<div id="metronomeAutoSpeedupConfiguration" role="dialog" aria-label="Auto speed up">
 				<div id="metronomeAutoSpeedupOutputText">
 					Increase <span id="metronomeAutoSpeedupTempoIncreaseAmountOutput">5</span> bpm in
 					<span id="metronomeAutoSpeedupTempoIncreaseIntervalOutput">2</span> min
@@ -550,7 +550,7 @@
 						<button type="button" class="metronomeButton" id="metronome8ths" onclick="myGrooveWriter.setMetronomeFrequency(8);">8th</button>
 						<button type="button" class="metronomeButton" id="metronome16ths" onclick="myGrooveWriter.setMetronomeFrequency(16);">16th</button>
 					</span>
-					<button type="button" class="metronomeButton Options grooveDB_hidden" id="metronomeOptionsAnchor" aria-label="Metronome options" onclick="myGrooveWriter.metronomeOptionsAnchorClick(event);"><i class="fa fa-cog"></i></button>
+					<button type="button" class="metronomeButton Options grooveDB_hidden" id="metronomeOptionsAnchor" aria-label="Metronome options" aria-haspopup="menu" aria-expanded="false" onclick="myGrooveWriter.metronomeOptionsAnchorClick(event);"><i class="fa fa-cog"></i></button>
 				</span>
 				<span class="tool-sep"></span>
 				<button type="button" class="tool tool-caret" id="swingButton" data-popover="swingPopover"><span class="tool-in"><span id="swingButtonLabel">Swing</span></span></button>
