@@ -1974,6 +1974,7 @@ function GrooveUtils() {
       playControl.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
           event.preventDefault();
+          if (event.repeat) return;
           playControl.click();
         }
       });

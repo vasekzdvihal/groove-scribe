@@ -43,8 +43,9 @@ Run the suites one after another, never in parallel: they use fixed ports.
 
 - IMPORTANT: SVG and MIDI output must stay byte-identical. The golden master proves it, not your
   eyes. Its baselines are Linux-only: never commit `*-chromium-darwin*` files.
-- Grid state is read back from the rendered CSS colour of each cell. A note colour changes in
-  `css/` and `js/constants.js` together, or the grid stops reading its own state.
+- The grid reads each cell's state from the inline colour that the note setters write. It
+  compares that colour with the `constant_*_on_color_rgb` values in `js/constants.js`. A note
+  colour changes in `css/` and `js/constants.js` together, or the grid stops reading its own state.
 - IMPORTANT: every `firebase`/`gcloud` command takes `--project groove-scribe-zdvihal`. The same
   account holds company projects: never touch them.
 - A merge to `master` deploys to production (`.github/workflows/ci-deploy.yml`). The user merges.

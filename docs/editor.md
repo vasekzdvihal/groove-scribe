@@ -77,9 +77,9 @@ Rules:
 
 ## Note grid
 
-- Grid state is read back from the rendered CSS colour. The setters paint the hex form; the
-  browser gives rgb back; `gridState.js` compares it with `constant_*_on_color_rgb` in
-  `js/constants.js`. A colour changes in the CSS and in `constants.js` together.
+- The grid reads cell state from the inline colour that the setters write. The setters write the
+  hex form; the browser gives rgb back; `gridState.js` compares it with `constant_*_on_color_rgb`
+  in `js/constants.js`. A colour changes in the CSS and in `constants.js` together.
 - Every `set_*_state` setter calls `markNoteOn`. It writes `data-on` on the cell, and the CSS
   draws off notes smaller: a cue for "on" that is not colour.
 - `renderNoteGrid()` owns the `--notes` and `--groups` custom properties on `#measureContainer`.

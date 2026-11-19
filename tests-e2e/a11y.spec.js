@@ -1,5 +1,5 @@
-import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from './fixtures.js';
+import { axeScan, seriousOrWorse, contrastRatio } from './a11y-helpers.js';
 
 // Accessibility checks. axe runs on every page, then focused tests cover what axe cannot see.
 
@@ -21,42 +21,6 @@ const PAGES = [
     '/GrooveEmbed.html?TimeSig=4/4&Div=16&H=|x-x-x-x-x-x-x-x-|&S=|----O-------O---|&K=|o-------o-------|',
   ],
 ];
-
-// Runs axe with the WCAG A and AA rules and the best-practice rules. Returns the violations.
-// The sheet music SVG is not scanned: abc2svg draws it, and the golden master pins its output.
-export async function axeScan(page, { include, disableRules = [] } = {}) {
-  let builder = new AxeBuilder({ page })
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'])
-    .exclude('#svgTarget svg')
-    .disableRules(disableRules);
-  if (include) builder = builder.include(include);
-  return (await builder.analyze()).violations;
-}
-
-// "<rule id>: <first target>" for each violation that is serious or critical.
-export function seriousOrWorse(violations) {
-  return violations
-    .filter((v) => v.impact === 'serious' || v.impact === 'critical')
-    .map((v) => `${v.id}: ${v.nodes[0].target.join(' ')}`);
-}
-
-function luminance(rgb) {
-  const [r, g, b] = rgb
-    .match(/[\d.]+/g)
-    .slice(0, 3)
-    .map(Number)
-    .map((v) => {
-      const c = v / 255;
-      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-    });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-// The WCAG contrast ratio of two 'rgb(r, g, b)' strings.
-export function contrastRatio(rgbA, rgbB) {
-  const [a, b] = [luminance(rgbA), luminance(rgbB)].sort((x, y) => y - x);
-  return (a + 0.05) / (b + 0.05);
-}
 
 async function waitForPage(page, url) {
   await page.goto(url);
@@ -129,6 +93,39 @@ test('a range slider shows a focus ring', async ({ page }) => {
   });
   expect(ring.style).not.toBe('none');
   expect(ring.width).toBeGreaterThanOrEqual(2);
+});
+
+test('Play shows a focus ring when Tab reaches it', async ({ page }) => {
+  await waitForPage(page, '/index.html' + GROOVE);
+  const play = page.locator('[id^="midiPlayImage"]');
+  for (let i = 0; i < 60; i++) {
+    await page.keyboard.press('Tab');
+    if (await play.evaluate((el) => el === document.activeElement)) break;
+  }
+  await expect(play).toBeFocused();
+  const ring = await play.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      style: style.outlineStyle,
+      width: parseFloat(style.outlineWidth),
+      colour: style.outlineColor,
+    };
+  });
+  expect(ring.style).not.toBe('none');
+  expect(ring.width).toBeGreaterThanOrEqual(3);
+  expect(ring.colour).toBe('rgb(255, 255, 255)');
+});
+
+test('Enter on Play in the embed plays', async ({ page }) => {
+  await waitForPage(page, PAGES[4][1]);
+  const play = page.locator('[id^="midiPlayImage"]');
+  await expect(play).toHaveClass(/Stopped/);
+  await play.focus();
+  await page.keyboard.press('Enter');
+  await expect(play).toHaveClass(/Playing/);
+  await expect(play).toHaveAttribute('aria-label', 'Pause');
+  await page.keyboard.press('Enter');
+  await expect(play).not.toHaveClass(/Playing/);
 });
 
 test('off notes and note borders have 3:1 contrast on white', async ({ page }) => {

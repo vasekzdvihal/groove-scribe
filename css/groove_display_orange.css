@@ -438,6 +438,11 @@ input[type='range']:active::-webkit-slider-thumb {
 .soundRetry:hover {
   background: #c02e20;
 }
+.midiPlayImage:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px #1f73a8;
+}
 .soundRetry:focus-visible {
   outline: 3px solid #ffffff;
   outline-offset: 2px;
