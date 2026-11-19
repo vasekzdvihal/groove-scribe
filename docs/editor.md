@@ -81,7 +81,24 @@ Rules:
   hex form; the browser gives rgb back; `gridState.js` compares it with `constant_*_on_color_rgb`
   in `js/constants.js`. A colour changes in the CSS and in `constants.js` together.
 - Every `set_*_state` setter calls `markNoteOn`. It writes `data-on` on the cell, and the CSS
-  draws off notes smaller: a cue for "on" that is not colour.
+  draws off notes smaller: a cue for "on" that is not colour. It also ends the cell's
+  `aria-label` with ", on" or ", off". `set_sticking_state` writes only the label.
+- Each bar has two ARIA grids: "Stickings, bar N" and "Notes, bar N". A lane is a `row`, a cell a
+  `gridcell` with `data-instrument`, a global `data-index` and `data-name` from `noteCellName()`
+  in `js/viewHtml.js`: "Snare, beat 2", "Hi-hat, beat 1 and", "Kick, bar 2, beat 4 a". The bar
+  shows only in a groove with more than one bar. A bar that does not split into whole beats
+  counts notes: "Snare, note 5".
+- `js/gridKeyboard.js` is the keyboard. All grids together are one tab stop: one visible cell
+  has `tabindex="0"`. Left and Right move in the lane and cross into the next bar. Up and Down
+  move to the next shown lane. Home and End go to the ends of the lane in the bar, Ctrl+Home
+  and Ctrl+End to the ends of the groove. Space and Enter act as a click on the cell. The page
+  keys do not see these keys, so Space in the grid does not stop playback. Other keys pass
+  through: Ctrl+Z still undoes.
+- A click does not move the focus into the grid, so Space still plays after a click. The
+  clicked cell becomes the tab stop. After a redraw or a hidden lane, the first shown hi-hat
+  cell becomes the tab stop.
+- Left and Right change the tempo everywhere on the page, except in a widget that uses the
+  arrow keys: the grid, a slider, a list box, a menu, a field (`ownsArrowKeys()`).
 - `renderNoteGrid()` owns the `--notes` and `--groups` custom properties on `#measureContainer`.
   The grid CSS sizes the cells and the bars from them.
 - The grid has rows for toms 1, 2 and 4: High, Mid and Floor tom, in sheet-music order. A loaded

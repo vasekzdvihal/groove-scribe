@@ -551,6 +551,13 @@
   margin-top: 7px;
 }
 
+/* The keyboard focus on a note cell. Inset, so the ring does not cover the next cell and the
+   bar's overflow clip does not cut it. */
+#musicalInput [role='gridcell']:focus-visible {
+  outline: 3px solid #1f73a8;
+  outline-offset: -3px;
+}
+
 /* A note that is off has a smaller symbol than a note that is on, so the state shows without
    colour too: for colour-blind people and in poor light. groove_writer.js writes data-on in
    each note setter. transform adds to the scale of narrow cells below. */

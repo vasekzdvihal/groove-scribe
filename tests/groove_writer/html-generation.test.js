@@ -34,7 +34,7 @@ function permutationGroupIds(html) {
 }
 
 function stickingGroupTokens(html) {
-  const start = html.indexOf('<div class="stickings-container">');
+  const start = html.indexOf('<div class="stickings-container"');
   const end = html.indexOf('<div class="end_note_space">', start);
   const section = html.slice(start, end);
   const re = /id="sticking(\d+)"|class="space_between_note_groups"/g;

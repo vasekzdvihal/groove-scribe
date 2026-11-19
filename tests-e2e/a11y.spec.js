@@ -35,6 +35,15 @@ for (const [name, url] of PAGES) {
   });
 }
 
+test('the note grid has no serious or critical axe violation', async ({ page }) => {
+  await waitForPage(page, '/index.html' + GROOVE);
+  // The groove shows its stickings. Show the toms too, so every lane is scanned.
+  await page.click('#showHideTomsButton');
+  await expect(page.locator('#tom1-0')).toBeVisible();
+  await expect(page.locator('#sticking0')).toBeVisible();
+  expect(seriousOrWorse(await axeScan(page, { include: '#measureContainer' }))).toEqual([]);
+});
+
 test('every page says it is in English', async ({ page }) => {
   for (const [, url] of PAGES) {
     await page.goto(url);

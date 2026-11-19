@@ -19,6 +19,7 @@ import {
 import { hasRememberedUser, initLibraryPanel } from './cloud/libraryPanel.js';
 import { createSidePanel } from './sidePanel.js';
 import { initPartPlay } from './partPlayControl.js';
+import { initGridKeyboard } from './gridKeyboard.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
 import { askToClearNotes, askToDiscard } from './confirmDialog.js';
 import { createWakeLock } from './wakeLock.js';
@@ -126,6 +127,19 @@ if (utils.is_touch_device()) {
 fillContainer('PermutationOptions', myGrooveWriter.HTMLforPermutationOptions());
 
 myGrooveWriter.renderNoteGrid();
+// The keyboard and screen readers use the note grid. Space or Enter on a cell acts as a click,
+// at the bottom left of the cell, so the note menu of advanced edit opens next to it.
+const measureContainer = document.getElementById('measureContainer');
+if (measureContainer) {
+  initGridKeyboard(measureContainer, (cell) => {
+    const rect = cell.getBoundingClientRect();
+    myGrooveWriter.noteLeftClick(
+      { clientX: rect.left, clientY: rect.bottom },
+      cell.dataset.instrument,
+      Number(cell.dataset.index)
+    );
+  });
+}
 // The rulers above the bars select the beats that Play loops. The chip says what plays.
 initPartPlay(myGrooveWriter);
 

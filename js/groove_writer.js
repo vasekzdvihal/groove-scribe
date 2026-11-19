@@ -87,6 +87,7 @@ import {
 } from './constants.js';
 import * as _perm from './permutations.js';
 import * as _view from './viewHtml.js';
+import { ownsArrowKeys } from './gridKeyboard.js';
 import * as _grid from './gridState.js';
 import { barRanges, beatsPerBarFit, countInPercent, groovePercent, rangeFits } from './partPlay.js';
 
@@ -281,9 +282,18 @@ function GrooveWriter() {
   // A cell shows that its note is on by more than colour: css/editor-toolbars.css draws the
   // symbols of a cell without data-on smaller. Each note setter writes data-on, so the cue
   // follows every edit, undo, load and Clear all notes. gridState still reads only the colours.
+  // The same setters keep the end of the cell name up to date: "Snare, beat 2, on".
   function markNoteOn(partId, on) {
     var part = document.getElementById(partId);
-    if (part && part.parentElement) part.parentElement.toggleAttribute('data-on', on);
+    if (part && part.parentElement) {
+      part.parentElement.toggleAttribute('data-on', on);
+      labelNoteState(part.parentElement, on);
+    }
+  }
+
+  function labelNoteState(cell, on) {
+    if (cell.dataset.name)
+      cell.setAttribute('aria-label', cell.dataset.name + (on ? ', on' : ', off'));
   }
 
   // set the tom note on with type
@@ -533,6 +543,9 @@ function GrooveWriter() {
   }
 
   function set_sticking_state(id, new_state, make_sound) {
+    // A sticking cell has no data-on: its off state already shows R and L in grey.
+    var stickingCell = document.getElementById('sticking' + id);
+    if (stickingCell) labelNoteState(stickingCell, new_state !== 'off');
     // turn both off
     document.getElementById('sticking_right' + id).style.color = constant_note_hidden_color_rgb;
     document.getElementById('sticking_left' + id).style.color = constant_note_hidden_color_rgb;
@@ -2976,17 +2989,17 @@ function GrooveWriter() {
             }
             break;
 
+          // Left and Right change the tempo, except in a widget that uses the arrow keys
+          // (the note grid, a slider, a list, a menu, a field).
           case 37: // left arrow
-            // left arrow
+            if (ownsArrowKeys(e.target)) break;
             root.myGrooveUtils.downTempo();
             return false;
-          //break;
 
           case 39: // right arrow
-            // right arrow
+            if (ownsArrowKeys(e.target)) break;
             root.myGrooveUtils.upTempo();
             return false;
-          //break;
 
           default:
             /* DEBUG

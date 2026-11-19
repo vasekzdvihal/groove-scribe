@@ -10,13 +10,70 @@
 import { constant_MAX_MEASURES } from './constants.js';
 import { beatsPerBarFit } from './partPlay.js';
 
+const INSTRUMENT_WORDS = {
+  sticking: 'Sticking',
+  hh: 'Hi-hat',
+  tom1: 'High tom',
+  tom2: 'Mid tom',
+  snare: 'Snare',
+  tom4: 'Floor tom',
+  kick: 'Kick',
+};
+
+// The counts after the beat number, by notes per beat. The first note of a beat is the beat.
+const BEAT_COUNTS = { 2: ['and'], 3: ['and', 'a'], 4: ['e', 'and', 'a'] };
+
+/**
+ * The name a screen reader says for a note cell, without its state: "Snare, beat 2",
+ * "Hi-hat, beat 1 and", "Kick, bar 2, beat 4 a". A bar that does not split into whole beats
+ * counts notes: "Snare, note 5".
+ * @param {'sticking'|'hh'|'tom1'|'tom2'|'snare'|'tom4'|'kick'} instrument
+ * @param {number} index  the global note index in the groove
+ * @param {{ notesPerMeasure: number, numBeatsPerMeasure: number, numberOfMeasures: number }} ctx
+ * @returns {string}
+ */
+export function noteCellName(instrument, index, ctx) {
+  var parts = [INSTRUMENT_WORDS[instrument]];
+  var noteInBar = index % ctx.notesPerMeasure;
+  if (ctx.numberOfMeasures > 1) parts.push('bar ' + (Math.floor(index / ctx.notesPerMeasure) + 1));
+  if (!beatsPerBarFit(ctx.notesPerMeasure, ctx.numBeatsPerMeasure)) {
+    parts.push('note ' + (noteInBar + 1));
+    return parts.join(', ');
+  }
+  var notesPerBeat = ctx.notesPerMeasure / ctx.numBeatsPerMeasure;
+  var beat = 'beat ' + (Math.floor(noteInBar / notesPerBeat) + 1);
+  var noteInBeat = noteInBar % notesPerBeat;
+  if (noteInBeat === 0) parts.push(beat);
+  else if (BEAT_COUNTS[notesPerBeat])
+    parts.push(beat + ' ' + BEAT_COUNTS[notesPerBeat][noteInBeat - 1]);
+  else parts.push(beat, 'note ' + (noteInBeat + 1));
+  return parts.join(', ');
+}
+
+// The grid attributes of one note cell. markNoteOn in groove_writer.js keeps the state at the
+// end of aria-label up to date; a new cell is off until a setter runs.
+function cellAttrs(instrument, index, ctx) {
+  var name = noteCellName(instrument, index, ctx);
+  return (
+    ' role="gridcell" tabindex="-1" data-instrument="' +
+    instrument +
+    '" data-index="' +
+    index +
+    '" data-name="' +
+    name +
+    '" aria-label="' +
+    name +
+    ', off"'
+  );
+}
+
 // One tom lane (High tom = 1, Mid tom = 2, Floor tom = 4) of a bar in the note grid.
 function tomLaneHTML(tomNum, baseindex, indexStartForNotes, ctx) {
   var newHTML = '';
   var i;
   newHTML +=
     '\
-										<div class="toms-container" id="tom' +
+										<div class="toms-container" role="row" id="tom' +
     tomNum +
     '-container">\
 											<div class="opening_note_space"> </div>';
@@ -27,7 +84,9 @@ function tomLaneHTML(tomNum, baseindex, indexStartForNotes, ctx) {
       tomNum +
       '-' +
       i +
-      '" class="tom" onClick="myGrooveWriter.noteLeftClick(event, \'tom' +
+      '" class="tom"' +
+      cellAttrs('tom' + tomNum, i, ctx) +
+      ' onClick="myGrooveWriter.noteLeftClick(event, \'tom' +
       tomNum +
       "', " +
       i +
@@ -136,18 +195,22 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
 								</div>\
 								<div class="music-line-container">\n\
 									\
-									<div class="notes-container">\n';
+									<div class="notes-container" role="grid" aria-label="Stickings, bar ' +
+    baseindex +
+    '">\n';
 
   newHTML +=
     '\
-										<div class="stickings-container">\
+										<div class="stickings-container" role="row">\
 											<div class="opening_note_space"> </div>';
   for (var i = indexStartForNotes; i < ctx.notesPerMeasure + indexStartForNotes; i++) {
     newHTML +=
       '\
 														<div id="sticking' +
       i +
-      '" class="sticking">\n\
+      '" class="sticking"' +
+      cellAttrs('sticking', i, ctx) +
+      '>\n\
 															<div class="sticking_right note_part"  id="sticking_right' +
       i +
       '"  onClick="myGrooveWriter.noteLeftClick(event, \'sticking\', ' +
@@ -234,7 +297,9 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
 								</div>\
 								<div class="music-line-container">\
 									\
-									<div class="notes-container">\
+									<div class="notes-container" role="grid" aria-label="Notes, bar ' +
+    baseindex +
+    '">\
 									<div class="staff-line-1"></div>\
 									<div class="staff-line-2"></div>\
 									<div class="staff-line-3"></div>\
@@ -265,14 +330,16 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
   // Hi-hats
   newHTML +=
     '\
-										<div class="hi-hat-container">\
+										<div class="hi-hat-container" role="row">\
 											<div class="opening_note_space"> </div>';
   for (i = indexStartForNotes; i < ctx.notesPerMeasure + indexStartForNotes; i++) {
     newHTML +=
       '\
 														<div id="hi-hat' +
       i +
-      '" class="hi-hat" onClick="myGrooveWriter.noteLeftClick(event, \'hh\', ' +
+      '" class="hi-hat"' +
+      cellAttrs('hh', i, ctx) +
+      " onClick=\"myGrooveWriter.noteLeftClick(event, 'hh', " +
       i +
       ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteRightClick(event, \'hh\', ' +
       i +
@@ -337,14 +404,16 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
   // Snare stuff
   newHTML +=
     '\
-										<div class="snare-container">\
+										<div class="snare-container" role="row">\
 											<div class="opening_note_space"> </div> ';
   for (i = indexStartForNotes; i < ctx.notesPerMeasure + indexStartForNotes; i++) {
     newHTML +=
       '' +
       '<div id="snare' +
       i +
-      '" class="snare" onClick="myGrooveWriter.noteLeftClick(event, \'snare\', ' +
+      '" class="snare"' +
+      cellAttrs('snare', i, ctx) +
+      " onClick=\"myGrooveWriter.noteLeftClick(event, 'snare', " +
       i +
       ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteRightClick(event, \'snare\', ' +
       i +
@@ -435,14 +504,16 @@ export function buildStaffContainerHTML(baseindex, indexStartForNotes, ctx) {
   // Kick stuff
   newHTML +=
     '\
-										<div class="kick-container">\
+										<div class="kick-container" role="row">\
 											<div class="opening_note_space"> </div> ';
   for (var j = indexStartForNotes; j < ctx.notesPerMeasure + indexStartForNotes; j++) {
     newHTML +=
       '\
 														<div id="kick' +
       j +
-      '" class="kick" onClick="myGrooveWriter.noteLeftClick(event, \'kick\', ' +
+      '" class="kick"' +
+      cellAttrs('kick', j, ctx) +
+      " onClick=\"myGrooveWriter.noteLeftClick(event, 'kick', " +
       j +
       ')" oncontextmenu="event.preventDefault(); myGrooveWriter.noteRightClick(event, \'kick\', ' +
       j +
