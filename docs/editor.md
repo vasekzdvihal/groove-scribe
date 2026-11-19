@@ -17,6 +17,14 @@ Each bar holds the controls for what is next to it:
 
 Rules:
 
+- Landmarks: the top bar is a `<header>` (banner) with the page `<h1>` in it. The `<h1>` is
+  `.visually-hidden`: screen readers find it, but it takes no room. The tools bar and its
+  popovers, the music, and the old menus and popups are in `<main id="editorMain">`. The playback
+  bar is a `<section aria-label="Playback">`, with the Swing popover after it. Each bar is in its
+  own `.nonPrintable` box. All three bars and the music are `position: fixed`, so this outline
+  does not change the layout. Keep new content inside a landmark: axe checks it
+  (`tests-e2e/a11y.spec.js`).
+- The page never scrolls sideways, also at 320 px. `#GrooveWriter` has no minimum width.
 - `css/editor-toolbars.css` overrides older rules that other pages still load. It holds the bar
   tokens (`--bar-*`, `--touch-size`, `--playback-touch`).
 - View mode writes `display: block` or `none` on every `.edit-block`. A `.edit-block` button must
@@ -62,6 +70,11 @@ Rules:
   button. A groove picked in the Grooves tab closes the panel and puts focus on the tab. A
   permutation choice keeps the panel open, because its options show in the same panel. Docked,
   both picks move focus out of the panel.
+- In the DOM the panel (`#sidePanel`, after its backdrop) is right after the top bar's
+  `.nonPrintable` box, before `<main>`. So the tab order is the tabs, the panel, then the tools,
+  the grid and the playback bar. A page without `#TopNav` gets the panel at the end of `<body>`.
+  The panel and the backdrop paint above the bars because of their `z-index`, not their place
+  in the DOM.
 - Turning a tablet from docked to overlay closes the panel. Back to docked, a panel that the user
   left open comes back.
 
@@ -110,6 +123,10 @@ Rules:
 - The grid has rows for toms 1, 2 and 4: High, Mid and Floor tom, in sheet-music order. A loaded
   groove keeps tom 3 in `class_kept_toms`, valid for one bar layout, with the same visibility
   rule as the other toms.
+- Below 480 px a bar of 1/16 notes does not fit, even with the smallest cells (`--cell-min`).
+  `#measureContainer` then gets a `min-width` of one bar with the smallest cells, and the grid
+  scrolls sideways in `#musicalInput`. No cell is cut off, and a cell that gets the keyboard focus
+  scrolls into view.
 - The label column is 100 px wide on a wide screen, so "Floor tom" fits on one line. Narrower
   columns let a tom name go onto two lines.
 - The metronome auto speed-up rewrites the newest undo step instead of adding one.

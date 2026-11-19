@@ -85,6 +85,19 @@ describe('createSidePanel', () => {
     expect(tab('grooves').querySelector('i')?.className).toBe('fa fa-list');
   });
 
+  it('puts the panel right after the top bar', () => {
+    // In the editor the panel comes before the tools in the tab order: right after the top bar,
+    // before <main>.
+    document.body.innerHTML =
+      '<div class="nonPrintable"><div id="TopNav"><span id="upperLeft"></span></div></div><main></main>';
+    setUp();
+    createSidePanel({ tabs: ALL_TABS });
+    expect(document.querySelector('main')?.previousElementSibling?.id).toBe('sidePanel');
+    expect(document.getElementById('sidePanel')?.previousElementSibling?.id).toBe(
+      'sidePanelBackdrop'
+    );
+  });
+
   it('gives each tab its own section', () => {
     setUp();
     const panel = createSidePanel({ tabs: ALL_TABS });

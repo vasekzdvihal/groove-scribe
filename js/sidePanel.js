@@ -105,7 +105,11 @@ export function createSidePanel({ tabs }) {
     document.getElementById('upperLeft')?.append(button);
     buttons.set(tab.id, button);
   }
-  document.body.append(backdrop, panel);
+  // In the editor the panel goes right after the top bar, before <main>: the tab order is the
+  // tabs, the panel, then the tools. A page without the top bar gets it at the end.
+  const topBar = document.getElementById('TopNav')?.closest('.nonPrintable');
+  if (topBar) topBar.after(backdrop, panel);
+  else document.body.append(backdrop, panel);
 
   /** @type {TabId | null} */
   let shownTab = null;

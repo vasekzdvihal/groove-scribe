@@ -17,6 +17,22 @@
   --playback-touch: 56px;
 }
 
+/* Text for screen readers only, such as the page h1. It takes no room on the screen. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The bars and the music are fixed to the screen. The old 800 px minimum of the app box
+   (groove_writer_orange.css) only made the page wider than a narrow window. */
+#GrooveWriter {
+  min-width: 0;
+}
+
 #TopNav,
 #ToolBar,
 #PlaybackBar {
@@ -674,6 +690,19 @@
   #musicalInput #measureContainer {
     --label-width: 72px;
     --beat-gap: 8px;
+  }
+}
+
+/* Below 480 px a bar of 1/16 notes does not fit, even with the smallest cells. The grid is
+   never narrower than a bar with the smallest cells, and scrolls sideways in #musicalInput, so no
+   cell is cut off. A cell that gets the keyboard focus scrolls into view. The page itself does
+   not scroll sideways. A min-width, because the intrinsic width of the grid counts the widest
+   cells (--cell-max). */
+@media (max-width: 479px) {
+  #musicalInput #measureContainer {
+    min-width: calc(
+      var(--label-width) + var(--notes) * var(--cell-min) + (var(--groups) - 1) * var(--beat-gap)
+    );
   }
 }
 

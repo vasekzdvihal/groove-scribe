@@ -24,7 +24,7 @@ const PAGES = [
 
 async function waitForPage(page, url) {
   await page.goto(url);
-  if (url.includes('GrooveEmbed')) await page.waitForSelector('.GrooveDisplay svg');
+  if (url.includes('GrooveEmbed')) await page.waitForSelector('.svgTarget svg');
   else if (url.includes('/index.html')) await page.waitForSelector('#svgTarget svg');
 }
 
@@ -166,4 +166,172 @@ test('a groove URL with stickings and every articulation is the same after a loa
   expect(first).toContain('Stickings=|RLBRLBc');
   await page.evaluate((url) => window.myGrooveWriter.loadNewGroove(url), first);
   expect(await urlFromGrid()).toBe(first);
+});
+
+// Landmarks and headings. The side panel comes before the tools in the DOM, so the panel is
+// before <main> in the tab order too.
+const LANDMARK_RULES = [
+  'region',
+  'landmark-one-main',
+  'landmark-unique',
+  'landmark-no-duplicate-banner',
+  'landmark-banner-is-top-level',
+  'landmark-main-is-top-level',
+  'landmark-complementary-is-top-level',
+  'page-has-heading-one',
+];
+
+const landmarkViolations = async (page) =>
+  (await axeScan(page)).map((v) => v.id).filter((id) => LANDMARK_RULES.includes(id));
+
+async function openGrooves(page) {
+  await page.click('#groovesTab');
+  await expect(page.locator('#sidePanel')).toHaveCSS('transform', 'none');
+  await expect(page.locator('#groovesPanel .grooveListLI').first()).toBeVisible();
+}
+
+for (const [name, url] of [
+  ['editor', '/index.html'],
+  ['help', '/gscribe_help.html'],
+  ['about', '/gscribe_about.html'],
+]) {
+  test(`${name} passes the landmark and heading rules`, async ({ page }) => {
+    await waitForPage(page, url);
+    expect(await landmarkViolations(page)).toEqual([]);
+    if (name === 'editor') {
+      await openGrooves(page);
+      expect(await landmarkViolations(page)).toEqual([]);
+    }
+  });
+}
+
+test('the editor has one h1, and it does not change the layout', async ({ page }) => {
+  await waitForPage(page, '/index.html');
+  const h1 = page.locator('h1');
+  await expect(h1).toHaveCount(1);
+  await expect(h1).toHaveText('Groove Scribe');
+  const box = await h1.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    return { width: r.width, height: r.height, position: getComputedStyle(el).position };
+  });
+  expect(box).toEqual({ width: 1, height: 1, position: 'absolute' });
+});
+
+test('the embed content is in a main landmark', async ({ page }) => {
+  await waitForPage(page, PAGES[4][1]);
+  const ids = (await axeScan(page)).map((v) => v.id);
+  expect(ids.filter((id) => ['region', 'landmark-one-main'].includes(id))).toEqual([]);
+  await expect(page.locator('main svg').first()).toBeVisible();
+});
+
+test.describe('at 1440x900', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('the panel comes before the tools in the tab order', async ({ page }) => {
+    await waitForPage(page, '/index.html' + GROOVE);
+    await openGrooves(page);
+    // Tab from the Grooves tab in the top bar, and give each stop a kind.
+    await page.locator('#groovesTab').focus();
+    const order = [];
+    for (let i = 0; i < 400 && order.at(-1) !== 'play'; i++) {
+      await page.keyboard.press('Tab');
+      order.push(
+        await page.evaluate(() => {
+          const el = document.activeElement;
+          if (el.closest('#sidePanel')) return 'panel';
+          if (el.id === 'timeLabel') return 'time';
+          if (el.getAttribute('role') === 'gridcell') return 'cell';
+          if (el.id.startsWith('midiPlayImage')) return 'play';
+          return 'other';
+        })
+      );
+    }
+    const first = (kind) => order.indexOf(kind);
+    expect(first('panel')).toBeGreaterThanOrEqual(0);
+    expect(first('panel')).toBeLessThan(first('time'));
+    expect(first('time')).toBeLessThan(first('cell'));
+    expect(first('cell')).toBeLessThan(first('play'));
+  });
+
+  test('the docked panel does not move the layout', async ({ page }) => {
+    await waitForPage(page, '/index.html' + GROOVE);
+    await openGrooves(page);
+    const edges = await page.evaluate(() => ({
+      panel: document.getElementById('sidePanel').getBoundingClientRect().right,
+      tools: document.getElementById('ToolBar').getBoundingClientRect().left,
+      music: document.getElementById('RightHandContent').getBoundingClientRect().left,
+      playback: document.getElementById('PlaybackBar').getBoundingClientRect().left,
+    }));
+    expect(edges).toEqual({ panel: 300, tools: 300, music: 300, playback: 300 });
+  });
+});
+
+// Review Focus 5: the panel is before <main> in the DOM, but the overlay still paints on top.
+test('the overlay panel paints above the bars', async ({ page }) => {
+  await waitForPage(page, '/index.html' + GROOVE);
+  await openGrooves(page);
+  const hits = await page.evaluate(() => {
+    const centre = (id) => {
+      const r = document.getElementById(id).getBoundingClientRect();
+      return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    };
+    return {
+      panel: centre('sidePanel').closest('#sidePanel') !== null,
+      playback: centre('PlaybackBar').id,
+      tools: centre('ToolBar').id,
+    };
+  });
+  expect(hits).toEqual({ panel: true, playback: 'sidePanelBackdrop', tools: 'sidePanelBackdrop' });
+});
+
+for (const [width, height] of [
+  [320, 640],
+  [768, 1024],
+  [1024, 768],
+  [1440, 900],
+]) {
+  test.describe(`at ${width}x${height}`, () => {
+    test.use({ viewport: { width, height } });
+
+    test(`no sideways page scroll at ${width} px`, async ({ page }) => {
+      await waitForPage(page, '/index.html' + GROOVE);
+      const pageWidth = () =>
+        page.evaluate(() => ({
+          scroll: document.documentElement.scrollWidth,
+          client: document.documentElement.clientWidth,
+          // The app box itself must fit too, also when no part of it makes the page scroll.
+          app: document.getElementById('GrooveWriter').getBoundingClientRect().width,
+        }));
+      for (const open of [false, true]) {
+        if (open) await openGrooves(page);
+        const size = await pageWidth();
+        expect(size.scroll, `panel open: ${open}`).toBeLessThanOrEqual(size.client);
+        expect(size.app, `panel open: ${open}`).toBeLessThanOrEqual(size.client);
+      }
+    });
+  });
+}
+
+test.describe('at 320x640', () => {
+  test.use({ viewport: { width: 320, height: 640 } });
+
+  test('at 320 px every cell of bar 1 can be reached and seen', async ({ page }) => {
+    await waitForPage(page, '/index.html' + GROOVE);
+    await page.locator('#hi-hat0').focus();
+    await page.keyboard.press('End');
+    await expect(page.locator('#hi-hat15')).toBeFocused();
+    const seen = await page.evaluate(() => {
+      const cell = document.getElementById('hi-hat15').getBoundingClientRect();
+      const grid = document.getElementById('musicalInput').getBoundingClientRect();
+      const music = document.getElementById('RightHandContent').getBoundingClientRect();
+      return {
+        inViewport: cell.left >= 0 && cell.right <= innerWidth,
+        inGrid: cell.left >= grid.left && cell.right <= grid.right,
+        inMusic: cell.top >= music.top && cell.bottom <= music.bottom,
+      };
+    });
+    expect(seen).toEqual({ inViewport: true, inGrid: true, inMusic: true });
+    // The grid scrolls in its own area. The page does not.
+    expect(await page.evaluate(() => window.scrollX)).toBe(0);
+  });
 });
