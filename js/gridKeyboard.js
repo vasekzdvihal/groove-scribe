@@ -118,10 +118,13 @@ export function initGridKeyboard(container, onToggle) {
 
   container.addEventListener('keydown', function (e) {
     var cell = e.target instanceof HTMLElement ? e.target : null;
-    if (!cell || cell.getAttribute('role') !== 'gridcell' || e.altKey || e.metaKey) return;
+    if (!cell || cell.getAttribute('role') !== 'gridcell') return;
+    focusInGrid = true; // a key on a cell: the keyboard is here, also for Ctrl+Z
+    if (e.altKey || e.metaKey) return;
     if (e.key === ' ' || e.key === 'Enter') {
       if (e.ctrlKey || e.shiftKey) return;
-      onToggle(cell);
+      // A held key sets the note once, not on and off again with each repeat.
+      if (!e.repeat) onToggle(cell);
     } else {
       // Ctrl goes with Home and End only, so Ctrl and an arrow is not a grid key.
       if (e.ctrlKey && e.key !== 'Home' && e.key !== 'End') return;
@@ -134,9 +137,45 @@ export function initGridKeyboard(container, onToggle) {
     e.stopPropagation();
   });
 
+  // Whether the keyboard focus is in the grid. A redraw that a grid key starts (Ctrl+Z can draw
+  // the grid again or hide a lane) removes or hides the focused cell; the check below then
+  // gives the focus to the cell that replaces it. A removed element may or may not send
+  // focusout, so only a focus that leaves for a place that is still there clears the flag.
+  // A redraw that the mouse starts gives no focus: the toolbar buttons do not take the focus
+  // from the cell, so each press of the mouse or a finger clears the flag first.
+  var focusInGrid = false;
+
+  document.addEventListener(
+    'pointerdown',
+    function () {
+      focusInGrid = false;
+    },
+    true
+  );
+
   container.addEventListener('focusin', function (e) {
     var cell = e.target instanceof HTMLElement ? e.target : null;
-    if (cell && cell.getAttribute('role') === 'gridcell') makeStop(cell);
+    if (cell && cell.getAttribute('role') === 'gridcell') {
+      makeStop(cell);
+      focusInGrid = true;
+    }
+  });
+
+  container.addEventListener('focusout', function (e) {
+    var left = e.target instanceof HTMLElement ? e.target : null;
+    var to = e.relatedTarget;
+    if (to instanceof Node && container.contains(to)) return;
+    if (to) {
+      focusInGrid = false;
+      return;
+    }
+    // No new focus: a click on the page, another window, or the cell was removed. Look again
+    // after the change: a cell that is still there and shown lost the focus for real.
+    queueMicrotask(function () {
+      if (left && left.isConnected && isVisible(left) && document.activeElement !== left) {
+        focusInGrid = false;
+      }
+    });
   });
 
   // A mouse or a touch on a cell makes it the stop, but does not take the focus into the grid
@@ -159,9 +198,27 @@ export function initGridKeyboard(container, onToggle) {
   function checkStop() {
     checkPending = false;
     if (stop && stop.isConnected && isVisible(stop)) return;
-    var first =
-      cellsMatching('[data-instrument="hh"]').find(isVisible) || cellsMatching('').find(isVisible);
-    if (first) makeStop(first);
+    var old = stop;
+    var hadFocus =
+      focusInGrid &&
+      (!document.activeElement ||
+        document.activeElement === document.body ||
+        document.activeElement === old);
+    var next = null;
+    if (hadFocus && old) {
+      // The same cell, else the hi-hat at the same place.
+      next = [
+        cellAt(old.dataset.instrument || '', Number(old.dataset.index)),
+        cellAt('hh', Number(old.dataset.index)),
+      ].find(isVisible);
+    }
+    next =
+      next ||
+      cellsMatching('[data-instrument="hh"]').find(isVisible) ||
+      cellsMatching('').find(isVisible);
+    if (!next) return;
+    makeStop(next);
+    if (hadFocus) next.focus();
   }
   new MutationObserver(function () {
     if (checkPending) return;

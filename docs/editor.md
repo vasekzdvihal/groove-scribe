@@ -80,9 +80,12 @@ Rules:
 - The grid reads cell state from the inline colour that the setters write. The setters write the
   hex form; the browser gives rgb back; `gridState.js` compares it with `constant_*_on_color_rgb`
   in `js/constants.js`. A colour changes in the CSS and in `constants.js` together.
-- Every `set_*_state` setter calls `markNoteOn`. It writes `data-on` on the cell, and the CSS
-  draws off notes smaller: a cue for "on" that is not colour. It also ends the cell's
-  `aria-label` with ", on" or ", off". `set_sticking_state` writes only the label.
+- Every note setter calls `markNoteOn`. It writes `data-on` on the cell, and the CSS draws off
+  notes smaller: a cue for "on" that is not colour. It also ends the cell's `aria-label` with
+  ", on" or ", off".
+- `set_sticking_state` does not call `markNoteOn`. A sticking state is a letter, not on or off,
+  and the shrink cue leaves the stickings out. It ends the name with the state instead:
+  "Sticking, beat 1, R", "L", "R and L", "count" or "off".
 - Each bar has two ARIA grids: "Stickings, bar N" and "Notes, bar N". A lane is a `row`, a cell a
   `gridcell` with `data-instrument`, a global `data-index` and `data-name` from `noteCellName()`
   in `js/viewHtml.js`: "Snare, beat 2", "Hi-hat, beat 1 and", "Kick, bar 2, beat 4 a". The bar
@@ -95,8 +98,11 @@ Rules:
   keys do not see these keys, so Space in the grid does not stop playback. Other keys pass
   through: Ctrl+Z still undoes.
 - A click does not move the focus into the grid, so Space still plays after a click. The
-  clicked cell becomes the tab stop. After a redraw or a hidden lane, the first shown hi-hat
-  cell becomes the tab stop.
+  clicked cell becomes the tab stop. A held Space or Enter sets the note once.
+- After a redraw or a hidden lane, the first shown hi-hat cell becomes the tab stop. When a key
+  in the grid started the change (Ctrl+Z, Ctrl+Y), the focus stays in the grid: it goes to the
+  same cell, else to the hi-hat at the same place, else to the first shown hi-hat. A change that
+  a mouse or a finger started gives no focus to the grid.
 - Left and Right change the tempo everywhere on the page, except in a widget that uses the
   arrow keys: the grid, a slider, a list box, a menu, a field (`ownsArrowKeys()`).
 - `renderNoteGrid()` owns the `--notes` and `--groups` custom properties on `#measureContainer`.

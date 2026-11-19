@@ -25,6 +25,11 @@ const stops = (page) =>
     }))
   );
 
+async function chooseDivision(page, id) {
+  await page.click('#divisionMenuButton');
+  await page.click(`#${id}`);
+}
+
 async function tabToGrid(page) {
   for (let i = 0; i < 80; i++) {
     await page.keyboard.press('Tab');
@@ -71,7 +76,7 @@ test('the arrows move, and Space sets a note', async ({ page }) => {
   expect(await focusedId(page)).toBe('kick0');
 });
 
-test('a sticking cell turns through its states and says on or off', async ({ page }) => {
+test('a sticking cell turns through its states and says each one', async ({ page }) => {
   await loadGroove(page, EMPTY);
   await page.click('#stickingsButton');
   await page.locator('#stickingsContextMenu li').filter({ hasText: 'Show or Hide' }).click();
@@ -80,9 +85,48 @@ test('a sticking cell turns through its states and says on or off', async ({ pag
   expect(await focusedId(page)).toBe('sticking2');
   const cell = page.locator('#sticking2');
   await expect(cell).toHaveAttribute('aria-label', 'Sticking, beat 1 and, off');
+  for (const state of ['R', 'L', 'R and L', 'count', 'off']) {
+    await page.keyboard.press('Space');
+    await expect(cell).toHaveAttribute('aria-label', `Sticking, beat 1 and, ${state}`);
+  }
+});
+
+test('a loaded sticking says its letter', async ({ page }) => {
+  await loadGroove(page, EMPTY.replace('&H=', '&Stickings=|RLBc------------|&H='));
+  const names = await page.evaluate(() =>
+    [0, 1, 2, 3, 4].map((i) => document.getElementById('sticking' + i).getAttribute('aria-label'))
+  );
+  expect(names).toEqual([
+    'Sticking, beat 1, R',
+    'Sticking, beat 1 e, L',
+    'Sticking, beat 1 and, R and L',
+    'Sticking, beat 1 a, count',
+    'Sticking, beat 2, off',
+  ]);
+});
+
+test('a held Space or Enter sets the note once', async ({ page }) => {
+  await loadGroove(page, EMPTY);
+  await page.focus('#snare4');
+  // Each key alone: two toggles would hide a missed repeat.
+  for (const key of [' ', 'Enter']) {
+    const seen = await page.evaluate((k) => {
+      const cell = document.getElementById('snare4');
+      const event = new KeyboardEvent('keydown', {
+        key: k,
+        repeat: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      cell.dispatchEvent(event);
+      return event.defaultPrevented;
+    }, key);
+    expect(seen).toBe(true); // the page keys still do not get it
+    await expect(page.locator('#snare4')).toHaveAttribute('aria-label', 'Snare, beat 2, off');
+  }
+  await expect(page.locator('#snare4')).toHaveAttribute('aria-label', 'Snare, beat 2, off');
   await page.keyboard.press('Space');
-  await expect(cell).toHaveAttribute('aria-label', 'Sticking, beat 1 and, on');
-  await expect.poll(() => page.evaluate(() => location.search)).toContain('Stickings=|--R');
+  await expect(page.locator('#snare4')).toHaveAttribute('aria-label', 'Snare, beat 2, on');
 });
 
 test('Right at the end of bar 1 goes to bar 2', async ({ page }) => {
@@ -193,12 +237,20 @@ test('the grid keeps one visible tab stop after a redraw or a hidden lane', asyn
   await expect(page.locator('#hi-hat16')).toBeAttached();
   await expect.poll(() => stops(page)).toEqual([{ id: 'hi-hat0', visible: true }]);
 
-  // A new division draws the grid again too.
+  // A new division draws the grid again too. The focus was in the grid and no click took it
+  // out, so the focus and the stop go to the same cell in the new grid.
   await page.focus('#kick3');
   await page.evaluate(() => window.myGrooveWriter.changeDivision(8));
   await expect(page.locator('#kick15')).toBeAttached(); // 2 bars of 1/8 notes
   await expect(page.locator('#kick16')).not.toBeAttached();
+  await expect.poll(() => stops(page)).toEqual([{ id: 'kick3', visible: true }]);
+  expect(await focusedId(page)).toBe('kick3');
+
+  // From the mouse, a new division takes the focus out of the grid: the first hi-hat is the stop.
+  await chooseDivision(page, 'subdivision_16ths');
+  await expect(page.locator('#kick31')).toBeAttached();
   await expect.poll(() => stops(page)).toEqual([{ id: 'hi-hat0', visible: true }]);
+  expect(await isCell(page)).toBe(false);
 
   // A tom lane that hides takes its stop with it: the stop moves to a cell that shows.
   await page.click('#showHideTomsButton');
@@ -221,4 +273,45 @@ test('Ctrl+Z in the grid undoes the last note', async ({ page }) => {
   await page.keyboard.press('Control+z');
   await expect(page.locator('#snare4')).toHaveAttribute('aria-label', 'Snare, beat 2, off');
   await expect.poll(() => page.evaluate(() => location.search)).toContain('S=|----------------|');
+});
+
+test('the focus stays in the grid when Ctrl+Z draws the grid again', async ({ page }) => {
+  await loadGroove(page, EMPTY);
+  await page.click('#addMeasureButton');
+  await expect(page.locator('#snare16')).toBeAttached();
+  await page.focus('#snare4');
+  await page.keyboard.press('Control+z'); // takes back the added bar: a redraw
+  await expect(page.locator('#snare16')).not.toBeAttached();
+  await expect.poll(() => focusedId(page)).toBe('snare4');
+  expect(await stops(page)).toEqual([{ id: 'snare4', visible: true }]);
+  // Redo draws the second bar again, and the focus stays too.
+  await page.keyboard.press('Control+y');
+  await expect(page.locator('#snare16')).toBeAttached();
+  await expect.poll(() => focusedId(page)).toBe('snare4');
+  expect(await stops(page)).toEqual([{ id: 'snare4', visible: true }]);
+});
+
+test('the focus goes to the hi-hat when Ctrl+Z hides the stickings lane', async ({ page }) => {
+  await loadGroove(page, EMPTY);
+  await page.click('#stickingsButton');
+  await page.locator('#stickingsContextMenu li').filter({ hasText: 'Show or Hide' }).click();
+  await page.focus('#sticking3');
+  await page.keyboard.press('Control+z'); // takes back the shown stickings
+  await expect(page.locator('#sticking3')).toBeHidden();
+  await expect.poll(() => focusedId(page)).toBe('hi-hat3');
+  expect(await stops(page)).toEqual([{ id: 'hi-hat3', visible: true }]);
+});
+
+test('a hidden stickings lane takes its stop with it', async ({ page }) => {
+  await loadGroove(page, EMPTY);
+  await page.click('#stickingsButton');
+  await page.locator('#stickingsContextMenu li').filter({ hasText: 'Show or Hide' }).click();
+  await page.focus('#sticking3');
+  expect(await stops(page)).toEqual([{ id: 'sticking3', visible: true }]);
+  await page.click('#stickingsButton');
+  await page.locator('#stickingsContextMenu li').filter({ hasText: 'Show or Hide' }).click();
+  await expect(page.locator('#sticking3')).toBeHidden();
+  await expect.poll(() => stops(page)).toEqual([{ id: 'hi-hat0', visible: true }]);
+  // A redraw that the mouse starts does not take the focus into the grid.
+  expect(await isCell(page)).toBe(false);
 });

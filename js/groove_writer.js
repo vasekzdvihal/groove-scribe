@@ -291,6 +291,14 @@ function GrooveWriter() {
     }
   }
 
+  // What a sticking cell says after its place: "Sticking, beat 1, R and L".
+  var STICKING_STATE_WORDS = { off: 'off', right: 'R', left: 'L', both: 'R and L', count: 'count' };
+
+  function labelStickingState(cell, state) {
+    if (cell.dataset.name && STICKING_STATE_WORDS[state])
+      cell.setAttribute('aria-label', cell.dataset.name + ', ' + STICKING_STATE_WORDS[state]);
+  }
+
   function labelNoteState(cell, on) {
     if (cell.dataset.name)
       cell.setAttribute('aria-label', cell.dataset.name + (on ? ', on' : ', off'));
@@ -543,9 +551,10 @@ function GrooveWriter() {
   }
 
   function set_sticking_state(id, new_state, make_sound) {
-    // A sticking cell has no data-on: its off state already shows R and L in grey.
+    // A sticking cell takes no data-on: only the shrink cue reads it, and that cue leaves the
+    // stickings out. Its state is a letter, not on or off, so the name says the letter.
     var stickingCell = document.getElementById('sticking' + id);
-    if (stickingCell) labelNoteState(stickingCell, new_state !== 'off');
+    if (stickingCell) labelStickingState(stickingCell, new_state);
     // turn both off
     document.getElementById('sticking_right' + id).style.color = constant_note_hidden_color_rgb;
     document.getElementById('sticking_left' + id).style.color = constant_note_hidden_color_rgb;

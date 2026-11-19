@@ -3,12 +3,12 @@ import AxeBuilder from '@axe-core/playwright';
 // Helpers for the accessibility tests. Playwright cannot import one spec file from another,
 // so later specs import from here.
 
-// The text in a note cell (R, L, R/L or a count in a sticking cell) is the value of the cell,
-// not its label, so a name such as "Sticking, beat 1, on" need not contain it. axe treats the
-// text of a checkbox or a switch the same way ("needs review", not a violation), but it does not
-// know that a grid cell can hold a value. So this one rule skips the note cells.
+// The text in a sticking cell (R, L, R/L, a count) is the value of the cell, not its label.
+// axe counts all four stacked glyphs as visible text, also the transparent ones, so no state
+// name can contain it. axe treats a checkbox or a switch the same way ("needs review"), but it
+// does not know that a grid cell can hold a value. So this one rule skips the sticking cells.
 function isValueTextCell(node) {
-  return /^<[a-z]+\b[^>]*\brole="gridcell"/.test(node.html);
+  return /^<[a-z]+\b[^>]*\brole="gridcell"[^>]*\bdata-instrument="sticking"/.test(node.html);
 }
 
 function withoutValueTextCells(violations) {
