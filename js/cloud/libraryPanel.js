@@ -570,6 +570,7 @@ function startLibrary({
     stopDirty();
     document.removeEventListener('visibilitychange', refresh);
     window.removeEventListener('online', refresh);
+    window.removeEventListener('keydown', onMenuEscape, true);
     showGrooveSaved(false);
   }
 
@@ -955,17 +956,14 @@ function startLibrary({
     return true;
   }
 
-  // The same window listener as for a tool form: it hears Escape before the side panel does, so
-  // the panel stays open.
-  window.addEventListener(
-    'keydown',
-    (event) => {
-      if (event.key === 'Escape' && !isAskingToDiscard() && closeRowMenuOf(event.target)) {
-        event.stopPropagation();
-      }
-    },
-    true
-  );
+  // A second window listener, next to the one for the tool forms. It hears Escape before the
+  // side panel does, so the panel stays open. stop() removes it with the session.
+  function onMenuEscape(event) {
+    if (event.key === 'Escape' && !isAskingToDiscard() && closeRowMenuOf(event.target)) {
+      event.stopPropagation();
+    }
+  }
+  window.addEventListener('keydown', onMenuEscape, true);
 
   function render() {
     // See onPointerDown: a click on the list or a tool form is in progress.

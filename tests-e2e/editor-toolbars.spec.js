@@ -151,7 +151,9 @@ for (const [name, width, height] of [
         await tab.click();
       } else {
         // Overlay: the panel and its backdrop cover the tab, so the panel has its own button.
-        await page.click('#sidePanelClose');
+        // Pressed by key, it gives the focus back to the tab.
+        await page.focus('#sidePanelClose');
+        await page.keyboard.press('Enter');
         await expect(tab).toBeFocused();
       }
       await expect(panel).toBeHidden();

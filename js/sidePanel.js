@@ -170,14 +170,22 @@ export function createSidePanel({ tabs }) {
     if (byUser && !docked.matches) closeButton.focus();
   }
 
+  // The last input before a close: a pointer or a key.
+  let lastInputWasPointer = false;
+  document.addEventListener('pointerdown', () => (lastInputWasPointer = true), true);
+  document.addEventListener('keydown', () => (lastInputWasPointer = false), true);
+
   function close() {
     if (shownTab === null) return;
     const button = buttons.get(shownTab);
-    // A docked panel is not a dialog. Focus stays on the page, so space still plays.
-    const moveFocus = !docked.matches || panel.contains(document.activeElement);
+    // Focus goes back to the tab only when it was in the panel and the last input was a key (a
+    // key pick, Escape). After a tap, space must play, not press the tab again. Opening by tap
+    // puts focus in the panel, so where the focus is does not tell a tap from a key.
+    const inPanel = panel.contains(document.activeElement);
     rememberDockedChoice(false);
     setShown(null);
-    if (moveFocus) button.focus();
+    if (inPanel && !lastInputWasPointer) button.focus();
+    else if (inPanel) /** @type {HTMLElement} */ (document.activeElement).blur();
   }
 
   /** @param {TabId} id  shows that tab, or closes the panel when that tab is shown */

@@ -160,9 +160,15 @@ test('the panel closes with the close button, the backdrop and Escape', async ({
   await openPanel(page);
   await expect(panel).toBeVisible();
   await expect(page.getByRole('button', { name: 'Close panel' })).toBeFocused();
-  await page.getByRole('button', { name: 'Close panel' }).click();
+  // By key, the Close button gives the focus back to the tab. A tap leaves it on the page.
+  await page.keyboard.press('Enter');
   await expect(panel).toBeHidden();
   await expect(toggle).toBeFocused();
+
+  await openPanel(page);
+  await page.getByRole('button', { name: 'Close panel' }).click();
+  await expect(panel).toBeHidden();
+  await expect(toggle).not.toBeFocused();
 
   await openPanel(page);
   await expect(panel).toBeVisible();
@@ -653,6 +659,25 @@ test.describe('the keyboard in a groove menu', () => {
     await expect(page.getByRole('button', { name: 'Rename lesson' })).toHaveCount(0);
     await expect(more).toBeFocused();
     await expect(page.locator('#sidePanel')).toHaveCSS('transform', 'none');
+  });
+
+  test('a menu Escape of an earlier session does not redraw the next session', async ({ page }) => {
+    await signedInPanel(page);
+    await addLink(page, QUERY, 'Paradiddle');
+    await grooveMore(page).click();
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(1);
+    await signOut(page);
+    await openPanel(page);
+    await signIn(page, 'bob@example.com');
+    await addLink(page, QUERY, 'Bobbeat');
+    await page.getByRole('button', { name: 'Options for Bobbeat', exact: true }).click();
+    await page.getByRole('button', { name: 'Rename', exact: true }).focus();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'Options for Bobbeat', exact: true })
+    ).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Paradiddle', exact: true })).toHaveCount(0);
   });
 
   test('the signed-in library has no serious or critical axe violation', async ({ page }) => {

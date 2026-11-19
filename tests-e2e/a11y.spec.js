@@ -231,8 +231,8 @@ test('the embed content is in a main landmark', async ({ page }) => {
 
 test.describe('at 1440x900', () => {
   // The page has 22 stops from its start to Play: the top bar, the panel, the tools, the grid.
-  // The open Grooves tab adds one stop for each groove.
-  const MAX_STOPS = 200;
+  // The open Grooves tab adds one stop for each of its 17 grooves.
+  const MAX_STOPS = 60;
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test('the panel comes before the tools in the tab order', async ({ page }) => {
@@ -425,6 +425,29 @@ test('a groove in the Grooves tab opens by keyboard', async ({ page }) => {
   await expect.poll(() => page.url()).not.toBe(before);
   await expect(page.locator('#groovesTab')).toBeFocused();
 });
+
+for (const [width, height] of [
+  [1024, 768],
+  [1440, 900],
+]) {
+  test(`after a tap on a groove at ${width}x${height}, Space plays and the panel stays closed`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height });
+    await waitForPage(page, '/index.html');
+    await page.click('#groovesTab');
+    await expect(page.locator('#groovesPanel .grooveListButton').first()).toBeVisible();
+    await page.locator('#groovesPanel .grooveListButton').nth(1).click();
+    if (width < 1100) await expect(page.locator('#sidePanel')).not.toHaveCSS('transform', 'none');
+    await expect(page.locator('#groovesTab')).not.toBeFocused();
+    await page.keyboard.press('Space');
+    await expect
+      .poll(() => page.evaluate(() => window.myGrooveWriter.myGrooveUtils.isPlaying()))
+      .toBe(true);
+    if (width < 1100) await expect(page.locator('#sidePanel')).not.toHaveCSS('transform', 'none');
+    await page.evaluate(() => window.myGrooveWriter.myGrooveUtils.stopMIDI_playback());
+  });
+}
 
 test('a tapped groove row does not keep focus', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
