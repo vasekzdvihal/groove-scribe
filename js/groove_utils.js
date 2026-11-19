@@ -666,6 +666,17 @@ function GrooveUtils() {
     return _urlBuild(myGrooveData, url_destination);
   };
 
+  // The controls that Space presses or types into. Play is a role=button too: it handles Space
+  // itself (AddMidiPlayerToPage).
+  var SPACE_OWNERS =
+    'button, a[href], input:not([type="range"]), select, textarea, [role="button"], ' +
+    '[role="menuitem"], [role="option"], [role="tab"], [role="checkbox"], [role="switch"], ' +
+    '[role="gridcell"], [contenteditable]:not([contenteditable="false"])';
+
+  function spaceBelongsTo(target) {
+    return target instanceof Element && target.closest(SPACE_OWNERS) !== null;
+  }
+
   function setupHotKeys() {
     // isCtrl is reassigned by the onkeyup/onkeydown handlers below (used to be
     // read by now-commented-out CTRL-S code); removing the declaration would
@@ -685,14 +696,9 @@ function GrooveUtils() {
 			return false;
 			}
 			 */
-      // only accept the event if it not going to an INPUT field
-      // otherwise we can't use spacebar in text fields :(
-      if (
-        e.which == 32 &&
-        (e.target.type == 'range' ||
-          (e.target.tagName.toUpperCase() != 'INPUT' &&
-            e.target.tagName.toUpperCase() != 'TEXTAREA'))
-      ) {
+      // Space plays, except on a control that uses Space itself: a button presses, a field
+      // types, a select opens. A range slider and the page itself still play.
+      if (e.which == 32 && !spaceBelongsTo(e.target)) {
         // spacebar
         root.startOrStopMIDI_playback();
         return false;
@@ -1968,11 +1974,12 @@ function GrooveUtils() {
     if (browserInfo.browser == 'MSIE' && browserInfo.version < 12) isIE10 = true;
 
     // now attach the onclicks
-    // Enter presses Play, as for a button. Space plays through the document hot key.
+    // Enter and Space press Play, as for a button. The document hot key leaves Space on a
+    // button alone, so Play handles it here.
     var playControl = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
     if (playControl) {
       playControl.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
+        if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           if (event.repeat) return;
           playControl.click();

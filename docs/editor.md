@@ -46,11 +46,17 @@ Rules:
   scrolls into view (`initBarScroll` in `js/editorChrome.js`).
 - Two filled buttons side by side keep at least 4 px between them, so a focus ring does not
   touch the next button.
+- Space plays or stops the groove (`setupHotKeys` in `js/groove_utils.js`), except on a control
+  that uses Space itself: a button, a link, a field, a select, a menu item, a tab, a grid cell.
+  There Space presses or types, as on any page. A range slider and the page itself (nothing
+  focused, as after a tap) still play. Play is a `role="button"` span: it handles Enter and Space
+  itself.
 - Popovers, the old menus and the popups take the focus only when a key opened them
   (`lastInputWasKeyboard()` in `js/editorChrome.js`). A tap opens them as before and leaves the
   focus where it is, so Space still plays on the tablet.
   - A popover (`initPopovers`) gives the focus to its first shown control. Escape, or an item with
-    `data-popover-close`, gives it back to the button. Tab out of the popover closes it.
+    `data-popover-close`, gives it back to the button. Tab out of the popover closes it. A tap
+    that closes it moves the focus out of the hidden popover to the page, not to the button.
   - The old menus (`.noteContextMenu > ul`) are ARIA menus (`initContextMenus`, which wraps
     `showContextMenu` and `hideContextMenu`). The first item gets the focus. Up and Down wrap,
     Home and End go to the ends, Enter or Space picks, Escape closes, Tab closes and goes on. When
@@ -86,7 +92,9 @@ Rules:
 - Below 1100 px the panel slides over the editor like a dialog, with a backdrop and a Close panel
   button. A groove picked in the Grooves tab closes the panel and puts focus on the tab. A
   permutation choice keeps the panel open, because its options show in the same panel. Docked,
-  both picks move focus out of the panel.
+  both picks move focus out of the panel. Escape closes the overlay panel, but not when it is
+  pressed in an old menu (`.noteContextMenu`) or a popup (`[role="dialog"]`): it closes that
+  menu or popup only.
 - In the DOM the panel (`#sidePanel`, after its backdrop) is right after the top bar's
   `.nonPrintable` box, before `<main>`. So the tab order is the tabs, the panel, then the tools,
   the grid and the playback bar. A page without `#TopNav` gets the panel at the end of `<body>`.
@@ -129,6 +137,9 @@ Rules:
   through: Ctrl+Z still undoes.
 - A click does not move the focus into the grid, so Space still plays after a click. The
   clicked cell becomes the tab stop. A held Space or Enter sets the note once.
+- In Note types mode, Space or Enter on a cell opens the note menu just below the cell
+  (`NOTE_MENU_LIFT` in `js/main.js`), so the menu does not cover it. A tap opens it at the tap,
+  as before.
 - After a redraw or a hidden lane, the first shown hi-hat cell becomes the tab stop. When a key
   in the grid started the change (Ctrl+Z, Ctrl+Y), the focus stays in the grid: it goes to the
   same cell, else to the hi-hat at the same place, else to the first shown hi-hat. A change that

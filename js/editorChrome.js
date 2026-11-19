@@ -49,12 +49,14 @@ export function initPopovers() {
   function close() {
     if (!open) return;
     const { popover, trigger } = open;
-    // A key used the popover: the focus goes back to its button. A tap left the focus outside.
-    const hadFocus = popover.contains(document.activeElement);
+    // A key closes it: the focus goes back to its button. A tap closes it: the focus leaves the
+    // hidden popover for the page, as after any tap, so Space plays.
+    const focused = popover.contains(document.activeElement) ? document.activeElement : null;
     popover.hidden = true;
     trigger.setAttribute('aria-expanded', 'false');
     open = null;
-    if (hadFocus) trigger.focus();
+    if (focused && lastInputWasKeyboard()) trigger.focus();
+    else if (focused instanceof HTMLElement) focused.blur();
   }
 
   for (const trigger of document.querySelectorAll('[data-popover]')) {

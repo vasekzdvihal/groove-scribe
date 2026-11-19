@@ -1045,16 +1045,23 @@ hr {
   font-size: 100%;
   float: right;
   cursor: pointer;
-  /* A button, so that the keyboard reaches it. It looks as the icon alone did. */
-  margin: 0;
-  padding: 0;
+  /* A button, so that the keyboard reaches it. It looks as the icon alone did. The padding
+     makes a 44 px touch target round the 18 x 19 px icon, and the negative margin keeps the
+     icon and the layout where they were. */
+  margin: -12.5px -13px;
+  padding: 12.5px 13px;
   border: 0;
   background: none;
   color: inherit;
   font-family: inherit;
   line-height: inherit;
 }
+/* The ring goes round the icon, not round the larger touch target. */
 #fullURLPopupCloseButton:focus-visible {
+  outline: none;
+}
+#fullURLPopupCloseButton:focus-visible > i {
+  border-radius: 50%;
   outline: 2px solid #1f73a8;
   outline-offset: 2px;
 }

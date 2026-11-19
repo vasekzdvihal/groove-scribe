@@ -189,6 +189,8 @@ test('Enter on a cell in advanced edit opens the note menu next to the cell', as
   const cellBox = await cell.boundingBox();
   const menuBox = await menu.boundingBox();
   expect(Math.abs(menuBox.y - (cellBox.y + cellBox.height))).toBeLessThanOrEqual(60);
+  // The menu opens below the cell, so the cell stays in view.
+  expect(menuBox.y).toBeGreaterThanOrEqual(cellBox.y + cellBox.height - 1);
   await expect(focused(page)).toHaveText('Off');
   await page.keyboard.press('ArrowDown');
   await expect(focused(page)).toHaveText('Snare Normal');
@@ -304,4 +306,100 @@ test('a tap on Download opens the menu below More, in view', async ({ page }) =>
   const more = await page.locator('#moreButton').boundingBox();
   expect(box.y).toBeGreaterThanOrEqual(more.y + more.height);
   expect(box.x + box.width).toBeLessThanOrEqual(1024);
+});
+
+const isPlaying = (page) => page.evaluate(() => window.myGrooveWriter.myGrooveUtils.isPlaying());
+const stopPlaying = (page) =>
+  page.evaluate(() => window.myGrooveWriter.myGrooveUtils.stopMIDI_playback());
+
+test('Space on a focused button presses it and does not play', async ({ page }) => {
+  await loadGroove(page, GROOVE);
+  await tabTo(page, '#stickingsButton');
+  await page.keyboard.press(' ');
+  await expect(page.locator('#stickingsContextMenu')).toBeVisible();
+  await expect(focused(page)).toHaveAttribute('role', 'menuitem');
+  expect(await isPlaying(page)).toBe(false);
+});
+
+test('Space on a popover item presses it and does not play', async ({ page }) => {
+  await loadGroove(page, GROOVE);
+  await tabTo(page, '#divisionMenuButton');
+  await page.keyboard.press('Enter');
+  await expect(focused(page)).toHaveId('subdivision_8ths');
+  await page.keyboard.press(' ');
+  await expect(page.locator('#divisionMenuLabel')).toHaveText('1/8 notes');
+  expect(await isPlaying(page)).toBe(false);
+});
+
+test('Space on Play plays, and Space with no focus plays', async ({ page }) => {
+  await loadGroove(page, GROOVE);
+  const play = page.locator('[id^="midiPlayImage"]');
+  await expect(play).toHaveClass(/Stopped/);
+  await play.focus();
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(true);
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(false);
+  // The tablet flow: nothing has the focus, and Space plays.
+  await page.evaluate(() => document.activeElement.blur());
+  await page.keyboard.press(' ');
+  await expect.poll(() => isPlaying(page)).toBe(true);
+  await stopPlaying(page);
+});
+
+test('a tap on the button of a popover that a key opened does not focus the button', async ({
+  page,
+}) => {
+  await loadGroove(page, GROOVE);
+  await tabTo(page, '#divisionMenuButton');
+  await page.keyboard.press('Enter');
+  await expect(focused(page)).toHaveId('subdivision_8ths');
+  await page.click('#divisionMenuButton');
+  await expect(page.locator('#divisionPopover')).toBeHidden();
+  await expect(page.locator('#divisionMenuButton')).not.toBeFocused();
+  // Space plays again, as after any tap.
+  expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+});
+
+test('the share Close button is a 44 px touch target', async ({ page }) => {
+  await loadGroove(page, GROOVE);
+  await page.click('#shareSaveButton');
+  const box = await page.locator('#fullURLPopupCloseButton').boundingBox();
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+  // The icon stays where it was: at the top right of the popup, in line with the title.
+  const icon = await page.locator('#fullURLPopupCloseButton i').boundingBox();
+  const title = await page.locator('#fullURLPopupTitle').boundingBox();
+  expect(Math.round(icon.y)).toBe(Math.round(title.y) + 3);
+  expect(Math.round(icon.x + icon.width)).toBe(Math.round(title.x + title.width));
+});
+
+test.describe('with the overlay side panel open', () => {
+  async function openPanel(page) {
+    await loadGroove(page, GROOVE);
+    await page.locator('#upperLeft .panel-tab', { hasText: 'Grooves' }).click();
+    await expect(page.locator('#sidePanel')).toBeVisible();
+  }
+
+  test('Escape in a menu closes the menu, not the panel', async ({ page }) => {
+    await openPanel(page);
+    await page.focus('#stickingsButton');
+    await page.keyboard.press('Enter');
+    await expect(focused(page)).toHaveAttribute('role', 'menuitem');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#stickingsContextMenu')).toBeHidden();
+    // The panel slides out with a transition, so check its tab, not its visibility.
+    await expect(page.locator('#groovesTab')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('Escape in a popup closes the popup, not the panel', async ({ page }) => {
+    await openPanel(page);
+    await page.focus('#timeLabel');
+    await page.keyboard.press('Enter');
+    await expect(focused(page)).toHaveId('timeSigPopupTimeSigTop');
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#timeSigPopup')).toBeHidden();
+    // The panel slides out with a transition, so check its tab, not its visibility.
+    await expect(page.locator('#groovesTab')).toHaveAttribute('aria-pressed', 'true');
+  });
 });

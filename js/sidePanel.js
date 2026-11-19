@@ -225,6 +225,9 @@ export function createSidePanel({ tabs }) {
     (event) => {
       // Escape in the dialog means Keep editing. It must not also close the panel.
       if (isAskingToDiscard()) return;
+      // Escape in a menu or a popup of the editor closes that menu or popup only.
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('.noteContextMenu, [role="dialog"]')) return;
       if (event.key === 'Escape' && shownTab !== null && !docked.matches) close();
     },
     true

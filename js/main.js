@@ -129,14 +129,17 @@ if (utils.is_touch_device()) {
 fillContainer('PermutationOptions', myGrooveWriter.HTMLforPermutationOptions());
 
 myGrooveWriter.renderNoteGrid();
-// The keyboard and screen readers use the note grid. Space or Enter on a cell acts as a click,
-// at the bottom left of the cell, so the note menu of advanced edit opens next to it.
+// The keyboard and screen readers use the note grid. Space or Enter on a cell acts as a click
+// at the left of the cell. The note menu of advanced edit opens 30 px above a click
+// (noteRightClick), so this click is 30 px below the cell: the menu then starts at the bottom of
+// the cell and does not cover it.
+const NOTE_MENU_LIFT = 30;
 const measureContainer = document.getElementById('measureContainer');
 if (measureContainer) {
   initGridKeyboard(measureContainer, (cell) => {
     const rect = cell.getBoundingClientRect();
     myGrooveWriter.noteLeftClick(
-      { clientX: rect.left, clientY: rect.bottom },
+      { clientX: rect.left, clientY: rect.bottom + NOTE_MENU_LIFT },
       cell.dataset.instrument,
       Number(cell.dataset.index)
     );
