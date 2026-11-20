@@ -90,10 +90,13 @@ body {
   background: #666666;
   margin: 4px 4px 4px 4px;
 }
-.midiPlayImage:hover,
-.midiRepeatImage:hover {
-  color: #ffffff;
-  background: #777777;
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  .midiPlayImage:hover,
+  .midiRepeatImage:hover {
+    color: #ffffff;
+    background: #777777;
+  }
 }
 .midiExpandImage {
   font-size: 26px;
@@ -431,8 +434,10 @@ input[type='range']:active::-webkit-slider-thumb {
   font-family: inherit;
   font-size: 16px;
 }
-.soundRetry:hover {
-  background: #c02e20;
+@media (hover: hover) {
+  .soundRetry:hover {
+    background: #c02e20;
+  }
 }
 .midiPlayImage:focus-visible {
   outline: 3px solid var(--focus-ring, #ffffff);

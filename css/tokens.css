@@ -49,8 +49,11 @@
   display: none;
 }
 
-.btn:hover {
-  background: color-mix(in srgb, var(--surface-2) 85%, var(--text));
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  .btn:hover {
+    background: color-mix(in srgb, var(--surface-2) 85%, var(--text));
+  }
 }
 
 /* A tablet shows no hover, so a press has its own, darker step. */
@@ -69,9 +72,11 @@
   border-color: var(--accent);
 }
 
-.btn-primary:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+@media (hover: hover) {
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
 }
 
 .btn-primary:active {
@@ -86,9 +91,11 @@
   border-color: var(--danger);
 }
 
-.btn-danger:hover {
-  background: color-mix(in srgb, var(--danger) 85%, #000000);
-  border-color: color-mix(in srgb, var(--danger) 85%, #000000);
+@media (hover: hover) {
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--danger) 85%, #000000);
+    border-color: color-mix(in srgb, var(--danger) 85%, #000000);
+  }
 }
 
 .btn-danger:active {

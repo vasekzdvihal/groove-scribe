@@ -108,8 +108,11 @@
   border-radius: var(--radius);
 }
 
-#helpLink:hover {
-  background: rgba(255, 255, 255, 0.1);
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  #helpLink:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
 
 #helpLink:focus-visible {
@@ -153,8 +156,10 @@
   white-space: nowrap;
 }
 
-.tool:hover {
-  background: rgba(255, 255, 255, 0.1);
+@media (hover: hover) {
+  .tool:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
 
 /* Undo or Redo with nothing to undo or redo. groove_writer.js sets aria-disabled. */
@@ -163,8 +168,10 @@
   cursor: default;
 }
 
-.tool[aria-disabled='true']:hover {
-  background: none;
+@media (hover: hover) {
+  .tool[aria-disabled='true']:hover {
+    background: none;
+  }
 }
 
 .tool:focus-visible,
@@ -190,8 +197,10 @@
   background: var(--line);
 }
 
-.tool-filled:hover {
-  background: #58666f;
+@media (hover: hover) {
+  .tool-filled:hover {
+    background: #58666f;
+  }
 }
 
 .tool-primary {
@@ -200,8 +209,10 @@
   font-weight: 700;
 }
 
-.tool-primary:hover {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .tool-primary:hover {
+    background: var(--accent-hover);
+  }
 }
 
 .tool-primary:active {
@@ -310,8 +321,10 @@
   }
 }
 
-#helpAnchor:hover {
-  background: rgba(255, 255, 255, 0.1);
+@media (hover: hover) {
+  #helpAnchor:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
 
 #helpAnchor .fa-question-circle {
@@ -821,8 +834,10 @@
   line-height: 68px;
 }
 
-#midiPlayer .midiPlayImage:hover {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  #midiPlayer .midiPlayImage:hover {
+    background: var(--accent-hover);
+  }
 }
 
 #midiPlayer .midiPlayImage:active {
@@ -1104,8 +1119,10 @@
   margin-right: auto;
 }
 
-.metronomeButton.Options:hover {
-  background: rgba(255, 255, 255, 0.1);
+@media (hover: hover) {
+  .metronomeButton.Options:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
 
 /* An option is on (Solo, Speed up or an offset): the cog is filled like the other buttons that
@@ -1115,8 +1132,10 @@
   background: var(--accent);
 }
 
-.metronomeButton.Options.selected:hover {
-  background: var(--accent-hover);
+@media (hover: hover) {
+  .metronomeButton.Options.selected:hover {
+    background: var(--accent-hover);
+  }
 }
 
 .metronomeButton.Options.selected:active {
@@ -1152,8 +1171,10 @@
   cursor: pointer;
 }
 
-.tool-popover button:hover {
-  background: #e7ecef;
+@media (hover: hover) {
+  .tool-popover button:hover {
+    background: #e7ecef;
+  }
 }
 
 .tool-popover button .fa {
@@ -1298,8 +1319,10 @@
   cursor: pointer;
 }
 
-.noteContextMenu > ul.list li:hover {
-  background: #e7ecef;
+@media (hover: hover) {
+  .noteContextMenu > ul.list li:hover {
+    background: #e7ecef;
+  }
 }
 
 /* "Rotate through" stays on one line, next to its check mark. */
@@ -1371,9 +1394,11 @@
   cursor: pointer;
 }
 
-.grooveListLI:hover {
-  color: var(--text);
-  background: var(--surface-2);
+@media (hover: hover) {
+  .grooveListLI:hover {
+    color: var(--text);
+    background: var(--surface-2);
+  }
 }
 
 #undoButton {

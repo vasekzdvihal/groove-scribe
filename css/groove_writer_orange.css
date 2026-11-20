@@ -922,9 +922,12 @@ body {
   border-bottom: solid 1px #393939;
   text-decoration: none;
 }
-.noteContextMenu > ul.list li:hover,
-ul.list a:hover {
-  background: #cccccc;
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  .noteContextMenu > ul.list li:hover,
+  ul.list a:hover {
+    background: #cccccc;
+  }
 }
 .noteContextMenu > ul.list li:last-child {
   border: none;
@@ -959,8 +962,10 @@ ul.list a:hover {
   padding-left: 15px;
   border-bottom: solid 1px #393939;
 }
-.grooveListLI:hover {
-  background: #cccccc;
+@media (hover: hover) {
+  .grooveListLI:hover {
+    background: #cccccc;
+  }
 }
 hr {
   width: 795px;
@@ -1032,8 +1037,11 @@ hr {
   background: #e7ecef;
   border-color: #c3ccd2;
 }
-:is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration) .btn:not(.btn-primary):hover {
-  background: #dce3e7;
+@media (hover: hover) {
+  :is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration)
+    .btn:not(.btn-primary):hover {
+    background: #dce3e7;
+  }
 }
 :is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration)
   .btn:not(.btn-primary):active {
@@ -1067,8 +1075,10 @@ hr {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-#fullURLPopupCloseButton:hover {
-  color: #444;
+@media (hover: hover) {
+  #fullURLPopupCloseButton:hover {
+    color: #444;
+  }
 }
 #fullURLPopupTitle {
   font-size: 18px;
@@ -1136,9 +1146,11 @@ hr {
   border: 1px solid #c3ccd2;
   border-radius: var(--radius);
 }
-#shareButton:hover {
-  color: #14191c;
-  background: #dce3e7;
+@media (hover: hover) {
+  #shareButton:hover {
+    color: #14191c;
+    background: #dce3e7;
+  }
 }
 #shareButton:active {
   background: #c3ccd2;

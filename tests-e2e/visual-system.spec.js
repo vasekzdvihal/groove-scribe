@@ -437,3 +437,81 @@ for (const [width, height] of [
     });
   }
 }
+
+// A touch screen has no hover. A tap must not leave a hover fill on a button until the next tap
+// elsewhere (iPad Safari keeps :hover on the tapped element). The hover fills are only for a
+// mouse: @media (hover: hover). Stand-in buttons with no actions carry the classes.
+const HOVER_STAND_INS = `
+  <div id="hoverStandIns" style="position: fixed; top: 120px; left: 20px; z-index: 10000;
+    display: flex; flex-wrap: wrap; gap: 8px; width: 600px; padding: 8px; background: #222a2f">
+    <button type="button" class="btn" id="standInBtn">Neutral</button>
+    <button type="button" class="btn btn-primary" id="standInPrimary">Primary</button>
+    <button type="button" class="btn btn-danger" id="standInDanger">Danger</button>
+    <button type="button" class="tool" id="standInTool"><span class="tool-in">Tool</span></button>
+    <button type="button" class="tool tool-filled" id="standInFilled">
+      <span class="tool-in">Filled</span></button>
+    <button type="button" class="tool tool-primary" id="standInToolPrimary">
+      <span class="tool-in">Tool primary</span></button>
+    <div class="tool-popover" style="position: static; display: block">
+      <button type="button" id="standInPopoverItem">Popover item</button></div>
+    <ul class="grooveListUL"><li><button type="button" class="grooveListLI" id="standInGrooveRow">
+      Groove row</button></li></ul>
+  </div>`;
+const STAND_IN_IDS = [
+  'standInBtn',
+  'standInPrimary',
+  'standInDanger',
+  'standInTool',
+  'standInFilled',
+  'standInToolPrimary',
+  'standInPopoverItem',
+  'standInGrooveRow',
+];
+const fill = (page, selector) =>
+  page.locator(selector).evaluate((node) => getComputedStyle(node).backgroundColor);
+
+test.describe('on a touch screen', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 1024, height: 768 } });
+
+  test('a tapped button keeps its rest fill', async ({ page }) => {
+    await page.goto('/index.html' + GROOVE);
+    await page.waitForSelector('#svgTarget svg');
+    expect(await page.evaluate(() => matchMedia('(hover: hover)').matches)).toBe(false);
+    await page.evaluate(
+      (html) => document.body.insertAdjacentHTML('beforeend', html),
+      HOVER_STAND_INS
+    );
+    for (const id of STAND_IN_IDS) {
+      const rest = await fill(page, `#${id}`);
+      await page.tap(`#${id}`);
+      // A press shows :active for a moment after the tap. Then the rest fill must come back.
+      await expect.soft.poll(() => fill(page, `#${id}`), { message: id, timeout: 2000 }).toBe(rest);
+    }
+    await page.evaluate(() => document.getElementById('hoverStandIns').remove());
+
+    // COPY in the share popup, a neutral button on white.
+    await page.tap('#shareSaveButton');
+    await expect(page.locator('#fullURLPopup')).toBeVisible();
+    const rest = await fill(page, '#fullURLPopupCopyButton');
+    await page.tap('#fullURLPopupCopyButton');
+    await expect.soft
+      .poll(() => fill(page, '#fullURLPopupCopyButton'), { message: 'COPY', timeout: 2000 })
+      .toBe(rest);
+  });
+});
+
+test('a mouse still shows the hover fill', async ({ page }) => {
+  await page.goto('/index.html' + GROOVE);
+  await page.waitForSelector('#svgTarget svg');
+  expect(await page.evaluate(() => matchMedia('(hover: hover)').matches)).toBe(true);
+  await page.evaluate(
+    (html) => document.body.insertAdjacentHTML('beforeend', html),
+    HOVER_STAND_INS
+  );
+  for (const id of STAND_IN_IDS) {
+    await page.mouse.move(0, 0);
+    const rest = await fill(page, `#${id}`);
+    await page.hover(`#${id}`);
+    expect.soft(await fill(page, `#${id}`), id).not.toBe(rest);
+  }
+});

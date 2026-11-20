@@ -205,8 +205,11 @@
   overflow-wrap: anywhere;
 }
 
-#libraryPanel .lp-open:hover {
-  background: var(--surface-2);
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  #libraryPanel .lp-open:hover {
+    background: var(--surface-2);
+  }
 }
 
 #libraryPanel .lp-open[aria-current='true'] {

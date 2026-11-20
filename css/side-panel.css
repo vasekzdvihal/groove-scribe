@@ -15,8 +15,11 @@
   background: var(--accent);
 }
 
-.panel-tab[aria-pressed='true']:hover {
-  background: var(--accent-hover);
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  .panel-tab[aria-pressed='true']:hover {
+    background: var(--accent-hover);
+  }
 }
 
 .panel-tab[aria-pressed='true']:active {
@@ -115,8 +118,10 @@
   cursor: pointer;
 }
 
-#sidePanelClose:hover {
-  background: var(--surface-2);
+@media (hover: hover) {
+  #sidePanelClose:hover {
+    background: var(--surface-2);
+  }
 }
 
 /* The section of the shown tab fills the rest of the panel and scrolls. */
@@ -151,9 +156,11 @@
   border-color: var(--accent);
 }
 
-.permutation-choice-button[aria-pressed='true']:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
+@media (hover: hover) {
+  .permutation-choice-button[aria-pressed='true']:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
 }
 
 .permutation-choice-button[aria-pressed='true']:active {
