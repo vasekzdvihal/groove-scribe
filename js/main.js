@@ -33,6 +33,10 @@ window.GrooveWriter = GrooveWriter;
 window.GrooveUtils = GrooveUtils;
 window.grooves = grooves;
 
+// iPad Safari applies :active on a tap only when the page has a touch listener. This empty one
+// makes the pressed button steps show on the tablet.
+document.addEventListener('touchstart', () => {}, { passive: true });
+
 const myGrooveWriter = new GrooveWriter();
 window.myGrooveWriter = myGrooveWriter;
 const utils = myGrooveWriter.myGrooveUtils;

@@ -515,3 +515,22 @@ test('a mouse still shows the hover fill', async ({ page }) => {
     expect.soft(await fill(page, `#${id}`), id).not.toBe(rest);
   }
 });
+
+// iPad Safari shows :active on a tap only when the page has a touch listener. The editor
+// registers an empty, passive one on the document, so the pressed steps show on the tablet.
+test('the editor listens for touches, so pressed buttons show on an iPad', async ({ page }) => {
+  await page.addInitScript(() => {
+    const add = EventTarget.prototype.addEventListener;
+    window.__documentTouchListeners = [];
+    EventTarget.prototype.addEventListener = function (type, listener, options) {
+      if (type === 'touchstart' && (this === document || this === document.body)) {
+        window.__documentTouchListeners.push(options);
+      }
+      return add.call(this, type, listener, options);
+    };
+  });
+  await page.goto('/index.html' + GROOVE);
+  await page.waitForSelector('#svgTarget svg');
+  const listeners = await page.evaluate(() => window.__documentTouchListeners);
+  expect(listeners).toContainEqual({ passive: true });
+});
