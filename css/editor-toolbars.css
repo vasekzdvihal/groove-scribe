@@ -638,6 +638,11 @@
   top: calc(50% - 0.55em);
 }
 
+/* The ink of the buzz bars sits 1 px higher in its glyph box than the ink of the X. */
+#musicalInput .snare_buzz {
+  top: calc(50% - 0.55em + 1px);
+}
+
 #musicalInput .kick_splash {
   top: calc((34px + var(--kick-height)) / 2 - 1px - 0.55em);
 }
