@@ -106,6 +106,7 @@ export default [
       'js/gridState.js',
       'js/gridKeyboard.js',
       'js/urlSerialization.js',
+      'js/shareButtonLoader.js',
       'js/midiFile.js',
       'js/abcNotation.js',
       'js/groove_utils.js',

@@ -111,6 +111,15 @@ describe('the service worker build', () => {
     ]);
   });
 
+  // The share popup loads these when it opens, so the editor needs them offline too.
+  it('precaches the share button script and stylesheet', () => {
+    put('js/share-button.min.js');
+    put('css/share-button.min.css');
+    expect(precacheList(dir)).toEqual(
+      expect.arrayContaining(['js/share-button.min.js', 'css/share-button.min.css'])
+    );
+  });
+
   it('picks up a new file without a list to update', () => {
     put('js/added.js');
     expect(precacheList(dir)).toContain('js/added.js');

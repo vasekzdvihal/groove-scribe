@@ -22,9 +22,11 @@
 //  along with Groove Scribe.  If not, see <http://www.gnu.org/licenses/>.
 
 // GrooveUtils and the drum-notation / MIDI constants come from groove_utils.js.
-// Vendored libraries (Midi, MIDI, Pablo, ShareButton) remain window globals
-// provided by the classic <script> tags loaded before this module.
+// Vendored libraries (Midi, MIDI, Pablo) remain window globals provided by the classic
+// <script> tags loaded before this module. ShareButton is a window global too, but its script
+// loads only when the share popup opens (js/shareButtonLoader.js).
 import { GrooveUtils } from './groove_utils.js';
+import { loadShareButton } from './shareButtonLoader.js';
 import { parseDivision, safeDecode } from './urlSerialization.js';
 import {
   constant_ABC_HH_Accent,
@@ -3800,9 +3802,16 @@ function GrooveWriter() {
     }
   };
 
+  // The popup opens at once with the URL and Copy. SHARE shows when its library has loaded.
+  // When the library cannot load (offline before the worker has cached it), the popup works
+  // without SHARE, and the next opening tries again.
   root.show_FullURLPopup = function () {
-    document.getElementById('fullURLPopup');
+    root.fillInFullURLInFullURLPopup();
+    loadShareButton().then(setUpShareButton, function () {});
+  };
 
+  // ShareButton fills every <share-button> element on the page, here #shareButton.
+  function setUpShareButton() {
     new ShareButton({
       ui: {
         flyout: 'bottom center', // change the flyout direction of the shares. chose from `top left`, `top center`, `top right`, `bottom left`, `bottom right`, `bottom center`, `middle left`, or `middle right` [Default: `top center`]
@@ -3858,9 +3867,9 @@ function GrooveWriter() {
       },
     });
 
-    // open the popup with the full url
-    root.fillInFullURLInFullURLPopup();
-  };
+    var shareButton = document.getElementById('shareButton');
+    if (shareButton) shareButton.hidden = false;
+  }
 
   root.copyShareURLToClipboard = function () {
     var copyText = document.getElementById('fullURLPopupTextField');

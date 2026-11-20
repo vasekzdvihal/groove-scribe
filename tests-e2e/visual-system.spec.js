@@ -132,6 +132,8 @@ for (const [width, height] of [
       // The share popup.
       await page.click('#shareSaveButton');
       await expect(page.locator('#fullURLPopup')).toBeVisible();
+      // SHARE shows when its library has loaded.
+      await expect(page.locator('#shareButton')).toBeVisible();
       expect.soft(await buttonsOffShape(page, '#fullURLPopup')).toEqual([]);
       await page.click('#fullURLPopupCloseButton');
       await expect(page.locator('#fullURLPopup')).toBeHidden();
@@ -206,4 +208,69 @@ test('the grid text uses Lato', async ({ page }) => {
       .evaluate((node) => getComputedStyle(node).fontFamily);
     expect(family, selector).toMatch(/^"?Lato"?,/);
   }
+});
+
+// The share button library (js/share-button.min.js and its stylesheet, about 60 KB) loads when
+// the share popup opens for the first time, not with the editor. The popup shows the URL and
+// Copy at once. SHARE shows when the library is ready.
+const shareButtonFiles = (page) => {
+  const files = [];
+  page.on('request', (request) => {
+    if (request.url().includes('share-button.min')) files.push(new URL(request.url()).pathname);
+  });
+  return files;
+};
+
+test('the share button loads only with the share popup', async ({ page }) => {
+  const files = shareButtonFiles(page);
+  await page.goto('/index.html' + GROOVE);
+  await page.waitForSelector('#svgTarget svg');
+  await page.waitForLoadState('load');
+  expect(files).toEqual([]);
+  expect(await page.evaluate(() => typeof window.ShareButton)).toBe('undefined');
+
+  const popup = page.locator('#fullURLPopup');
+  const share = page.locator('#shareButtonContainer > #shareButton');
+  await page.click('#shareSaveButton');
+  await expect(popup).toBeVisible();
+  await expect(page.locator('#fullURLPopupTextField')).toHaveValue(/TimeSig=4\/4/);
+  await expect(share).toBeVisible();
+  await expect(share).toContainText('SHARE');
+  expect([...files].sort()).toEqual(['/css/share-button.min.css', '/js/share-button.min.js']);
+
+  await page.click('#fullURLPopupCloseButton');
+  await expect(popup).toBeHidden();
+  await page.click('#shareSaveButton');
+  await expect(popup).toBeVisible();
+  await expect(share).toBeVisible();
+  await expect(share.locator('.sb-social')).toHaveCount(1);
+  expect(files).toHaveLength(2);
+});
+
+test('the share popup works without SHARE when the share button cannot load', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  const files = shareButtonFiles(page);
+  await page.route('**/share-button.min.*', (route) => route.abort());
+  await page.goto('/index.html' + GROOVE);
+  await page.waitForSelector('#svgTarget svg');
+
+  const popup = page.locator('#fullURLPopup');
+  const share = page.locator('#shareButton');
+  await page.click('#shareSaveButton');
+  await expect(popup).toBeVisible();
+  await expect(page.locator('#fullURLPopupTextField')).toHaveValue(/TimeSig=4\/4/);
+  await expect(page.locator('#fullURLPopupCopyButton')).toBeVisible();
+  await expect.poll(() => files.length).toBe(2);
+  // Time for a late error or a late SHARE to show.
+  await page.waitForTimeout(300);
+  await expect(share).toBeHidden();
+  expect(errors).toEqual([]);
+
+  // The next opening tries again.
+  await page.unroute('**/share-button.min.*');
+  await page.click('#fullURLPopupCloseButton');
+  await page.click('#shareSaveButton');
+  await expect(share).toBeVisible();
+  expect(errors).toEqual([]);
 });
