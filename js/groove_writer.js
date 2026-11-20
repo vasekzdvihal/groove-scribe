@@ -3802,12 +3802,21 @@ function GrooveWriter() {
     }
   };
 
+  // The share button is built once per page. Its network hooks read the URL field at click time.
+  var shareButtonSetup = null;
+
   // The popup opens at once with the URL and Copy. SHARE shows when its library has loaded.
   // When the library cannot load (offline before the worker has cached it), the popup works
   // without SHARE, and the next opening tries again.
   root.show_FullURLPopup = function () {
     root.fillInFullURLInFullURLPopup();
-    loadShareButton().then(setUpShareButton, function () {});
+    if (!shareButtonSetup) {
+      shareButtonSetup = loadShareButton()
+        .then(setUpShareButton, function () {
+          shareButtonSetup = null;
+        })
+        .catch(console.error);
+    }
   };
 
   // ShareButton fills every <share-button> element on the page, here #shareButton.
@@ -3868,7 +3877,7 @@ function GrooveWriter() {
     });
 
     var shareButton = document.getElementById('shareButton');
-    if (shareButton) shareButton.hidden = false;
+    if (shareButton) shareButton.classList.remove('share-pending');
   }
 
   root.copyShareURLToClipboard = function () {

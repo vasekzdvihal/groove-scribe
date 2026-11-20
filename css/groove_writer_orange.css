@@ -1118,14 +1118,20 @@ hr {
   gap: 16px;
 }
 /* The share control of js/share-button.min.js has the shape and the colours of Copy. It is a
-   flex item, so it is a block, also with the inline display that the library sets. */
+   flex item, so it is a block, also with the inline display that the library sets. The type is
+   set here, not only in the library CSS, so the placeholder in index.html has the width of the
+   final button before the library loads. */
 #shareButton {
   box-sizing: border-box;
   min-height: var(--touch-size);
   padding: 0 16px 0 40px;
   color: #14191c;
+  font-family: Lato, sans-serif;
+  font-size: 16px;
   font-weight: 600;
   line-height: 42px;
+  text-transform: uppercase;
+  white-space: nowrap;
   background: #e7ecef;
   border: 1px solid #c3ccd2;
   border-radius: var(--radius);
@@ -1136,6 +1142,11 @@ hr {
 }
 #shareButton:active {
   background: #c3ccd2;
+}
+/* Until its library has loaded, SHARE keeps its place but does not show, so COPY does not
+   move. js/groove_writer.js removes the class. */
+#shareButton.share-pending {
+  visibility: hidden;
 }
 #shareButton::before {
   top: calc(50% - 0.5em);

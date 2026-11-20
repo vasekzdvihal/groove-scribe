@@ -251,6 +251,10 @@ test('the share popup works without SHARE when the share button cannot load', as
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   const files = shareButtonFiles(page);
+  let failed = 0;
+  page.on('requestfailed', (request) => {
+    if (request.url().includes('share-button.min')) failed += 1;
+  });
   await page.route('**/share-button.min.*', (route) => route.abort());
   await page.goto('/index.html' + GROOVE);
   await page.waitForSelector('#svgTarget svg');
@@ -261,9 +265,8 @@ test('the share popup works without SHARE when the share button cannot load', as
   await expect(popup).toBeVisible();
   await expect(page.locator('#fullURLPopupTextField')).toHaveValue(/TimeSig=4\/4/);
   await expect(page.locator('#fullURLPopupCopyButton')).toBeVisible();
-  await expect.poll(() => files.length).toBe(2);
-  // Time for a late error or a late SHARE to show.
-  await page.waitForTimeout(300);
+  await expect.poll(() => failed).toBe(2);
+  expect(files).toHaveLength(2);
   await expect(share).toBeHidden();
   expect(errors).toEqual([]);
 
@@ -273,4 +276,80 @@ test('the share popup works without SHARE when the share button cannot load', as
   await page.click('#shareSaveButton');
   await expect(share).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+/** Holds js/share-button.min.js until the returned function is called. */
+async function holdShareScript(page) {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  await page.route('**/js/share-button.min.js', async (route) => {
+    await gate;
+    await route.continue();
+  });
+  return release;
+}
+
+// SHARE has its place in the popup before its library loads, so COPY does not move.
+test('COPY stays in place while the share button loads', async ({ page }) => {
+  const release = await holdShareScript(page);
+  await page.goto('/index.html' + GROOVE);
+  await page.waitForSelector('#svgTarget svg');
+
+  const copy = page.locator('#fullURLPopupCopyButton');
+  const share = page.locator('#shareButton');
+  await page.click('#shareSaveButton');
+  await expect(copy).toBeVisible();
+  await expect(share).toBeHidden();
+  const before = await copy.boundingBox();
+
+  release();
+  await expect(share).toBeVisible();
+  const after = await copy.boundingBox();
+  expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(after.width - before.width)).toBeLessThanOrEqual(0.5);
+});
+
+// The share button is built once per page, also when the popup opens several times before its
+// library has loaded. Its flyout then opens with one click.
+test('the share button is built once and its flyout opens after reopens', async ({ page }) => {
+  await page.addInitScript(() => {
+    let Real;
+    window.__shareButtonBuilds = 0;
+    Object.defineProperty(window, 'ShareButton', {
+      configurable: true,
+      get: () =>
+        Real &&
+        function (...args) {
+          window.__shareButtonBuilds += 1;
+          return new Real(...args);
+        },
+      set: (value) => {
+        Real = value;
+      },
+    });
+  });
+  const release = await holdShareScript(page);
+  await page.goto('/index.html' + GROOVE);
+  await page.waitForSelector('#svgTarget svg');
+
+  const popup = page.locator('#fullURLPopup');
+  const share = page.locator('#shareButton');
+  for (let opening = 0; opening < 3; opening++) {
+    await page.click('#shareSaveButton');
+    await expect(popup).toBeVisible();
+    await page.click('#fullURLPopupCloseButton');
+    await expect(popup).toBeHidden();
+  }
+  release();
+  await page.click('#shareSaveButton');
+  await expect(share).toBeVisible();
+  await page.click('#fullURLPopupCloseButton');
+  await page.click('#shareSaveButton');
+  await expect(share).toBeVisible();
+
+  const networks = share.locator('.sb-social li.enabled');
+  await expect(networks.first()).toBeHidden();
+  await share.click();
+  await expect(networks.first()).toBeVisible();
+  expect(await page.evaluate(() => window.__shareButtonBuilds)).toBe(1);
 });
