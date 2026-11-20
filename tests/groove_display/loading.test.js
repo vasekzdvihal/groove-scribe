@@ -120,6 +120,15 @@ describe('GrooveDisplay asset loading', () => {
       expect(joined).toContain('font-awesome');
     });
 
+    // The editor and the embed share one copy of Font Awesome.
+    it('injects Font Awesome 4.7.0, the copy the editor loads', () => {
+      const hrefs = Array.from(document.getElementsByTagName('link')).map((l) => l.href);
+      expect(hrefs.some((h) => h.endsWith('/font-awesome/4.7.0/css/font-awesome.min.css'))).toBe(
+        true
+      );
+      expect(hrefs.some((h) => h.includes('font-awesome/4.3.0'))).toBe(false);
+    });
+
     it('injects tokens.css first, so the other stylesheets have the colours', () => {
       const hrefs = Array.from(document.getElementsByTagName('link')).map((l) => l.href);
       const css = hrefs.filter((href) => href.includes('/css/'));

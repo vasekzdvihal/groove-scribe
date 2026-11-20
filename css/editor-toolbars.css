@@ -1028,7 +1028,7 @@
   border: 0;
   border-radius: var(--radius);
   cursor: pointer;
-  /* groove_writer.css animates every property. Only the colour may animate here: the size
+  /* groove_writer_orange.css animates every property. Only the colour may animate here: the size
      changes with the window width, and it must not lag behind. */
   transition: background-color 0.1s ease-in-out;
 }

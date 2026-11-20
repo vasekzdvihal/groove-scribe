@@ -8,9 +8,8 @@ import { join } from 'node:path';
 const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-// share-button.min.css is vendored. groove_writer.css and groove_display_grey.css are not loaded
-// by any page.
-const SKIP = new Set(['share-button.min.css', 'groove_writer.css', 'groove_display_grey.css']);
+// share-button.min.css is vendored.
+const SKIP = new Set(['share-button.min.css']);
 const CSS_FILES = readdirSync(join(root, 'css'))
   .filter((name) => name.endsWith('.css') && !SKIP.has(name))
   .map((name) => `css/${name}`);

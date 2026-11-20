@@ -55,8 +55,8 @@ const ITEMS = [
 // module or stylesheet joins by itself. It is the editor page and everything that page loads.
 // Both sound formats are included (about 470 KB together): the browser picks one at run time.
 // The manifest and its icons (under images/) are here so the app installs offline.
-// Left out on purpose: the embed page, the old Font Awesome and its other font formats, and
-// SoundManager2, which nothing loads.
+// Left out on purpose: the embed page, the woff fallback of Font Awesome (every browser the
+// editor supports takes the woff2), and SoundManager2, which nothing loads.
 const PRECACHED = [
   /^(index|profile|gscribe_help|gscribe_about)\.html$/,
   /^manifest\.webmanifest$/,
