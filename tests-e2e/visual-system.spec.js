@@ -34,7 +34,7 @@ test('primary buttons share one accent (the library button: CSS only)', async ({
     const section = document.createElement('section');
     section.id = 'libraryPanel';
     section.innerHTML =
-      '<button id="lpSignIn" class="lp-primary" type="button">Sign in with Google</button>';
+      '<button id="lpSignIn" class="btn btn-primary" type="button">Sign in with Google</button>';
     document.getElementById('sidePanel').append(section);
   });
   const signIn = page.getByRole('button', { name: 'Sign in with Google' });
@@ -49,3 +49,85 @@ test('primary buttons share one accent (the library button: CSS only)', async ({
   const keep = dialog.getByRole('button', { name: 'Keep the notes' });
   expect(await look(keep)).toEqual({ background: ACCENT, color: WHITE });
 });
+
+// Every button has one shape (D2): 6 px corners and a 44 px touch target. Round controls (the
+// tempo knob, an avatar) stay round, and the note grid keeps its own cells.
+async function buttonsOffShape(page, rootSelector) {
+  return page.locator(rootSelector).evaluateAll((roots) => {
+    const offenders = [];
+    for (const root of roots) {
+      for (const node of root.querySelectorAll('button, [role="button"]')) {
+        const style = getComputedStyle(node);
+        const box = node.getBoundingClientRect();
+        if (!node.getClientRects().length || style.visibility === 'hidden') continue;
+        if (style.borderRadius === '50%' || node.closest('.tempoKnob, #musicalInput')) continue;
+        if (style.borderRadius !== '6px' || box.height < 44) {
+          const name = node.id || node.getAttribute('aria-label') || node.textContent.trim();
+          offenders.push(`${name}: ${style.borderRadius}, ${Math.round(box.height)} px`);
+        }
+      }
+    }
+    return offenders;
+  });
+}
+
+for (const [width, height] of [
+  [1024, 768],
+  [768, 1024],
+]) {
+  test.describe(`at ${width}x${height}`, () => {
+    test.use({ viewport: { width, height } });
+
+    test('every button has one shape', async ({ page }) => {
+      await page.goto('/index.html' + GROOVE);
+      await page.waitForSelector('#svgTarget svg');
+      const radius = (selector) =>
+        page.locator(selector).evaluate((node) => getComputedStyle(node).borderRadius);
+
+      // The toolbars. The Help link and the Sign in control are buttons too.
+      expect.soft(await buttonsOffShape(page, '#TopNav, #ToolBar, #PlaybackBar')).toEqual([]);
+      expect.soft(await radius('#helpLink')).toBe('6px');
+      expect.soft(await radius('#helpAnchor')).toBe('6px');
+
+      // The side panel: Library, then Grooves.
+      for (const name of ['Library', 'Grooves']) {
+        await page.locator('#upperLeft .panel-tab', { hasText: name }).click();
+        await expect(page.locator('#sidePanel')).toBeVisible();
+        expect.soft(await buttonsOffShape(page, '#sidePanel'), name).toEqual([]);
+        await page.keyboard.press('Escape');
+        await expect(page.locator('#sidePanel')).toBeHidden();
+      }
+
+      // A .btn with the hidden attribute stays hidden, such as Retry in the library.
+      const shownHidden = await page
+        .locator('.btn[hidden]')
+        .evaluateAll((nodes) => [
+          nodes.length,
+          nodes.filter((node) => getComputedStyle(node).display !== 'none').map((node) => node.id),
+        ]);
+      expect(shownHidden[0]).toBeGreaterThan(0);
+      expect(shownHidden[1]).toEqual([]);
+
+      // The confirm dialog.
+      await page.click('#moreButton');
+      await page.click('#clearAllNotesButton');
+      const dialog = page.getByRole('dialog', { name: 'Clear all notes?' });
+      await expect(dialog).toBeVisible();
+      expect.soft(await buttonsOffShape(page, '.confirm-dialog[open]')).toEqual([]);
+      await dialog.getByRole('button', { name: 'Keep the notes' }).click();
+      await expect(dialog).toBeHidden();
+
+      // The share popup.
+      await page.click('#shareSaveButton');
+      await expect(page.locator('#fullURLPopup')).toBeVisible();
+      expect.soft(await buttonsOffShape(page, '#fullURLPopup')).toEqual([]);
+      await page.click('#fullURLPopupCloseButton');
+      await expect(page.locator('#fullURLPopup')).toBeHidden();
+
+      // The time signature popup.
+      await page.click('#timeLabel');
+      await expect(page.locator('#timeSigPopup')).toBeVisible();
+      expect.soft(await buttonsOffShape(page, '#timeSigPopup')).toEqual([]);
+    });
+  });
+}

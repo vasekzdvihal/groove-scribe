@@ -16,4 +16,77 @@
   --danger: #a8261a;
   --danger-text: #f08a8a;
   --radius: 6px;
+  /* The keyboard focus ring on the dark bars, the side panel and the dialogs. */
+  --focus-ring: #ffffff;
+}
+
+/* One button shape for the side panel, the dialogs and the popups. A neutral button has the
+   surface colour. .btn-primary is the one main action. .btn-danger loses data. The tool buttons
+   of the bars (.tool in css/editor-toolbars.css) have the same corners and height. */
+.btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--touch-size, 44px);
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--text);
+  font-family: Lato, system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* display above would show a button that has the hidden attribute. */
+.btn[hidden] {
+  display: none;
+}
+
+.btn:hover {
+  background: color-mix(in srgb, var(--surface-2) 85%, var(--text));
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-primary:active {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+}
+
+/* White text on --danger has a contrast of 7:1. */
+.btn-danger {
+  color: #ffffff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: color-mix(in srgb, var(--danger) 85%, #000000);
+  border-color: color-mix(in srgb, var(--danger) 85%, #000000);
+}
+
+.btn-danger:active {
+  background: color-mix(in srgb, var(--danger) 72%, #000000);
+  border-color: color-mix(in srgb, var(--danger) 72%, #000000);
 }

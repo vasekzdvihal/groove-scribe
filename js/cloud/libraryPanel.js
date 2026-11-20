@@ -48,23 +48,23 @@ const POINTER_WAIT_MAX_MS = 1000;
 const PANEL_HTML = `
   <div class="lp-body">
     <p id="lpMessage" role="alert" hidden></p>
-    <button id="lpRetry" class="lp-primary" type="button" hidden>Retry</button>
+    <button id="lpRetry" class="btn btn-primary" type="button" hidden>Retry</button>
     <p id="lpLoading" hidden>${LOADING_TEXT}</p>
     <section id="lpSignedOut" hidden>
       <p>Sign in to keep your grooves in lessons and open them on any device.</p>
-      <button id="lpSignIn" class="lp-primary" type="button">Sign in with Google</button>
+      <button id="lpSignIn" class="btn btn-primary" type="button">Sign in with Google</button>
     </section>
     <section id="lpLibrary" hidden>
       <div class="lp-tools">
-        <button id="lpSaveToolButton" class="lp-tool-button" type="button"
+        <button id="lpSaveToolButton" class="btn lp-tool-button" type="button"
             aria-label="Save current groove" aria-expanded="false" aria-controls="lpSaveTool">
           <i class="fa fa-floppy-o" aria-hidden="true"></i><span>Save</span>
         </button>
-        <button id="lpLinkToolButton" class="lp-tool-button" type="button"
+        <button id="lpLinkToolButton" class="btn lp-tool-button" type="button"
             title="Add a groove link" aria-expanded="false" aria-controls="lpLinkTool">
           <i class="fa fa-link" aria-hidden="true"></i><span>Add link</span>
         </button>
-        <button id="lpLessonToolButton" class="lp-tool-button" type="button"
+        <button id="lpLessonToolButton" class="btn lp-tool-button" type="button"
             aria-expanded="false" aria-controls="lpLessonTool">
           <i class="fa fa-plus" aria-hidden="true"></i><span>New lesson</span>
         </button>
@@ -77,7 +77,7 @@ const PANEL_HTML = `
           <select id="lpSaveLesson"></select>
           <p id="lpUpdateHint" class="lp-hint" hidden></p>
           <div id="lpSaveButtons" class="lp-save-buttons">
-            <button id="lpSaveNew" class="lp-primary" type="submit">Save groove</button>
+            <button id="lpSaveNew" class="btn btn-primary" type="submit">Save groove</button>
           </div>
         </form>
       </div>
@@ -89,14 +89,14 @@ const PANEL_HTML = `
           <input id="lpLinkTitle" type="text" maxlength="200">
           <label for="lpLinkLesson">Lesson</label>
           <select id="lpLinkLesson"></select>
-          <button class="lp-primary" type="submit">Add groove</button>
+          <button class="btn btn-primary" type="submit">Add groove</button>
         </form>
       </div>
       <div id="lpLessonTool" class="lp-tool" hidden>
         <form id="lpLessonForm">
           <label for="lpLessonName">Lesson name</label>
           <input id="lpLessonName" type="text" maxlength="200" required>
-          <button class="lp-primary" type="submit">Create lesson</button>
+          <button class="btn btn-primary" type="submit">Create lesson</button>
         </form>
       </div>
       <div id="lpLessons"></div>
@@ -120,8 +120,9 @@ function element(tag, properties = {}, children = []) {
   return node;
 }
 
+// A .btn (css/tokens.css), unless properties give it other classes.
 function button(textContent, onClick, properties = {}) {
-  const node = element('button', { type: 'button', textContent, ...properties });
+  const node = element('button', { type: 'button', className: 'btn', textContent, ...properties });
   node.addEventListener('click', onClick);
   return node;
 }
@@ -768,7 +769,7 @@ function startLibrary({
       () => {
         if (confirm(`Delete "${name}"?`)) act(() => library.deleteGroove(groove.id, name));
       },
-      { className: 'lp-danger' }
+      { className: 'btn btn-danger' }
     );
     const row = `groove:${groove.id}`;
     markFocus(move, row, 'move');
@@ -842,7 +843,7 @@ function startLibrary({
               act(() => library.deleteLesson(lesson.id));
             }
           },
-          { className: 'lp-danger' }
+          { className: 'btn btn-danger' }
         ),
         row,
         'delete'
@@ -920,7 +921,7 @@ function startLibrary({
   const updateButton = element('button', {
     id: 'lpUpdate',
     type: 'submit',
-    className: 'lp-primary',
+    className: 'btn btn-primary',
     textContent: 'Update groove',
   });
 
@@ -932,7 +933,7 @@ function startLibrary({
     const canUpdate = Boolean(groove) && dirtyState.isDirty(editor.currentQuery());
     const saveNew = byId('lpSaveNew');
     saveNew.textContent = canUpdate ? 'Save as new' : 'Save groove';
-    saveNew.className = canUpdate ? '' : 'lp-primary';
+    saveNew.className = canUpdate ? 'btn' : 'btn btn-primary';
     const hint = byId('lpUpdateHint');
     if (canUpdate) {
       hint.textContent = `Update saves the changes in "${grooveName(groove)}". Save as new keeps it as it is.`;

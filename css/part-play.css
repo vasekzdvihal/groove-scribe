@@ -52,7 +52,7 @@
 #musicalInput .bar-ruler-bar:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 /* The beats, over the cells. Each beat has the flex size of its cells: their 56 px each at
@@ -84,7 +84,7 @@
   right: 2px;
   bottom: 8px;
   left: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: var(--ruler-track);
 }
 
@@ -140,7 +140,7 @@
 }
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-num {
-  color: #fff;
+  color: var(--accent-text);
 }
 
 /* The keyboard focus: a ring 2 px out from the track, so it does not hide the beat number and
@@ -179,7 +179,7 @@
   height: 48px;
   max-width: calc(100% - 24px);
   padding: 0 2px 0 14px;
-  border-radius: 6px;
+  border-radius: calc(var(--radius) + 2px);
   background: var(--line);
   color: var(--text);
   font-size: 18px;
@@ -219,7 +219,7 @@
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: none;
   color: var(--text);
   font-size: 20px;
@@ -233,7 +233,7 @@
 }
 
 #partPlayChip .part-play-clear:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: -2px;
 }
 

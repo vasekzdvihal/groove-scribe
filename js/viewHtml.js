@@ -609,7 +609,7 @@ export function buildPermutationChoiceHTML(activeType, isFourFour) {
   if (!isFourFour) return '<p>Permutations work in 4/4 time only.</p>';
   return PERMUTATION_CHOICES.map(
     ({ type, label }) =>
-      `<button type="button" class="permutation-choice-button" data-permutation="${type}" ` +
+      `<button type="button" class="btn permutation-choice-button" data-permutation="${type}" ` +
       `aria-pressed="${type == activeType}" ` +
       `onclick="myGrooveWriter.permutationPopupClick('${type}')">${label}</button>`
   ).join('');

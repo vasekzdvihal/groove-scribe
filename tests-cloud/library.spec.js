@@ -707,6 +707,28 @@ test.describe('the keyboard in a groove menu', () => {
     await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(1);
     expect(seriousOrWorse(await axeScan(page, { include: '#sidePanel' }))).toEqual([]);
   });
+
+  // D2 of the visual system: 6 px corners and a 44 px touch target on every button. The
+  // avatar in the top bar stays round.
+  test('every library button has one shape', async ({ page }) => {
+    await signedInPanel(page);
+    await createLesson(page, 'Week 1');
+    await addLink(page, QUERY, 'Paradiddle');
+    await grooveMore(page).click();
+    await page.locator('#lpSaveToolButton').click();
+    await expect(page.locator('#lpSaveForm')).toBeVisible();
+    const offShape = await page.locator('#sidePanel').evaluate((panel) =>
+      [...panel.querySelectorAll('button')]
+        .filter((node) => node.getClientRects().length)
+        .map((node) => ({ node, style: getComputedStyle(node) }))
+        .filter(({ node, style }) => style.borderRadius !== '6px' || node.offsetHeight < 44)
+        .map(({ node, style }) => `${node.id || node.textContent.trim()}: ${style.borderRadius}`)
+    );
+    expect(offShape).toEqual([]);
+    expect(
+      await page.locator('#helpAnchor').evaluate((node) => getComputedStyle(node).borderRadius)
+    ).toBe('50%');
+  });
 });
 
 const UNTITLED_QUERY = '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
@@ -890,8 +912,8 @@ test.describe('updating a saved groove', () => {
 
     await saveTool(page).click();
     await expect(page.locator('#lpSaveTitle')).toHaveValue('Paradiddle');
-    await expect(updateButton(page)).toHaveClass(/lp-primary/);
-    await expect(saveAsNewButton(page)).not.toHaveClass(/lp-primary/);
+    await expect(updateButton(page)).toHaveClass(/btn-primary/);
+    await expect(saveAsNewButton(page)).not.toHaveClass(/btn-primary/);
     await expect(plainSaveButton(page)).toHaveCount(0);
     await updateButton(page).click();
     await expect(updateButton(page)).toBeHidden();
@@ -1097,7 +1119,7 @@ test.describe('updating a saved groove', () => {
     await signedInPanel(page);
     await editNote(page);
     await saveTool(page).click();
-    await expect(plainSaveButton(page)).toHaveClass(/lp-primary/);
+    await expect(plainSaveButton(page)).toHaveClass(/btn-primary/);
     await expect(updateButton(page)).toHaveCount(0);
     await expect(saveAsNewButton(page)).toHaveCount(0);
   });

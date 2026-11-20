@@ -28,6 +28,12 @@ Rules:
 - The page never scrolls sideways, also at 320 px. `#GrooveWriter` has no minimum width.
 - `css/editor-toolbars.css` overrides older rules that other pages still load. It holds the bar
   tokens (`--bar-*`, `--touch-size`, `--playback-touch`).
+- `css/tokens.css` holds the colours, the 6 px corner radius (`--radius`) and the focus ring
+  colour (`--focus-ring`). It also has the one button shape: `.btn`, `.btn-primary` and
+  `.btn-danger`. Use them for a button in the side panel, a dialog or a popup. A tool in a bar is
+  a `.tool` with the same corners. Every button has 6 px corners and is at least 44 px tall. Only
+  round controls, such as the tempo knob and the avatar, stay round.
+  `tests-e2e/visual-system.spec.js` checks it.
 - View mode writes `display: block` or `none` on every `.edit-block`. A `.edit-block` button must
   not need another display value: put its layout on an inner `.tool-in` span.
 - The player markup is shared with the embed pages. `initPlaybackControls` in

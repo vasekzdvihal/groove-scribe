@@ -14,7 +14,6 @@
   box-sizing: border-box;
 }
 
-#libraryPanel button,
 #libraryPanel input,
 #libraryPanel select {
   min-height: 44px;
@@ -23,7 +22,21 @@
   color: var(--text);
   background: var(--surface-2);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Most buttons are .btn (css/tokens.css). The rows of the list (a groove, a lesson name, ⋯)
+   have no fill and no border. :where keeps this rule weaker than .btn. */
+:where(#libraryPanel) button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  color: var(--text);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
   font: inherit;
   cursor: pointer;
 }
@@ -35,16 +48,6 @@
 
 #libraryPanel select {
   width: 100%;
-}
-
-#libraryPanel .lp-primary {
-  color: var(--accent-text);
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-#libraryPanel .lp-danger {
-  color: var(--danger-text);
 }
 
 .lp-body {
@@ -64,7 +67,7 @@
   padding: 8px 12px;
   background: var(--surface-2);
   border: 1px solid var(--danger-text);
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 #lpLoading,
@@ -140,8 +143,6 @@
   padding: 8px 0;
   font-weight: 600;
   text-align: left;
-  background: none;
-  border-color: transparent;
   overflow-wrap: anywhere;
 }
 
@@ -201,8 +202,6 @@
   flex: 1 1 0;
   min-width: 0;
   text-align: left;
-  background: none;
-  border-color: transparent;
   overflow-wrap: anywhere;
 }
 
@@ -211,7 +210,7 @@
 }
 
 #libraryPanel .lp-open[aria-current='true'] {
-  color: #fff;
+  color: var(--accent-text);
   background: var(--accent);
 }
 
@@ -220,8 +219,6 @@
   width: 44px;
   padding: 0;
   color: var(--text-dim);
-  background: none;
-  border-color: transparent;
 }
 
 #libraryPanel .lp-sync {

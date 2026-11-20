@@ -105,7 +105,7 @@
   color: inherit;
   font-size: 24px;
   text-decoration: none;
-  border-radius: 22px;
+  border-radius: var(--radius);
 }
 
 #helpLink:hover {
@@ -113,7 +113,7 @@
 }
 
 #helpLink:focus-visible {
-  outline: 2px solid #fff;
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -139,7 +139,7 @@
   font: inherit;
   background: none;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -170,10 +170,15 @@
 .tool:focus-visible,
 .metronomeButton:focus-visible,
 .tempoKnob:focus-visible,
-#helpAnchor:focus-visible,
-.tool-popover button:focus-visible {
-  outline: 2px solid #fff;
+#helpAnchor:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
+}
+
+/* The popovers are white, so their items take an accent ring. Inset, like the menu items. */
+.tool-popover button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .tool-filled {
@@ -186,7 +191,7 @@
 
 .tool-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -244,7 +249,7 @@
 .tool.ClickToHide,
 .tool.buttonSelected {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
 }
 
 #timeSigLabel {
@@ -275,7 +280,7 @@
   font-size: 15px;
   background: none;
   border: 0;
-  border-radius: 22px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -308,11 +313,13 @@
   font-size: 24px;
 }
 
+/* The avatar stays round. */
 #helpAnchor.signedIn {
   width: var(--touch-size);
   padding: 0;
   overflow: hidden;
   background: var(--accent);
+  border-radius: 50%;
 }
 
 #helpAnchor.signedIn img {
@@ -675,7 +682,7 @@
 #musicalInput #addMeasureButton:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 /* With one measure the Remove slot is an empty placeholder. */
@@ -993,11 +1000,12 @@
   gap: 8px;
 }
 
+/* The group is 2 px larger than its buttons all round, so its corners follow theirs. */
 #metronomeChoices {
   display: inline-flex;
   padding: 2px;
   background: var(--line);
-  border-radius: 6px;
+  border-radius: calc(var(--radius) + 2px);
 }
 
 .metronomeButton {
@@ -1010,7 +1018,7 @@
   font-size: 20px;
   background: none;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius);
   cursor: pointer;
   /* groove_writer.css animates every property. Only the colour may animate here: the size
      changes with the window width, and it must not lag behind. */
@@ -1088,7 +1096,7 @@
   color: #14191c;
   font-family: 'Lato', Calibri, sans-serif;
   background: #fff;
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
@@ -1117,7 +1125,7 @@
 }
 
 .tool-popover .subdivision.buttonSelected {
-  color: #fff;
+  color: var(--accent-text);
   font-weight: 700;
   background: var(--accent);
 }
@@ -1161,7 +1169,7 @@
   padding: 0 10px;
   font: inherit;
   border: 1px solid #9aa4aa;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 #KeyButton {
@@ -1187,11 +1195,11 @@
   padding: 12px 10px;
   background: #e7ecef;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius);
 }
 
 #KeyButton input:checked + #LegendLabel {
-  color: #fff;
+  color: var(--accent-text);
   background: var(--accent);
 }
 
@@ -1227,7 +1235,7 @@
   padding: 6px 0;
   background: #fff;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
@@ -1283,9 +1291,13 @@
   font-weight: 700;
 }
 
+/* The rows sit 8 px in from the panel edges, so their round corners show on hover. The text
+   stays 16 px in, in line with the group headings. */
 .grooveListLI {
+  margin: 0 8px;
   padding: 0;
   border-bottom: 0;
+  border-radius: var(--radius);
 }
 
 /* The button fills the row, so a tap or a click anywhere in the row picks the groove. The
@@ -1297,11 +1309,11 @@
   width: 100%;
   min-height: 44px;
   margin: 0;
-  padding: 10px 16px;
+  padding: 10px 8px;
   color: inherit;
   background: none;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius);
   font: inherit;
   text-align: left;
   cursor: pointer;

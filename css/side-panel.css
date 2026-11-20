@@ -80,7 +80,7 @@
 }
 
 #sidePanel :focus-visible {
-  outline: 2px solid var(--text);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -111,7 +111,7 @@
   font: inherit;
   background: none;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -141,25 +141,24 @@
 
 .permutation-choice-button {
   flex: 1;
-  min-height: 44px;
   padding: 0 12px;
-  color: var(--text);
-  font: inherit;
-  font-weight: 600;
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  cursor: pointer;
 }
 
-.permutation-choice-button:hover {
-  border-color: var(--accent);
-}
-
+/* The chosen permutation looks like .btn-primary. */
 .permutation-choice-button[aria-pressed='true'] {
   color: var(--accent-text);
   background: var(--accent);
   border-color: var(--accent);
+}
+
+.permutation-choice-button[aria-pressed='true']:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.permutation-choice-button[aria-pressed='true']:active {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
 }
 
 #PermutationOptions.displayed {
@@ -206,7 +205,7 @@
   box-sizing: border-box;
   min-height: 44px;
   color: var(--text-dim);
-  border-radius: 6px;
+  border-radius: var(--radius);
   cursor: pointer;
 }
 
@@ -215,7 +214,7 @@
 }
 
 #permutationsPanel .myCheckbox:focus-visible + label {
-  outline: 2px solid var(--text);
+  outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
 
@@ -266,7 +265,7 @@
 }
 
 #permutationsPanel .PermutationSubOption .myCheckbox:checked + label {
-  color: #fff;
+  color: var(--accent-text);
   background: var(--accent);
   border-color: var(--accent);
 }

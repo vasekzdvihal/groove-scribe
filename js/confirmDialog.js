@@ -36,8 +36,8 @@ function createDialog({ id, title, text, yes, no }) {
     <h2 id="${id}Title">${title}</h2>
     <p id="${id}Text">${text}</p>
     <div class="confirm-actions">
-      <button type="submit" class="confirm-danger" value="yes">${yes}</button>
-      <button type="submit" class="confirm-primary" value="no" autofocus>${no}</button>
+      <button type="submit" class="btn btn-danger" value="yes">${yes}</button>
+      <button type="submit" class="btn btn-primary" value="no" autofocus>${no}</button>
     </div>
   </form>
 `;

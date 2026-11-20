@@ -978,14 +978,16 @@ hr {
   /visibility: hidden;
   display: none;
   position: absolute;
-  left: 300px;
+  /* In the middle of the window at every width. At 1024 px wide this is the old 300 px. */
+  left: 50%;
+  translate: -50% 0;
   top: 250px;
   z-index: 999;
   background-color: #fff;
   width: 400px;
   padding: 10px;
   border: solid 2px #999;
-  border-radius: 5px;
+  border-radius: var(--radius);
 }
 #timeSigPopup {
   font-size: 24px;
@@ -1018,27 +1020,24 @@ hr {
   font-size: 24px;
   margin: 0px 10px;
 }
-#timeSigPopupCancel {
-  font-size: 16px;
-  font-weight: 500;
-  background: #fff;
-  color: #767676; /* 4.5:1 on white */
-  border: 0px;
-  border-radius: 5px;
-  padding: 5px 10px;
-}
-#timeSigPopupOK {
-  font-size: 16px;
-  font-weight: 500;
-  background: var(--accent);
-  color: #fff;
-  border: 0px;
-  border-radius: 5px;
-  padding: 5px 10px;
-}
 #timeSigPopupButtons {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
   margin-top: 30px;
-  text-align: center;
+}
+/* The old popups are white. A neutral .btn (css/tokens.css) is light there, so the primary
+   button stays the strongest, and the focus ring has the accent colour. */
+:is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration) .btn:not(.btn-primary) {
+  color: #14191c;
+  background: #e7ecef;
+  border-color: #c3ccd2;
+}
+:is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration) .btn:not(.btn-primary):hover {
+  background: #dce3e7;
+}
+:is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration) .btn:focus-visible {
+  outline-color: var(--accent);
 }
 #fullURLPopupCloseButton {
   font-size: 100%;
@@ -1050,6 +1049,7 @@ hr {
   margin: -12.5px -13px;
   padding: 12.5px 13px;
   border: 0;
+  border-radius: var(--radius);
   background: none;
   color: inherit;
   font-family: inherit;
@@ -1105,29 +1105,35 @@ hr {
   padding: 8px;
   background: #ffe9b7;
   border: 0px;
-  border-radius: 5px;
+  border-radius: var(--radius);
   text-align: center;
-}
-#fullURLPopupCopyButton {
-  font-size: 16px;
-  font-family: Lato, sans-serif;
-  font-weight: 700;
-  color: #000;
-  border: 0px;
-  border-radius: 5px;
-  padding: 5px 10px;
 }
 #shareButtonContainer {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
 }
+/* The share control of js/share-button.min.js has the shape and the colours of Copy. It is a
+   flex item, so it is a block, also with the inline display that the library sets. */
 #shareButton {
+  box-sizing: border-box;
+  min-height: var(--touch-size);
+  padding: 0 16px 0 40px;
+  color: #14191c;
+  font-weight: 600;
+  line-height: 42px;
+  background: #e7ecef;
+  border: 1px solid #c3ccd2;
+  border-radius: var(--radius);
 }
-.sharer-0::before {
-  top: 7px;
+#shareButton:hover {
+  color: #14191c;
+  background: #dce3e7;
 }
-.sharer-0 label {
-  background: var(--accent) !important;
-  color: #fff !important;
+#shareButton::before {
+  top: calc(50% - 0.5em);
+  left: 16px;
 }
 .metronomeAutoSpeedupInputRow {
   vertical-align: text-bottom;
@@ -1164,15 +1170,6 @@ hr {
 #metronomeAutoSpeedupCloseButtonDiv {
   text-align: center;
   margin-top: 15px;
-}
-#metronomeAutoSpeedupConfigurationCloseButton {
-  font-size: 16px;
-  font-weight: 500;
-  background: var(--accent);
-  color: #fff;
-  border: 0px;
-  border-radius: 5px;
-  padding: 5px 10px;
 }
 #showHideSecondMeasureButton {
 }
