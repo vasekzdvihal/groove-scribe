@@ -16,7 +16,7 @@ const look = (locator) =>
     return { background: style.backgroundColor, color: style.color };
   });
 
-test('primary buttons share one accent', async ({ page }) => {
+test('primary buttons share one accent (the library button: CSS only)', async ({ page }) => {
   await page.goto('/index.html' + GROOVE);
   await page.waitForSelector('#svgTarget svg');
 
@@ -27,8 +27,9 @@ test('primary buttons share one accent', async ({ page }) => {
   await page.mouse.move(0, 0);
   expect((await look(tab)).background).toBe(ACCENT);
 
-  // The sign-in button of the library. The hermetic test server blocks Firebase, so the Library
-  // tab does not start here. Put the same button in a library section of the open panel.
+  // The library CSS for its primary button. The hermetic test server blocks Firebase, so the
+  // Library tab does not start here. A stand-in button in a library section checks the CSS only.
+  // tests-cloud/library.spec.js checks the real Sign in with Google button.
   await page.evaluate(() => {
     const section = document.createElement('section');
     section.id = 'libraryPanel';

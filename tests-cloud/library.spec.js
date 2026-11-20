@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { axeScan, seriousOrWorse } from '../tests-e2e/a11y-helpers.js';
+import { axeScan, contrastRatio, seriousOrWorse } from '../tests-e2e/a11y-helpers.js';
 
 const QUERY = '?TimeSig=4/4&Div=16&Title=Paradiddle&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
 const EDITOR = '/index.html?emulator=1';
@@ -1272,8 +1272,12 @@ test.describe('the Save button', () => {
 
     await saveButton(page).click();
     await expect(page.locator('#libraryPanel')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeFocused();
+    const signIn = page.getByRole('button', { name: 'Sign in with Google' });
+    await expect(signIn).toBeFocused();
     expect(sdkRequests).toHaveLength(1);
+    // The primary button has the accent of the editor (css/tokens.css) with white text.
+    await expect(signIn).toHaveCSS('background-color', 'rgb(31, 115, 168)');
+    await expect(signIn).toHaveCSS('color', 'rgb(255, 255, 255)');
   });
 
   test('signed in, it opens the panel at the save form, and the form saves', async ({ page }) => {
@@ -1285,6 +1289,17 @@ test.describe('the Save button', () => {
     await expect(page.locator('#lpSaveToolButton')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#lpSaveForm')).toBeVisible();
     await expect(page.locator('#lpSaveToolButton')).toBeFocused();
+    // The border and the underline show the open form. They need 3:1 on the panel.
+    const look = await page.locator('#lpSaveToolButton').evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        border: style.borderBottomColor,
+        underline: style.boxShadow,
+        panel: getComputedStyle(node.closest('.lp-tools')).backgroundColor,
+      };
+    });
+    expect(contrastRatio(look.border, look.panel)).toBeGreaterThanOrEqual(3);
+    expect(look.underline).toContain(look.border);
     await page.locator('#lpSaveTitle').fill('Mine');
     await page.getByRole('button', { name: 'Save groove' }).click();
     await expect(grooveButton(page, 'Mine')).toHaveAttribute('aria-current', 'true');

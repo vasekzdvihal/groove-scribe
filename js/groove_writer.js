@@ -652,7 +652,7 @@ function GrooveWriter() {
     // turn this one on;
     class_cur_all_notes_highlight_id = id;
     document.getElementById('bg-highlight' + class_cur_all_notes_highlight_id).style.background =
-      'rgba(50, 126, 173, 0.2)';
+      'rgba(31, 115, 168, 0.2)';
   }
 
   function hilight_note(instrument, percent_complete) {
