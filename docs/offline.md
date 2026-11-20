@@ -6,7 +6,10 @@ How the app works with no network, and how to recover when a service worker rele
 
 - `scripts/sw-template.js` becomes `www/sw.js` when `build-www.mjs` runs. The worker precaches
   from `www/`. A new runtime file must match `PRECACHED` in `build-www.mjs`, or it is not
-  available offline.
+  available offline. This includes a file that the editor loads later, such as the share button
+  library.
+- Font Awesome ships only its woff2 and woff fonts. The worker precaches the woff2 under the URL
+  that the stylesheet asks for (`PRECACHE_QUERIES` in `build-www.mjs`).
 - `registerServiceWorker.js` registers the worker on production HTTPS. On localhost, `?sw=1` opts
   in, so cached files never hide an edit during development. The native app does not use it.
 - Precached files never change within a version: a new version arrives complete. Pages come from

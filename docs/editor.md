@@ -27,7 +27,8 @@ Rules:
   (`tests-e2e/a11y.spec.js`).
 - The page never scrolls sideways, also at 320 px. `#GrooveWriter` has no minimum width.
 - `css/editor-toolbars.css` overrides older rules that other pages still load. It holds the bar
-  tokens (`--bar-*`, `--touch-size`, `--playback-touch`).
+  sizes (`--bar-*`, `--touch-size`, `--playback-touch`). The colours are in
+  `css/tokens.css`.
 - `css/tokens.css` holds the colours, the 6 px corner radius (`--radius`) and the focus ring
   colour (`--focus-ring`). It also has the one button shape: `.btn`, `.btn-primary` and
   `.btn-danger`. Use them for a button in the side panel, a dialog or a popup. A tool in a bar is
@@ -79,8 +80,11 @@ Rules:
   - The time signature, share and auto speed-up popups are non-modal dialogs (`initPopups`).
     The first control gets the focus. Escape presses their own Cancel or close button. On close,
     the focus goes back to the control that opened them. There is no focus trap.
-- `groove_writer.css` sets `transition: all` on old buttons. A control whose size changes with
-  the window width must limit its transition to colours, or tests measure it mid-change.
+- The share popup loads the share button library (`js/share-button.min.js` and its CSS) when it
+  opens for the first time, not with the editor (`js/shareButtonLoader.js`). Until it loads,
+  SHARE is hidden but keeps its place (`.share-pending`), so COPY does not move.
+- `groove_writer_orange.css` sets `transition: all` on old buttons. A control whose size changes
+  with the window width must limit its transition to colours, or tests measure it mid-change.
 
 ## Side panel and tabs
 
