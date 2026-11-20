@@ -570,6 +570,7 @@ function startLibrary({
     stopDirty();
     document.removeEventListener('visibilitychange', refresh);
     window.removeEventListener('online', refresh);
+    window.removeEventListener('keydown', onMenuEscape, true);
     showGrooveSaved(false);
   }
 
@@ -942,6 +943,34 @@ function startLibrary({
     byId('lpSaveButtons').replaceChildren(...(canUpdate ? [updateButton, saveNew] : [saveNew]));
     return canUpdate ? groove : null;
   }
+
+  // Escape in an open ⋯ menu, on its ⋯, or on the page after a tap, closes the menu, and focus goes to the ⋯ of its row.
+  // The redraw puts focus there: the control that had it is gone, and the ⋯ is the fallback.
+  // Returns true when it closed a menu.
+  function closeRowMenuOf(target) {
+    if (!openMenu || !(target instanceof Element)) return false;
+    // A tap opened the menu: the focus is on the page. Escape closes the menu and leaves the
+    // focus there.
+    if (target === document.body || target === document.documentElement) {
+      openMenu = null;
+      render();
+      return true;
+    }
+    const control = target.closest('.lp-actions, .lp-more[aria-expanded="true"]');
+    if (!control || !byId('lpLessons').contains(control)) return false;
+    openMenu = null;
+    render();
+    return true;
+  }
+
+  // A second window listener, next to the one for the tool forms. It hears Escape before the
+  // side panel does, so the panel stays open. stop() removes it with the session.
+  function onMenuEscape(event) {
+    if (event.key === 'Escape' && !isAskingToDiscard() && closeRowMenuOf(event.target)) {
+      event.stopPropagation();
+    }
+  }
+  window.addEventListener('keydown', onMenuEscape, true);
 
   function render() {
     // See onPointerDown: a click on the list or a tool form is in progress.

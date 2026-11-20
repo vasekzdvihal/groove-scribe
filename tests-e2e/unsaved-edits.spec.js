@@ -199,19 +199,31 @@ test('the Grooves tab lists the grooves and a pick loads one', async ({ page }) 
 test.describe('the Grooves tab on a narrow screen', () => {
   test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
 
-  test('a pick closes the panel, and focus goes to the tab', async ({ page }) => {
+  const trainBeat = (page) =>
+    page.locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' }).first();
+
+  test('a pick by keyboard closes the panel, and focus goes to the tab', async ({ page }) => {
     await loadGroove(page, '/index.html');
     const tab = page.locator('#groovesTab');
     await tab.click();
     await expect(page.locator('#sidePanelClose')).toBeFocused();
-    await page
-      .locator('#grooveListWrapper .grooveListLI', { hasText: 'Train Beat' })
-      .first()
-      .click();
+    await trainBeat(page).locator('button').focus();
+    await page.keyboard.press('Enter');
     await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
     await expect(page.locator('#sidePanel')).toBeHidden();
     await expect(tab).toHaveAttribute('aria-pressed', 'false');
     await expect(tab).toBeFocused();
+  });
+
+  test('a tap pick closes the panel and leaves the focus off the tab', async ({ page }) => {
+    await loadGroove(page, '/index.html');
+    const tab = page.locator('#groovesTab');
+    await tab.click();
+    await trainBeat(page).click();
+    await expect(page.locator('#tuneTitle')).toHaveValue('Train Beat');
+    await expect(page.locator('#sidePanel')).toBeHidden();
+    await expect(tab).toHaveAttribute('aria-pressed', 'false');
+    await expect(tab).not.toBeFocused();
   });
 });
 

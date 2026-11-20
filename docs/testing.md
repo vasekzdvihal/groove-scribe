@@ -4,19 +4,19 @@ All suites must stay green after every change. Run them one after another: they 
 
 ## The suites
 
-| Command                   | What it checks                                                                                                       |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `npm test`                | Vitest unit suite (jsdom), `tests/`. See [`../tests/README.md`](../tests/README.md).                                 |
-| `npm run test:e2e`        | Playwright, `tests-e2e/`: golden master (byte-identical SVG and MIDI) plus UI tests. Linux only.                     |
-| `npm run test:e2e:verify` | The same on a Mac. See "Golden master on a Mac" below.                                                               |
-| `npm run test:cloud`      | The library panel in Chromium against the Auth and Firestore emulators, `tests-cloud/`. Needs Java.                  |
-| `npm run test:rules`      | `firestore.rules` against the Firestore emulator, `tests-rules/`. Needs Java.                                        |
-| `npm run lint`            | ESLint: 0 errors. SonarJS warnings are an accepted backlog.                                                          |
-| `npm run typecheck`       | `tsc` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json`. Fails if a file gets more errors. |
-| `npm run knip`            | No unused exports or files.                                                                                          |
-| `npm run format:check`    | Prettier. `npm run format` fixes it.                                                                                 |
-| `npm run verify:fast`     | lint + typecheck + format:check + knip + Vitest. CI's "Lint and unit tests" job.                                     |
-| `npm run verify`          | `verify:fast`, then `test:e2e:verify`, `test:rules`, `test:cloud`.                                                   |
+| Command                   | What it checks                                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                | Vitest unit suite (jsdom), `tests/`. See [`../tests/README.md`](../tests/README.md).                                  |
+| `npm run test:e2e`        | Playwright, `tests-e2e/`: golden master (byte-identical SVG and MIDI), UI tests and the axe scan. Linux only.         |
+| `npm run test:e2e:verify` | The same on a Mac. See "Golden master on a Mac" below.                                                                |
+| `npm run test:cloud`      | The library panel in Chromium against the Auth and Firestore emulators, `tests-cloud/`, with an axe scan. Needs Java. |
+| `npm run test:rules`      | `firestore.rules` against the Firestore emulator, `tests-rules/`. Needs Java.                                         |
+| `npm run lint`            | ESLint: 0 errors. SonarJS warnings are an accepted backlog.                                                           |
+| `npm run typecheck`       | `tsc` checkJs via JSDoc, compared per file with `scripts/typecheck-baseline.json`. Fails if a file gets more errors.  |
+| `npm run knip`            | No unused exports or files.                                                                                           |
+| `npm run format:check`    | Prettier. `npm run format` fixes it.                                                                                  |
+| `npm run verify:fast`     | lint + typecheck + format:check + knip + Vitest. CI's "Lint and unit tests" job.                                      |
+| `npm run verify`          | `verify:fast`, then `test:e2e:verify`, `test:rules`, `test:cloud`.                                                    |
 
 After you fix type errors, run `npm run typecheck -- --update` to lower the baseline.
 

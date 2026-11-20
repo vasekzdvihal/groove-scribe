@@ -295,6 +295,120 @@ describe('selecting on the ruler', () => {
   });
 });
 
+describe('the ruler by keyboard', () => {
+  const tabStops = () =>
+    [...document.querySelectorAll('.bar-ruler-beat[tabindex="0"]')].map((b) => b.dataset.beat);
+  const selected = () =>
+    [...document.querySelectorAll('.bar-ruler-beat[aria-selected="true"]')].map(
+      (b) => b.dataset.beat
+    );
+  /** Press a key on the focused element, as the browser does. */
+  function press(key, options = {}) {
+    const event = new KeyboardEvent('keydown', {
+      key,
+      bubbles: true,
+      cancelable: true,
+      ...options,
+    });
+    document.activeElement.dispatchEvent(event);
+    return event;
+  }
+
+  it('names the beats and lists them per bar', () => {
+    const list = document.querySelector('.bar-ruler[data-bar="1"] .bar-ruler-beats');
+    expect(list.getAttribute('role')).toBe('listbox');
+    expect(list.getAttribute('aria-multiselectable')).toBe('true');
+    expect(list.getAttribute('aria-label')).toBe('Beats of bar 2');
+    expect(beat(6).getAttribute('role')).toBe('option');
+    expect(beat(6).getAttribute('aria-label')).toBe('Bar 2, beat 3');
+    expect(beat(6).getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('marks selected beats with aria-selected and keeps one tab stop', () => {
+    expect(tabStops()).toEqual(['0']);
+    pointer('pointerdown', 6);
+    pointer('pointermove', 9);
+    pointer('pointerup', 9);
+    expect(selected()).toEqual(['6', '7', '8', '9']);
+    expect(tabStops()).toEqual(['6']);
+    writer.setPartPlay(null);
+    expect(selected()).toEqual([]);
+    expect(tabStops()).toEqual(['0']);
+  });
+
+  it('keeps the tab stop on the focused beat when a key changes the selection', () => {
+    beat(3).focus();
+    press('ArrowRight', { shiftKey: true });
+    expect(writer.setPartPlay).toHaveBeenLastCalledWith({ first: 3, last: 4 });
+    expect(tabStops()).toEqual(['4']);
+  });
+
+  it('keeps the tab stop on the last focused beat, also after a redraw', async () => {
+    beat(10).focus();
+    expect(tabStops()).toEqual(['10']);
+    const container = document.getElementById('measureContainer');
+    container.innerHTML = container.innerHTML.replace('tabindex="0"', 'tabindex="-1"');
+    await Promise.resolve();
+    expect(tabStops()).toEqual(['10']);
+  });
+
+  it('moves the focus with the arrow keys, across bars, and Home and End', () => {
+    beat(3).focus();
+    const right = press('ArrowRight');
+    expect(right.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(beat(4));
+    press('ArrowLeft');
+    press('ArrowLeft');
+    expect(document.activeElement).toBe(beat(2));
+    press('End');
+    expect(document.activeElement).toBe(beat(15));
+    press('ArrowRight');
+    expect(document.activeElement).toBe(beat(15));
+    press('Home');
+    expect(document.activeElement).toBe(beat(0));
+    expect(writer.setPartPlay).not.toHaveBeenCalled();
+    expect(tabStops()).toEqual(['0']);
+  });
+
+  it('selects with Enter and Space as with taps, and clears on the selection', () => {
+    beat(2).focus();
+    press('Enter');
+    expect(writer.setPartPlay).toHaveBeenLastCalledWith({ first: 2, last: 2 });
+    press('ArrowRight');
+    press('ArrowRight');
+    press(' ');
+    expect(writer.setPartPlay).toHaveBeenLastCalledWith({ first: 2, last: 4 });
+    expect(status().textContent).toBe('Bar 1 beat 3 – bar 2 beat 1');
+    press('Enter');
+    expect(writer.setPartPlay).toHaveBeenLastCalledWith(null);
+  });
+
+  it('ignores a held Enter', () => {
+    beat(2).focus();
+    press('Enter');
+    press('Enter', { repeat: true });
+    expect(writer.setPartPlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('extends the selection with Shift and the arrow keys', () => {
+    beat(3).focus();
+    press('ArrowRight', { shiftKey: true });
+    press('ArrowRight', { shiftKey: true });
+    expect(document.activeElement).toBe(beat(5));
+    expect(writer.setPartPlay).toHaveBeenLastCalledWith({ first: 3, last: 5 });
+    press('ArrowLeft', { shiftKey: true });
+    expect(writer.setPartPlay).toHaveBeenLastCalledWith({ first: 3, last: 4 });
+    expect(status().textContent).toBe('Bar 1 beat 4 – bar 2 beat 1');
+  });
+
+  it('keeps other keys and the keys of other elements for the page', () => {
+    beat(3).focus();
+    expect(press('a').defaultPrevented).toBe(false);
+    document.querySelector('.bar-ruler-bar').focus();
+    expect(press('ArrowRight').defaultPrevented).toBe(false);
+  });
+});
+
 describe('the chip', () => {
   it('is hidden without a selection', () => {
     expect(chip().hidden).toBe(true);
@@ -359,7 +473,7 @@ describe('the status for screen readers', () => {
 });
 
 describe('the part blue', () => {
-  // White beat numbers (15 px bold) sit on the part blue: WCAG AA wants 4.5:1.
+  // White beat numbers (15 px bold) sit on the part blue, the --bar-selected token: WCAG AA wants 4.5:1.
   const luminance = (hex) => {
     const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
     const [r, g, b] = channels.map((c) =>
@@ -369,8 +483,8 @@ describe('the part blue', () => {
   };
 
   it('has a contrast of 4.5:1 or more with white text', () => {
-    const css = readFileSync(join(process.cwd(), 'css/part-play.css'), 'utf8');
-    const blue = /--part-blue:\s*(#[0-9a-f]{6})/i.exec(css)?.[1];
+    const css = readFileSync(join(process.cwd(), 'css/editor-toolbars.css'), 'utf8');
+    const blue = /--bar-selected:\s*(#[0-9a-f]{6})/i.exec(css)?.[1];
     expect(blue).toBeDefined();
     const contrast = 1.05 / (luminance(blue) + 0.05);
     expect(contrast).toBeGreaterThanOrEqual(4.5);

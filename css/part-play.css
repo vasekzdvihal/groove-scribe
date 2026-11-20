@@ -4,8 +4,6 @@
 #measureContainer {
   /* The playhead blue. The playhead (0.2, an inline style) replaces the shade on its cell. */
   --part-shade: rgba(50, 126, 173, 0.09);
-  /* The playhead hue, darker: white beat numbers on it have 5.1:1 (WCAG AA). */
-  --part-blue: #1f73a8;
   --ruler-track: #eef1f3;
   --ruler-text: #5b6870;
 }
@@ -53,7 +51,7 @@
 }
 
 #musicalInput .bar-ruler-bar:focus-visible {
-  outline: 2px solid var(--part-blue);
+  outline: 2px solid var(--bar-selected);
   outline-offset: -2px;
   border-radius: 6px;
 }
@@ -105,6 +103,16 @@
   #musicalInput .staff-container:has(> .closeMeasureButton[id]) .bar-ruler-beat:last-of-type > * {
     visibility: hidden;
   }
+
+  /* With the keyboard focus, the ring goes round the whole beat, over the Remove button. */
+  #musicalInput
+    .staff-container:has(> .closeMeasureButton[id])
+    .bar-ruler-beat:last-of-type:focus-visible
+    > .bar-ruler-track {
+    right: 2px;
+    background: none;
+    visibility: visible;
+  }
 }
 
 /* The beat number sits over the first cell of the beat, where the beat starts. */
@@ -124,23 +132,35 @@
   }
 
   #musicalInput .bar-ruler-bar:hover {
-    color: var(--part-blue);
+    color: var(--bar-selected);
   }
 }
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-track {
-  background: var(--part-blue);
+  background: var(--bar-selected);
 }
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-num {
   color: #fff;
 }
 
+/* The keyboard focus: a ring 2 px out from the track, so it does not hide the beat number and
+   shows also around a selected (blue) track. The focused beat paints over the Remove button. */
+#musicalInput .bar-ruler-beat:focus-visible {
+  z-index: 2;
+  outline: none;
+}
+
+#musicalInput .bar-ruler-beat:focus-visible .bar-ruler-track {
+  outline: 2px solid var(--bar-selected);
+  outline-offset: 2px;
+}
+
 /* The first tap: the next tap selects everything from here. */
 #musicalInput .bar-ruler-beat.is-anchor .bar-ruler-track {
   box-shadow:
     inset 0 0 0 2px #fff,
-    0 0 0 2px var(--part-blue);
+    0 0 0 2px var(--bar-selected);
 }
 
 /* The Remove button stays on top of the ruler. */

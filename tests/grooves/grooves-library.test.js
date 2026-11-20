@@ -81,12 +81,17 @@ describe('groove library HTML helpers', () => {
   });
 
   describe('arrayAsHTMLList / getGroovesAsHTML', () => {
-    it('renders a nested <ul> with category headers and clickable groove items', () => {
+    it('renders a heading and a <ul> per category, with a button in each groove item', () => {
       const html = grooves.getGroovesAsHTML();
-      expect(html.startsWith('<ul class="grooveListUL">')).toBe(true);
-      // Category headers and leaf groove items.
-      expect(html).toContain('class="grooveListHeaderLI">Rock grooves</li>');
+      expect(html.startsWith('<h3 class="grooveListHeader">')).toBe(true);
+      expect(html).toContain('<h3 class="grooveListHeader">Rock grooves</h3>');
+      expect(html).toContain('<ul class="grooveListUL">');
+      // A list inside a list is not valid markup for the list rules of a screen reader.
+      expect(html).not.toMatch(/<ul[^>]*>\s*<ul/);
       expect(html).toContain('class="grooveListLI"');
+      expect(html).toMatch(
+        /<li class="grooveListLI" data-groove="[^"]*"><button type="button" class="grooveListButton">/
+      );
       // Each leaf carries its URL. The editor handles the click, so it can ask first when
       // the groove has unsaved edits.
       expect(html).toContain('data-groove="?TimeSig=4/4&amp;Div=');
@@ -98,7 +103,7 @@ describe('groove library HTML helpers', () => {
       const CATEGORIES = ['Rock_Grooves', 'Triplet_Grooves', 'World_Grooves', 'Foot_Ostinatos'];
       const grooveCount = CATEGORIES.reduce((n, c) => n + Object.keys(grooves[c]).length, 0);
       const leafItems = (html.match(/class="grooveListLI"/g) || []).length;
-      const headerItems = (html.match(/class="grooveListHeaderLI"/g) || []).length;
+      const headerItems = (html.match(/class="grooveListHeader"/g) || []).length;
       expect(leafItems).toBe(grooveCount);
       expect(headerItems).toBe(CATEGORIES.length);
     });

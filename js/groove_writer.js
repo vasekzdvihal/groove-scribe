@@ -87,6 +87,7 @@ import {
 } from './constants.js';
 import * as _perm from './permutations.js';
 import * as _view from './viewHtml.js';
+import { ownsArrowKeys } from './gridKeyboard.js';
 import * as _grid from './gridState.js';
 import { barRanges, beatsPerBarFit, countInPercent, groovePercent, rangeFits } from './partPlay.js';
 
@@ -160,11 +161,11 @@ function GrooveWriter() {
   // colors the gridState readers also compare against now live in constants.js)
   var constant_note_on_color_hex = '#000000'; // black
   var constant_note_off_color_hex = '#FFF';
-  var constant_note_border_color_hex = '#999';
-  var constant_hihat_note_off_color_hex = '#CCC';
+  var constant_note_border_color_hex = '#8c8c8c';
+  var constant_hihat_note_off_color_hex = '#8c8c8c';
   var constant_note_hidden_color_rgb = 'transparent';
-  var constant_sticking_right_off_color_rgb = 'rgb(204, 204, 204)';
-  var constant_sticking_left_off_color_rgb = 'rgb(204, 204, 204)';
+  var constant_sticking_right_off_color_rgb = 'rgb(140, 140, 140)';
+  var constant_sticking_left_off_color_rgb = 'rgb(140, 140, 140)';
   var constant_snare_accent_on_color_hex = '#FFF';
 
   // functions below
@@ -281,9 +282,26 @@ function GrooveWriter() {
   // A cell shows that its note is on by more than colour: css/editor-toolbars.css draws the
   // symbols of a cell without data-on smaller. Each note setter writes data-on, so the cue
   // follows every edit, undo, load and Clear all notes. gridState still reads only the colours.
+  // The same setters keep the end of the cell name up to date: "Snare, beat 2, on".
   function markNoteOn(partId, on) {
     var part = document.getElementById(partId);
-    if (part && part.parentElement) part.parentElement.toggleAttribute('data-on', on);
+    if (part && part.parentElement) {
+      part.parentElement.toggleAttribute('data-on', on);
+      labelNoteState(part.parentElement, on);
+    }
+  }
+
+  // What a sticking cell says after its place: "Sticking, beat 1, R and L".
+  var STICKING_STATE_WORDS = { off: 'off', right: 'R', left: 'L', both: 'R and L', count: 'count' };
+
+  function labelStickingState(cell, state) {
+    if (cell.dataset.name && STICKING_STATE_WORDS[state])
+      cell.setAttribute('aria-label', cell.dataset.name + ', ' + STICKING_STATE_WORDS[state]);
+  }
+
+  function labelNoteState(cell, on) {
+    if (cell.dataset.name)
+      cell.setAttribute('aria-label', cell.dataset.name + (on ? ', on' : ', off'));
   }
 
   // set the tom note on with type
@@ -533,6 +551,10 @@ function GrooveWriter() {
   }
 
   function set_sticking_state(id, new_state, make_sound) {
+    // A sticking cell takes no data-on: only the shrink cue reads it, and that cue leaves the
+    // stickings out. Its state is a letter, not on or off, so the name says the letter.
+    var stickingCell = document.getElementById('sticking' + id);
+    if (stickingCell) labelStickingState(stickingCell, new_state);
     // turn both off
     document.getElementById('sticking_right' + id).style.color = constant_note_hidden_color_rgb;
     document.getElementById('sticking_left' + id).style.color = constant_note_hidden_color_rgb;
@@ -831,20 +853,17 @@ function GrooveWriter() {
     }
   };
 
-  // the user has clicked on the download menu (at bottom)
-  root.DownloadAnchorClick = function (event) {
+  // The Download item of the More popover opens the download menu below the More button. A tap
+  // and a key both open it there, in view.
+  root.DownloadAnchorClick = function () {
     var contextMenu = document.getElementById('downloadContextMenu');
-    if (contextMenu) {
-      var anchorPoint = document.getElementById('downloadButton');
-
-      if (anchorPoint) {
-        if (!event) event = window.event;
-        if (event.clientX || event.clientY) {
-          contextMenu.style.top = event.clientY - 150 + 'px';
-          contextMenu.style.left = event.clientX - 150 + 'px';
-        }
-      }
-      root.myGrooveUtils.showContextMenu(contextMenu);
+    if (!contextMenu) return;
+    root.myGrooveUtils.showContextMenu(contextMenu);
+    var moreButton = document.getElementById('moreButton');
+    if (moreButton) {
+      var moreRect = moreButton.getBoundingClientRect();
+      contextMenu.style.top = moreRect.bottom + 4 + 'px';
+      contextMenu.style.left = Math.max(0, moreRect.right - contextMenu.offsetWidth) + 'px';
     }
   };
 
@@ -2685,11 +2704,41 @@ function GrooveWriter() {
     return false; // don't follow the link
   };
 
+  // The bar buttons go away when the grid is drawn again. A key press on one of them gives the
+  // focus to the new "Add a bar" button, so the focus does not fall back to the page start. A
+  // tap does not focus the buttons (editorChrome.js), so after a tap nothing gets the focus.
+  function barButtonHasFocus() {
+    var focused = document.activeElement;
+    return (
+      !!focused && (focused.id === 'addMeasureButton' || focused.matches('.closeMeasureButton'))
+    );
+  }
+
+  // preventScroll: Add a bar scrolls itself into view with a smooth scroll already.
+  function focusAddBarButton(preventScroll) {
+    var add = document.getElementById('addMeasureButton');
+    if (add) add.focus({ preventScroll: preventScroll });
+  }
+
+  // The focus on "Add a bar" does not say what changed, so the status region says it. It is
+  // empty first for a moment, so the same text twice ("Bar 2 removed") is spoken twice.
+  var barStatusTimer = null;
+  function announceBarChange(text) {
+    var status = document.getElementById('barStatus');
+    if (!status) return;
+    status.textContent = '';
+    clearTimeout(barStatusTimer);
+    barStatusTimer = setTimeout(function () {
+      status.textContent = text;
+    }, 100);
+  }
+
   // remove a measure from the page
   // measureNum is indexed starting at 1, not 0
   root.closeMeasureButtonClick = function (measureNum) {
     // a groove always keeps at least one measure
     if (class_number_of_measures <= 1) return;
+    var refocus = barButtonHasFocus();
 
     var uiStickings = '';
     var uiHH = '';
@@ -2732,6 +2781,10 @@ function GrooveWriter() {
       uiSnare,
       uiKick
     );
+    if (refocus) {
+      focusAddBarButton(false);
+      announceBarChange('Bar ' + measureNum + ' removed');
+    }
 
     updateSheetMusic();
   };
@@ -2743,6 +2796,7 @@ function GrooveWriter() {
     // The URL parser clamps to constant_MAX_MEASURES, so a longer groove would lose
     // its extra measures on reload. The button is disabled at the limit; stop here too.
     if (class_number_of_measures >= constant_MAX_MEASURES) return;
+    var refocus = barButtonHasFocus();
 
     var uiStickings = '';
     var uiHH = '';
@@ -2795,6 +2849,10 @@ function GrooveWriter() {
     var add_measure_button = document.getElementById('addMeasureButton');
     if (add_measure_button)
       add_measure_button.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    if (refocus) {
+      focusAddBarButton(true);
+      announceBarChange('Bar ' + class_number_of_measures + ' added');
+    }
 
     updateSheetMusic();
 
@@ -2976,17 +3034,17 @@ function GrooveWriter() {
             }
             break;
 
+          // Left and Right change the tempo, except in a widget that uses the arrow keys
+          // (the note grid, a slider, a list, a menu, a field).
           case 37: // left arrow
-            // left arrow
+            if (ownsArrowKeys(e.target)) break;
             root.myGrooveUtils.downTempo();
             return false;
-          //break;
 
           case 39: // right arrow
-            // right arrow
+            if (ownsArrowKeys(e.target)) break;
             root.myGrooveUtils.upTempo();
             return false;
-          //break;
 
           default:
             /* DEBUG
@@ -3593,6 +3651,13 @@ function GrooveWriter() {
       '</sup>/<sub>' +
       class_note_value_per_measure +
       '</sub>';
+    // The name of a button must hold its visible text.
+    var timeButton = document.getElementById('timeLabel');
+    if (timeButton)
+      timeButton.setAttribute(
+        'aria-label',
+        'Time signature ' + class_num_beats_per_measure + '/' + class_note_value_per_measure
+      );
   };
 
   // A division that does not fit a time signature gets a message that says why. Null means it fits.
@@ -4006,7 +4071,12 @@ function GrooveWriter() {
     var divisionButton = document.getElementById('subdivision_' + division + 'ths');
     selectButton(divisionButton);
     var label = document.getElementById('divisionMenuLabel');
-    if (label && divisionButton) label.textContent = divisionButton.textContent;
+    if (label && divisionButton) {
+      label.textContent = divisionButton.textContent;
+      // The name of a button must hold its visible text.
+      var menuButton = document.getElementById('divisionMenuButton');
+      if (menuButton) menuButton.setAttribute('aria-label', 'Note division ' + label.textContent);
+    }
   }
 
   root.expandAuthoringViewWhenNecessary = function (numNotesPerMeasure, numberOfMeasures) {

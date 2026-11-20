@@ -666,6 +666,17 @@ function GrooveUtils() {
     return _urlBuild(myGrooveData, url_destination);
   };
 
+  // The controls that Space presses or types into. Play is a role=button too: it handles Space
+  // itself (AddMidiPlayerToPage).
+  var SPACE_OWNERS =
+    'button, a[href], input:not([type="range"]), select, textarea, [role="button"], ' +
+    '[role="menuitem"], [role="option"], [role="tab"], [role="checkbox"], [role="switch"], ' +
+    '[role="gridcell"], [contenteditable]:not([contenteditable="false"])';
+
+  function spaceBelongsTo(target) {
+    return target instanceof Element && target.closest(SPACE_OWNERS) !== null;
+  }
+
   function setupHotKeys() {
     // isCtrl is reassigned by the onkeyup/onkeydown handlers below (used to be
     // read by now-commented-out CTRL-S code); removing the declaration would
@@ -685,14 +696,9 @@ function GrooveUtils() {
 			return false;
 			}
 			 */
-      // only accept the event if it not going to an INPUT field
-      // otherwise we can't use spacebar in text fields :(
-      if (
-        e.which == 32 &&
-        (e.target.type == 'range' ||
-          (e.target.tagName.toUpperCase() != 'INPUT' &&
-            e.target.tagName.toUpperCase() != 'TEXTAREA'))
-      ) {
+      // Space plays, except on a control that uses Space itself: a button presses, a field
+      // types, a select opens. A range slider and the page itself still play.
+      if (e.which == 32 && !spaceBelongsTo(e.target)) {
         // spacebar
         root.startOrStopMIDI_playback();
         return false;
@@ -1088,13 +1094,20 @@ function GrooveUtils() {
     return root.getGrooveUtilsBaseLocation() + 'images/';
   };
 
+  // The Play control is a span with a CSS icon. The class draws the icon. The name says what
+  // a press does: Pause while it plays, Play otherwise.
+  function setPlayState(icon, state) {
+    icon.className = 'midiPlayImage ' + state;
+    icon.setAttribute('aria-label', state === 'Playing' ? 'Pause' : 'Play');
+  }
+
   root.midiEventCallbackClass = function (classRoot) {
     this.classRoot = classRoot;
     this.noteHasChangedSinceLastDataLoad = false;
 
     this.playEvent = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Playing';
+      if (icon) setPlayState(icon, 'Playing');
       if (root.playEventCallback) {
         root.playEventCallback();
       }
@@ -1118,13 +1131,13 @@ function GrooveUtils() {
     };
     this.pauseEvent = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Paused';
+      if (icon) setPlayState(icon, 'Paused');
     };
 
     this.resumeEvent = function (root) {};
     this.stopEvent = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Stopped';
+      if (icon) setPlayState(icon, 'Stopped');
     };
     this.repeatChangeEvent = function (root, newValue) {
       if (newValue)
@@ -1139,7 +1152,7 @@ function GrooveUtils() {
 
     this.midiInitialized = function (root) {
       var icon = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
-      if (icon) icon.className = 'midiPlayImage Stopped';
+      if (icon) setPlayState(icon, 'Stopped');
       document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex).onclick = function (
         event
       ) {
@@ -1883,7 +1896,7 @@ function GrooveUtils() {
       '	<div class="playerControlsRow" id="playerControlsRow' +
       root.grooveUtilsUniqueIndex +
       '">' +
-      '		<span title="Play/Pause" class="midiPlayImage" id="midiPlayImage' +
+      '		<span title="Play/Pause" class="midiPlayImage" role="button" tabindex="0" aria-label="Play" id="midiPlayImage' +
       root.grooveUtilsUniqueIndex +
       '"></span>' +
       '       <span class="MIDIPlayTime" id="MIDIPlayTime' +
@@ -1907,10 +1920,10 @@ function GrooveUtils() {
       '">' +
       '			<div class="tempoRow">' +
       '				<span class="tempoLabel">BPM</span>' +
-      '				<input type="text" for="tempo" class="tempoTextField" pattern="\\d+" id="tempoTextField' +
+      '				<input type="text" for="tempo" class="tempoTextField" aria-label="Beats per minute" pattern="\\d+" id="tempoTextField' +
       root.grooveUtilsUniqueIndex +
       '" value="80"></input>' +
-      '				<input type=range min=30 max=300 value=90 class="tempoInput' +
+      '				<input type=range min=30 max=300 value=90 aria-label="Tempo" class="tempoInput' +
       (root.is_touch_device() ? ' touch' : '') +
       '" id="tempoInput' +
       root.grooveUtilsUniqueIndex +
@@ -1921,7 +1934,7 @@ function GrooveUtils() {
       '				<span for="swingAmount" class="swingOutput" id="swingOutput' +
       root.grooveUtilsUniqueIndex +
       '">0% swing</span>' +
-      '				<input type=range min=0 max=50 value=0 class="swingInput' +
+      '				<input type=range min=0 max=50 value=0 aria-label="Swing" class="swingInput' +
       (root.is_touch_device() ? ' touch' : '') +
       '" id="swingInput' +
       root.grooveUtilsUniqueIndex +
@@ -1961,6 +1974,19 @@ function GrooveUtils() {
     if (browserInfo.browser == 'MSIE' && browserInfo.version < 12) isIE10 = true;
 
     // now attach the onclicks
+    // Enter and Space press Play, as for a button. The document hot key leaves Space on a
+    // button alone, so Play handles it here.
+    var playControl = document.getElementById('midiPlayImage' + root.grooveUtilsUniqueIndex);
+    if (playControl) {
+      playControl.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          if (event.repeat) return;
+          playControl.click();
+        }
+      });
+    }
+
     html_element = document.getElementById('tempoInput' + root.grooveUtilsUniqueIndex);
     if (html_element) {
       if (isIE10) html_element.addEventListener('click', root.tempoUpdateFromSlider, false);

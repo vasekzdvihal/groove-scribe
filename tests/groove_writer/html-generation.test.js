@@ -34,7 +34,7 @@ function permutationGroupIds(html) {
 }
 
 function stickingGroupTokens(html) {
-  const start = html.indexOf('<div class="stickings-container">');
+  const start = html.indexOf('<div class="stickings-container"');
   const end = html.indexOf('<div class="end_note_space">', start);
   const section = html.slice(start, end);
   const re = /id="sticking(\d+)"|class="space_between_note_groups"/g;
@@ -187,7 +187,9 @@ describe('HTMLforStaffContainer', () => {
       // class_number_of_measures(1) is not > 1 -> close-measure button is the
       // inert "&nbsp;&nbsp;&nbsp;" placeholder, not a clickable id'd button.
       expect(html).not.toMatch(/id="closeMeasureButton\d+"/);
-      expect(html).toContain('class="closeMeasureButton"><i class="fa">&nbsp;&nbsp;&nbsp;</i>');
+      expect(html).toContain(
+        'class="closeMeasureButton" aria-hidden="true"><i class="fa">&nbsp;&nbsp;&nbsp;</i>'
+      );
     });
   });
 
@@ -244,13 +246,13 @@ describe('HTMLforStaffContainer', () => {
       for (let i = 1; i < 9; i++) swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
       expect(gw.numberOfMeasures()).toBe(9);
       const below = gw.HTMLforStaffContainer(9, 0);
-      expect(below).toContain('title="Add measure"');
+      expect(below).toContain('title="Add a bar"');
       expect(below).not.toContain('aria-disabled');
 
       swallowingKnownHarnessGap(() => gw.addMeasureButtonClick());
       expect(gw.numberOfMeasures()).toBe(10);
       const atLimit = gw.HTMLforStaffContainer(10, 0);
-      expect(atLimit).toContain('title="Maximum is 10 measures"');
+      expect(atLimit).toContain('title="Add a bar. You can have 10 bars at most"');
       expect(atLimit).toContain('aria-disabled="true"');
     });
 
@@ -284,7 +286,7 @@ describe('HTMLforStaffContainer', () => {
 
       expect(gw.numberOfMeasures()).toBe(9);
       const html = gw.HTMLforStaffContainer(9, 0);
-      expect(html).toContain('title="Add measure"');
+      expect(html).toContain('title="Add a bar"');
       expect(html).not.toContain('aria-disabled');
     });
   });

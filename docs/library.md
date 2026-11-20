@@ -36,7 +36,9 @@ Read this before you change anything in `js/cloud/`. For the offline side, see
 - The three tools (Save, Add link, New lesson) are buttons in a sticky row at the top. Each opens
   one form (`showTool`).
 - Lessons sort in natural order ("Week 2" before "Week 10"). Lessons and grooves have a ⋯ menu;
-  only one menu is open at a time.
+  only one menu is open at a time. Escape in an open menu, or on its ⋯, closes it and puts focus
+  on the ⋯ of its row. A window listener in `startLibrary` does this before the side panel hears
+  the key, so an overlay panel stays open.
 - `render()` replaces every row. It puts focus back through `data-focus` keys, and it waits while
   a pointer is down on the list or on a tool form, so a redraw never eats a tap.
 

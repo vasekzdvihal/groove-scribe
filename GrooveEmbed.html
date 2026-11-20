@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
     <head>
-		<title>Embeded Groove</title>
+		<title>Embedded groove</title>
 		
 		
     </head>
     <body>
+	<main id="embed"></main>
 	<script type="module">
 		import { GrooveDisplay } from "./js/groove_display.js";
-		GrooveDisplay.AddGrooveDisplayToPage(location.search, true, true);
+		window.addEventListener("load", function () {
+			GrooveDisplay.AddGrooveDisplayToElementId("embed", location.search, true, true);
+		});
 	</script>
-	

@@ -556,6 +556,8 @@ describe('the library panel', () => {
       fake.add('grooves', 'g1', { lessonId: null, title: 'Beat', query: BEAT, createdAt: 1 });
       await openPanel();
       await loaded();
+      // A key picks the groove (Enter), so the focus goes back to the tab.
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       grooveButton('Beat').click();
       await vi.waitFor(() => expect(editor.currentQuery()).toBe(BEAT));
       expect(byId('sidePanel').classList.contains('open')).toBe(false);

@@ -85,6 +85,19 @@ describe('createSidePanel', () => {
     expect(tab('grooves').querySelector('i')?.className).toBe('fa fa-list');
   });
 
+  it('puts the panel right after the top bar', () => {
+    // In the editor the panel comes before the tools in the tab order: right after the top bar,
+    // before <main>.
+    document.body.innerHTML =
+      '<div class="nonPrintable"><div id="TopNav"><span id="upperLeft"></span></div></div><main></main>';
+    setUp();
+    createSidePanel({ tabs: ALL_TABS });
+    expect(document.querySelector('main')?.previousElementSibling?.id).toBe('sidePanel');
+    expect(document.getElementById('sidePanel')?.previousElementSibling?.id).toBe(
+      'sidePanelBackdrop'
+    );
+  });
+
   it('gives each tab its own section', () => {
     setUp();
     const panel = createSidePanel({ tabs: ALL_TABS });
@@ -285,6 +298,8 @@ describe('createSidePanel', () => {
     panel.show('grooves');
     // An overlay panel is a dialog: focus goes into it.
     expect(document.activeElement?.id).toBe('sidePanelClose');
+    // A key picked the item, so the focus goes back to the tab.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     panel.afterPick();
     expect(panel.isOpen()).toBe(false);
     expect(document.activeElement).toBe(tab('grooves'));

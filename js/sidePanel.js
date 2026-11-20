@@ -6,6 +6,7 @@
 // panel slides over the editor, like a dialog. Turning a tablet closes an overlay panel, and a
 // docked panel that the user left open comes back when the tablet turns back.
 import { isAskingToDiscard } from './confirmDialog.js';
+import { lastInputWasKeyboard, trackInput } from './inputModality.js';
 
 // The docked panel is open. The key is older than the side panel: the library panel used it.
 // The side panel uses it only when it has a Library tab. Without one, the key is not used, and
@@ -66,6 +67,7 @@ function tabButton(tab) {
  * @param {{ tabs: Tab[] }} options  the tabs, in display order
  */
 export function createSidePanel({ tabs }) {
+  trackInput();
   const docked = window.matchMedia(DOCKED_QUERY);
   const byTab = new Map(tabs.map((tab) => [tab.id, tab]));
   const storesKeepOpen = byTab.has('library');
@@ -105,7 +107,11 @@ export function createSidePanel({ tabs }) {
     document.getElementById('upperLeft')?.append(button);
     buttons.set(tab.id, button);
   }
-  document.body.append(backdrop, panel);
+  // In the editor the panel goes right after the top bar, before <main>: the tab order is the
+  // tabs, the panel, then the tools. A page without the top bar gets it at the end.
+  const topBar = document.getElementById('TopNav')?.closest('.nonPrintable');
+  if (topBar) topBar.after(backdrop, panel);
+  else document.body.append(backdrop, panel);
 
   /** @type {TabId | null} */
   let shownTab = null;
@@ -169,11 +175,14 @@ export function createSidePanel({ tabs }) {
   function close() {
     if (shownTab === null) return;
     const button = buttons.get(shownTab);
-    // A docked panel is not a dialog. Focus stays on the page, so space still plays.
-    const moveFocus = !docked.matches || panel.contains(document.activeElement);
+    // Focus goes back to the tab only when it was in the panel and the last input was a key (a
+    // key pick, Escape). After a tap, space must play, not press the tab again. Opening by tap
+    // puts focus in the panel, so where the focus is does not tell a tap from a key.
+    const inPanel = panel.contains(document.activeElement);
     rememberDockedChoice(false);
     setShown(null);
-    if (moveFocus) button.focus();
+    if (inPanel && lastInputWasKeyboard()) button.focus();
+    else if (inPanel) /** @type {HTMLElement} */ (document.activeElement).blur();
   }
 
   /** @param {TabId} id  shows that tab, or closes the panel when that tab is shown */
@@ -221,6 +230,9 @@ export function createSidePanel({ tabs }) {
     (event) => {
       // Escape in the dialog means Keep editing. It must not also close the panel.
       if (isAskingToDiscard()) return;
+      // Escape in a menu or a popup of the editor closes that menu or popup only.
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('.noteContextMenu, [role="dialog"]')) return;
       if (event.key === 'Escape' && shownTab !== null && !docked.matches) close();
     },
     true

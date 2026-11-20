@@ -121,16 +121,26 @@ describe('groove_utils rendering & environment branches', () => {
       expect(typeof document.onkeydown).toBe('function');
       expect(typeof document.onkeyup).toBe('function');
 
-      // Fire each recognized key: ctrl up/down, spacebar in the document body
-      // (plays), spacebar inside a text input (ignored), and the media keys.
+      // Fire each recognized key: ctrl up/down, spacebar in the document body and on a range
+      // slider (plays), spacebar on a control that uses it (a text input, a button, a menu
+      // item: ignored), and the media keys.
+      const make = (html) => {
+        const holder = document.createElement('div');
+        holder.innerHTML = html;
+        return holder.firstElementChild;
+      };
       document.onkeyup({ which: 17 });
       document.onkeydown({ which: 17 });
-      document.onkeydown({ which: 32, target: { type: '', tagName: 'BODY' } });
-      document.onkeydown({ which: 32, target: { type: 'text', tagName: 'INPUT' } });
+      document.onkeydown({ which: 32, target: document.body });
+      document.onkeydown({ which: 32, target: make('<input type="range">') });
+      document.onkeydown({ which: 32, target: make('<input type="text">') });
+      document.onkeydown({ which: 32, target: make('<button><span>Stickings</span></button>') });
+      document.onkeydown({ which: 32, target: make('<button><span>x</span></button>').firstChild });
+      document.onkeydown({ which: 32, target: make('<li role="menuitem">Solo</li>') });
       document.onkeydown({ which: 179 });
       document.onkeydown({ which: 178 });
 
-      expect(gu.startOrStopMIDI_playback).toHaveBeenCalledTimes(1); // spacebar in body only
+      expect(gu.startOrStopMIDI_playback).toHaveBeenCalledTimes(2); // the body and the slider
       expect(gu.startOrPauseMIDI_playback).toHaveBeenCalledTimes(1); // key 179
       expect(gu.stopMIDI_playback).toHaveBeenCalledTimes(1); // key 178
     });

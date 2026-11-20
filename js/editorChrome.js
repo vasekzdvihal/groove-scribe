@@ -1,6 +1,8 @@
 // Behavior for the editor's bars: small popover menus, the tempo knob, and swing.
 // The other menus are the older context menus, opened by GrooveWriter.
 
+import { lastInputWasKeyboard, trackInput } from './inputModality.js';
+
 // The bars are fixed to the screen, so a popover uses screen coordinates. A toolbar that
 // scrolls sideways on a narrow screen cannot clip it this way.
 function placePopover(popover, trigger) {
@@ -13,14 +15,32 @@ function placePopover(popover, trigger) {
     (opensUpward ? rect.top - popover.offsetHeight - margin : rect.bottom + margin) + 'px';
 }
 
+const FOCUSABLE =
+  'button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
+  'textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
+/** @param {Element} container @returns {HTMLElement | undefined} */
+function firstFocusable(container) {
+  return /** @type {HTMLElement[]} */ ([...container.querySelectorAll(FOCUSABLE)]).find(
+    (el) => el.getClientRects().length > 0
+  );
+}
+
 export function initPopovers() {
+  trackInput();
   let open = null;
 
   function close() {
     if (!open) return;
-    open.popover.hidden = true;
-    open.trigger.setAttribute('aria-expanded', 'false');
+    const { popover, trigger } = open;
+    // A key closes it: the focus goes back to its button. A tap closes it: the focus leaves the
+    // hidden popover for the page, as after any tap, so Space plays.
+    const focused = popover.contains(document.activeElement) ? document.activeElement : null;
+    popover.hidden = true;
+    trigger.setAttribute('aria-expanded', 'false');
     open = null;
+    if (focused && lastInputWasKeyboard()) trigger.focus();
+    else if (focused instanceof HTMLElement) focused.blur();
   }
 
   for (const trigger of document.querySelectorAll('[data-popover]')) {
@@ -35,7 +55,16 @@ export function initPopovers() {
       placePopover(popover, trigger);
       trigger.setAttribute('aria-expanded', 'true');
       open = { popover, trigger };
+      if (lastInputWasKeyboard()) firstFocusable(popover)?.focus();
     });
+    // Tab out of the popover closes it. The focus stays where Tab took it.
+    const closeOnFocusAway = (/** @type {FocusEvent} */ event) => {
+      const to = event.relatedTarget;
+      if (open?.popover !== popover || !(to instanceof Node)) return;
+      if (!popover.contains(to) && !trigger.contains(to)) close();
+    };
+    popover.addEventListener('focusout', closeOnFocusAway);
+    trigger.addEventListener('focusout', closeOnFocusAway);
   }
 
   document.addEventListener('click', (event) => {
@@ -54,12 +83,266 @@ export function initPopovers() {
   });
 
   // Space plays the groove. A tapped button must not keep focus, or space would press it again.
+  // Fields and selects take the focus as usual.
+  const tapNoFocus = [
+    '.panel-tab',
+    '#ToolBar button',
+    '#PlaybackBar button',
+    '.tool-popover button',
+    '#helpAnchor',
+    '#timeSigPopup button',
+    '#fullURLPopup button',
+    '#metronomeAutoSpeedupConfiguration button',
+    // The part play ruler and the bar buttons. A key press on a bar button moves the focus to
+    // the new "Add a bar" button (groove_writer.js). A tap must not count as a key press there.
+    '.bar-ruler-bar',
+    '.bar-ruler-beat',
+    '#addMeasureButton',
+    '.closeMeasureButton',
+    // A tapped menu item: the menu closes, and the focus must not stay on the hidden item.
+    '.noteContextMenu li',
+    // A tapped groove row: the panel closes, and the focus must not stay on the hidden button.
+    '.grooveListButton',
+  ].join(', ');
   document.addEventListener('mousedown', (event) => {
-    if (
-      event.target.closest('.panel-tab, #ToolBar button, #PlaybackBar button, .tool-popover button')
-    ) {
-      event.preventDefault();
+    if (event.target.closest(tapNoFocus)) event.preventDefault();
+  });
+}
+
+/** @param {Element} menu @returns {HTMLElement[]} the items that show */
+function markMenuItems(menu) {
+  menu.setAttribute('role', 'menu');
+  const items = [];
+  for (const item of /** @type {HTMLElement[]} */ ([...menu.children])) {
+    if (item.tagName !== 'LI') continue;
+    if (item.hidden) {
+      item.removeAttribute('role');
+      item.removeAttribute('tabindex');
+      continue;
     }
+    item.setAttribute('role', 'menuitem');
+    item.setAttribute('tabindex', '-1');
+    items.push(item);
+  }
+  return items;
+}
+
+const isEnabled = (/** @type {HTMLElement} */ item) =>
+  item.getAttribute('aria-disabled') !== 'true';
+
+/** @param {Element | null} active @returns {HTMLElement | null} the focus, unless it is nowhere */
+const focusedControl = (active) =>
+  active instanceof HTMLElement && active !== document.body ? active : null;
+
+/** @param {HTMLElement} element  focus it, or the element that a redraw put in its place */
+function focusBack(element) {
+  let target = element.isConnected ? element : element.id && document.getElementById(element.id);
+  // An item of a popover that has closed (Download in ⋯): the popover button gets the focus.
+  const popover = target?.closest('.tool-popover');
+  if (popover instanceof HTMLElement && popover.hidden) {
+    target = document.querySelector(`[data-popover="${popover.id}"]`);
+  }
+  if (target instanceof HTMLElement) target.focus();
+}
+
+/**
+ * The older menus (GrooveWriter's context menus) by keyboard: the ARIA menu pattern.
+ * @param {{ showContextMenu: (menu: HTMLElement) => void,
+ *   hideContextMenu: (menu?: HTMLElement | false) => void,
+ *   visible_context_menu: HTMLElement | false }} utils
+ */
+export function initContextMenus(utils) {
+  trackInput();
+  // The signed-in name is the first item of the user menu. A screen reader reads it, but it
+  // does nothing.
+  document.getElementById('userMenuName')?.setAttribute('aria-disabled', 'true');
+  const menus = document.querySelectorAll('.noteContextMenu > ul');
+  menus.forEach(markMenuItems);
+
+  // The focus goes back here when the menu closes. A tap gives none: the focus stays as it was.
+  /** @type {HTMLElement | null} */
+  let opener = null;
+  // The menu button that says the menu is open (aria-expanded).
+  /** @type {Element | null} */
+  let trigger = null;
+  // The menu button of the click that is running now. A tap does not focus a toolbar button.
+  /** @type {Element | null} */
+  let clickedTrigger = null;
+  document.addEventListener(
+    'click',
+    (event) => {
+      clickedTrigger =
+        event.target instanceof Element ? event.target.closest('[aria-haspopup="menu"]') : null;
+      setTimeout(() => (clickedTrigger = null));
+    },
+    true
+  );
+
+  const hide = utils.hideContextMenu;
+  utils.hideContextMenu = function (contextMenu) {
+    const shown = utils.visible_context_menu || contextMenu;
+    const hadFocus = shown instanceof Element && shown.contains(document.activeElement);
+    hide.call(utils, contextMenu);
+    trigger?.setAttribute('aria-expanded', 'false');
+    const back = opener;
+    opener = trigger = null;
+    if (hadFocus && back) focusBack(back);
+  };
+
+  const show = utils.showContextMenu;
+  utils.showContextMenu = function (contextMenu) {
+    const active = document.activeElement;
+    const previous = utils.visible_context_menu;
+    // A sub-menu (Offset click) opens from an item of a menu. It keeps the first opener.
+    const kept = previous && previous.contains(active) ? { opener, trigger } : null;
+    show.call(utils, contextMenu);
+    if (kept) {
+      ({ opener, trigger } = kept);
+    } else {
+      opener = focusedControl(active);
+      trigger = clickedTrigger ?? (opener?.matches('[aria-haspopup="menu"]') ? opener : null);
+    }
+    trigger?.setAttribute('aria-expanded', 'true');
+    const items = markMenuItems(contextMenu);
+    if (lastInputWasKeyboard()) items.find(isEnabled)?.focus({ preventScroll: true });
+  };
+
+  /** @param {KeyboardEvent} event */
+  function onMenuKey(event) {
+    const menu = /** @type {HTMLElement} */ (event.currentTarget);
+    const items = /** @type {HTMLElement[]} */ ([
+      ...menu.querySelectorAll(':scope > [role="menuitem"]'),
+    ]);
+    const item = event.target instanceof Element ? event.target.closest('[role="menuitem"]') : null;
+    const at = items.indexOf(/** @type {HTMLElement} */ (item));
+    const count = items.length;
+    const moveTo = (/** @type {number} */ index) => items[(index + count) % count]?.focus();
+    switch (event.key) {
+      case 'ArrowDown':
+        moveTo(at + 1);
+        break;
+      case 'ArrowUp':
+        moveTo(at < 0 ? -1 : at - 1);
+        break;
+      case 'Home':
+        moveTo(0);
+        break;
+      case 'End':
+        moveTo(-1);
+        break;
+      case 'Enter':
+      case ' ':
+        if (!event.repeat && item instanceof HTMLElement && isEnabled(item)) {
+          item.click();
+          // A tap closes the menu with a click on the page, which waits a moment after it
+          // opens. A key closes it now.
+          if (utils.visible_context_menu === menu) utils.hideContextMenu(menu);
+        }
+        break;
+      case 'Escape':
+        utils.hideContextMenu(menu);
+        break;
+      case 'Tab':
+        // Close and let Tab go on from the menu button.
+        utils.hideContextMenu(menu);
+        return;
+      default:
+        return;
+    }
+    // The page keys must not see a menu key: Space would play, Left would slow the tempo.
+    event.preventDefault();
+    event.stopPropagation();
+  }
+  menus.forEach((menu) => menu.addEventListener('keydown', onMenuKey));
+
+  // A tap opened the menu, so the focus is on the page, not in the menu. Escape closes it and
+  // leaves the focus where it is.
+  document.addEventListener('keydown', (event) => {
+    const menu = utils.visible_context_menu;
+    if (event.key !== 'Escape' || !menu || menu.contains(document.activeElement)) return;
+    utils.hideContextMenu(menu);
+  });
+}
+
+// The popups of the editor. Each one closes with its own Cancel or close button, which Escape
+// presses. They are not modal: Tab can leave them.
+const POPUPS = [
+  ['timeSigPopup', 'timeSigPopupTimeSigTop', 'timeSigPopupCancel'],
+  ['fullURLPopup', 'fullURLPopupTextField', 'fullURLPopupCloseButton'],
+  [
+    'metronomeAutoSpeedupConfiguration',
+    'metronomeAutoSpeedUpKeepGoingForever',
+    'metronomeAutoSpeedupConfigurationCloseButton',
+  ],
+];
+
+/**
+ * Follows one popup as it opens and closes. The editor shows and hides it with its style.
+ * @param {HTMLElement} popup
+ * @param {HTMLElement} first  the control that gets the focus
+ * @param {(open: boolean) => void} onChange
+ */
+function watchPopup(popup, first, onChange) {
+  let isOpen = false;
+  /** @type {HTMLElement | null} */
+  let opener = null;
+  // Where the focus came from when the editor put it into the popup itself (the share link).
+  /** @type {HTMLElement | null} */
+  let cameFrom = null;
+  popup.addEventListener('focusin', (event) => {
+    const from = event.relatedTarget;
+    if (!isOpen && from instanceof HTMLElement && !popup.contains(from)) cameFrom = from;
+  });
+
+  function opened() {
+    const active = document.activeElement;
+    opener = popup.contains(active) ? cameFrom : focusedControl(active);
+    if (lastInputWasKeyboard() && !popup.contains(active)) first.focus();
+  }
+
+  function closed() {
+    const active = document.activeElement;
+    // The focus was in the popup, or nowhere: it goes back. A focus that moved on stays. With no
+    // place to go back to (a tap opened it), the focus leaves the hidden popup for the page.
+    if (opener && (!focusedControl(active) || popup.contains(active))) focusBack(opener);
+    else if (active instanceof HTMLElement && popup.contains(active)) active.blur();
+    opener = cameFrom = null;
+  }
+
+  new MutationObserver(() => {
+    const nowOpen = getComputedStyle(popup).display !== 'none';
+    if (nowOpen === isOpen) return;
+    isOpen = nowOpen;
+    if (nowOpen) opened();
+    else closed();
+    onChange(nowOpen);
+  }).observe(popup, { attributes: true, attributeFilter: ['style'] });
+}
+
+export function initPopups() {
+  trackInput();
+  /** @type {{ popup: HTMLElement, close: HTMLElement }[]} the open popups, the newest last */
+  const shown = [];
+  for (const [popupId, firstId, closeId] of POPUPS) {
+    const popup = document.getElementById(popupId);
+    const first = document.getElementById(firstId);
+    const close = document.getElementById(closeId);
+    if (!popup || !first || !close) continue;
+    watchPopup(popup, first, (open) => {
+      const at = shown.findIndex((entry) => entry.popup === popup);
+      if (at >= 0) shown.splice(at, 1);
+      if (open) shown.push({ popup, close });
+    });
+  }
+
+  // Escape closes the newest popup that has the focus, or any popup when the focus is nowhere.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    const active = document.activeElement;
+    const entry = shown.findLast(({ popup }) => !focusedControl(active) || popup.contains(active));
+    if (!entry) return;
+    event.preventDefault();
+    entry.close.click();
   });
 }
 
@@ -369,7 +652,6 @@ function initTempoField(utils, player, tempoField) {
 export function initPlaybackControls(utils) {
   const player = document.getElementById('midiPlayer');
   const tempoField = player.querySelector('.tempoTextField');
-  tempoField.setAttribute('aria-label', 'Beats per minute');
   const tempo = initTempoField(utils, player, tempoField);
 
   const holder = document.createElement('span');

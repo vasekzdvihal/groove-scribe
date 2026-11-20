@@ -12,13 +12,16 @@ import { GrooveUtils } from './groove_utils.js';
 import { grooves } from './grooves.js';
 import {
   initBarScroll,
+  initContextMenus,
   initPlaybackControls,
   initPopovers,
+  initPopups,
   initSaveButton,
 } from './editorChrome.js';
 import { hasRememberedUser, initLibraryPanel } from './cloud/libraryPanel.js';
 import { createSidePanel } from './sidePanel.js';
 import { initPartPlay } from './partPlayControl.js';
+import { initGridKeyboard } from './gridKeyboard.js';
 import { createDirtyState, restoredBaseline, watchDirty } from './cloud/dirtyState.js';
 import { askToClearNotes, askToDiscard } from './confirmDialog.js';
 import { createWakeLock } from './wakeLock.js';
@@ -126,6 +129,22 @@ if (utils.is_touch_device()) {
 fillContainer('PermutationOptions', myGrooveWriter.HTMLforPermutationOptions());
 
 myGrooveWriter.renderNoteGrid();
+// The keyboard and screen readers use the note grid. Space or Enter on a cell acts as a click
+// at the left of the cell. The note menu of advanced edit opens 30 px above a click
+// (noteRightClick), so this click is 30 px below the cell: the menu then starts at the bottom of
+// the cell and does not cover it.
+const NOTE_MENU_LIFT = 30;
+const measureContainer = document.getElementById('measureContainer');
+if (measureContainer) {
+  initGridKeyboard(measureContainer, (cell) => {
+    const rect = cell.getBoundingClientRect();
+    myGrooveWriter.noteLeftClick(
+      { clientX: rect.left, clientY: rect.bottom + NOTE_MENU_LIFT },
+      cell.dataset.instrument,
+      Number(cell.dataset.index)
+    );
+  });
+}
 // The rulers above the bars select the beats that Play loops. The chip says what plays.
 initPartPlay(myGrooveWriter);
 
@@ -247,6 +266,8 @@ if ('serviceWorker' in navigator && shouldRegister(window.location, Boolean(wind
 }
 
 initPopovers();
+initContextMenus(utils);
+initPopups();
 initBarScroll();
 
 // Back can bring this page out of the back-forward cache after another page in the tab wrote

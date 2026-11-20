@@ -213,7 +213,7 @@ body {
 .left-button.buttonSelected,
 .left-button.buttonSelected:hover {
   /* is subdivision and is selected */
-  background: #2484c0;
+  background: #1f73a8;
   color: #fff;
   cursor: auto;
   transform: scale(1.1);
@@ -545,7 +545,7 @@ body {
   top: 0px;
   left: 6px;
   font-size: 24px;
-  color: #cccccc;
+  color: #8c8c8c;
   cursor: pointer;
 }
 .sticking_left {
@@ -553,7 +553,7 @@ body {
   top: 0px;
   left: 6px;
   font-size: 24px;
-  color: #cccccc;
+  color: #8c8c8c;
   cursor: pointer;
 }
 .sticking_both {
@@ -633,7 +633,7 @@ body {
   top: 15px;
   left: 5px;
   font-size: 24px;
-  color: #cccccc;
+  color: #8c8c8c;
   cursor: pointer;
 }
 .hh_open {
@@ -700,7 +700,7 @@ body {
   width: 20px;
   background: #fff;
   border: 2px solid;
-  border-color: #999;
+  border-color: #8c8c8c;
   border-radius: 30px;
   cursor: pointer;
 }
@@ -729,7 +729,7 @@ body {
   width: 22px;
   background: #fff;
   border: 2px solid;
-  border-color: #999;
+  border-color: #8c8c8c;
   border-radius: 30px;
   cursor: pointer;
 }
@@ -781,7 +781,7 @@ body {
   height: 22px;
   width: 22px;
   background: #fff;
-  border: 2px solid #999;
+  border: 2px solid #8c8c8c;
   border-radius: 40px 40px 40px 40px;
   cursor: pointer;
 }
@@ -950,7 +950,7 @@ ul.list a:hover {
   background: #eeeeee;
   color: #000;
 }
-.grooveListHeaderLI {
+.grooveListHeader {
   padding: 15px;
   background: var(--highlight-color);
   font-size: 18px;
@@ -1023,7 +1023,7 @@ hr {
   font-size: 16px;
   font-weight: 500;
   background: #fff;
-  color: #ccc;
+  color: #767676; /* 4.5:1 on white */
   border: 0px;
   border-radius: 5px;
   padding: 5px 10px;
@@ -1045,6 +1045,25 @@ hr {
   font-size: 100%;
   float: right;
   cursor: pointer;
+  /* A button, so that the keyboard reaches it. It looks as the icon alone did. The padding
+     makes a 44 px touch target round the 18 x 19 px icon, and the negative margin keeps the
+     icon and the layout where they were. */
+  margin: -12.5px -13px;
+  padding: 12.5px 13px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: inherit;
+  line-height: inherit;
+}
+/* The ring goes round the icon, not round the larger touch target. */
+#fullURLPopupCloseButton:focus-visible {
+  outline: none;
+}
+#fullURLPopupCloseButton:focus-visible > i {
+  border-radius: 50%;
+  outline: 2px solid #1f73a8;
+  outline-offset: 2px;
 }
 #fullURLPopupCloseButton:hover {
   color: #444;
