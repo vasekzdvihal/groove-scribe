@@ -1,0 +1,19 @@
+/* The colours and the corner radius of the editor, the side panel, the dialogs, the Help and About
+   pages and the embed. Every page loads this file first. White text on each accent colour has a
+   contrast of 4.5:1 or more. The note colours of the grid are in js/constants.js, not here. */
+:root {
+  --accent: #1f73a8;
+  --accent-hover: #1a6493;
+  --accent-active: #155780;
+  --accent-text: #ffffff;
+  --accent-shade: rgba(31, 115, 168, 0.09);
+  --surface-1: #222a2f;
+  --surface-2: #2a3238;
+  --surface-header: #243640;
+  --text: #eef2f4;
+  --text-dim: #b4c0c7;
+  --line: #46525a;
+  --danger: #a8261a;
+  --danger-text: #f08a8a;
+  --radius: 6px;
+}

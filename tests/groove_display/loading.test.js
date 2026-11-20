@@ -119,5 +119,11 @@ describe('GrooveDisplay asset loading', () => {
       expect(joined).toContain('groove_display.css');
       expect(joined).toContain('font-awesome');
     });
+
+    it('injects tokens.css first, so the other stylesheets have the colours', () => {
+      const hrefs = Array.from(document.getElementsByTagName('link')).map((l) => l.href);
+      const css = hrefs.filter((href) => href.includes('/css/'));
+      expect(css[0]).toMatch(/\/css\/tokens\.css$/);
+    });
   });
 });

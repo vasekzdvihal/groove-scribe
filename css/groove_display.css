@@ -293,7 +293,7 @@ input[type='range']:focus {
   outline: none;
 }
 input[type='range']:focus-visible {
-  outline: 2px solid #1f73a8;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 input[type='range']::-webkit-slider-runnable-track {
@@ -395,7 +395,7 @@ input[type='range']:active::-webkit-slider-thumb {
   padding: 8px 16px;
   border: 0;
   border-radius: 4px;
-  background: #a8261a;
+  background: var(--danger);
   color: #ffffff;
   font-family: inherit;
   font-size: 16px;
@@ -417,12 +417,12 @@ input[type='range']:active::-webkit-slider-thumb {
 .midiPlayImage:focus-visible {
   outline: 3px solid #ffffff;
   outline-offset: 2px;
-  box-shadow: 0 0 0 5px #1f73a8;
+  box-shadow: 0 0 0 5px var(--accent);
 }
 .soundRetry:focus-visible {
   outline: 3px solid #ffffff;
   outline-offset: 2px;
-  box-shadow: 0 0 0 5px #1f73a8;
+  box-shadow: 0 0 0 5px var(--accent);
 }
 /* The small player is only 96 px wide, so the button goes beside it on one line. */
 .playerControl.small {

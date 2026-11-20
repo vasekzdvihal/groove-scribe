@@ -162,7 +162,6 @@ body {
   /* is a button and is selected */
   color: #fff;
   font-weight: 700;
-  /background: #68c2ff;
 }
 
 #logoInSubdivision {
@@ -213,7 +212,7 @@ body {
 .left-button.buttonSelected,
 .left-button.buttonSelected:hover {
   /* is subdivision and is selected */
-  background: #1f73a8;
+  background: var(--accent);
   color: #fff;
   cursor: auto;
   transform: scale(1.1);
@@ -368,12 +367,12 @@ body {
   text-align: center;
 }
 .stickings-label:hover {
-  color: var(--highlight-color);
+  color: var(--accent);
 }
 .hh-label:hover,
 .snare-label:hover,
 .kick-label:hover {
-  color: var(--highlight-color);
+  color: var(--accent);
 }
 .music-line-container {
   display: inline-block;
@@ -815,7 +814,7 @@ body {
 #addMeasureButton {
   vertical-align: top;
   display: inline-block;
-  color: var(--highlight-color-on-white);
+  color: var(--accent);
   cursor: pointer;
   font-size: 40px;
   padding-top: 2px;
@@ -827,7 +826,7 @@ body {
   display: inline-block;
   margin-top: 3px;
   cursor: pointer;
-  color: var(--highlight-color-on-white);
+  color: var(--accent);
 }
 .closeMeasureButton:hover,
 #addMeasureButton:hover {
@@ -835,7 +834,7 @@ body {
 }
 #addMeasureButton[aria-disabled='true'],
 #addMeasureButton[aria-disabled='true']:hover {
-  color: var(--highlight-color-on-white);
+  color: var(--accent);
   opacity: 0.35;
   cursor: not-allowed;
 }
@@ -952,7 +951,7 @@ ul.list a:hover {
 }
 .grooveListHeader {
   padding: 15px;
-  background: var(--highlight-color);
+  background: var(--accent);
   font-size: 18px;
   font-weight: bold;
 }
@@ -1031,7 +1030,7 @@ hr {
 #timeSigPopupOK {
   font-size: 16px;
   font-weight: 500;
-  background: var(--highlight-color);
+  background: var(--accent);
   color: #fff;
   border: 0px;
   border-radius: 5px;
@@ -1062,7 +1061,7 @@ hr {
 }
 #fullURLPopupCloseButton:focus-visible > i {
   border-radius: 50%;
-  outline: 2px solid #1f73a8;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 #fullURLPopupCloseButton:hover {
@@ -1074,7 +1073,7 @@ hr {
   text-align: center;
 }
 #fullURLPopupSubTitle {
-  color: var(--highlight-color);
+  color: var(--accent);
   font-size: 14px;
   font-weight: 700;
   text-align: center;
@@ -1127,7 +1126,7 @@ hr {
   top: 7px;
 }
 .sharer-0 label {
-  background: var(--highlight-color) !important;
+  background: var(--accent) !important;
   color: #fff !important;
 }
 .metronomeAutoSpeedupInputRow {
@@ -1139,7 +1138,7 @@ hr {
 }
 #metronomeAutoSpeedupTempoIncreaseAmount,
 #metronomeAutoSpeedupTempoIncreaseInterval {
-  background: var(--highlight-color);
+  background: var(--accent);
   width: 365px;
 }
 #metronomeAutoSpeedupOutputText {
@@ -1148,7 +1147,7 @@ hr {
 }
 #metronomeAutoSpeedupTempoIncreaseAmountOutput,
 #metronomeAutoSpeedupTempoIncreaseIntervalOutput {
-  color: var(--highlight-color);
+  color: var(--accent);
   font-weight: 700;
 }
 #metronomeAutoSpeedupConfigurationAmountLable,
@@ -1157,7 +1156,7 @@ hr {
 }
 #metronomeAutoSpeedupConfigurationKeepIncreasing {
   font-size: 12px;
-  color: var(--highlight-color);
+  color: var(--accent);
   text-align: center;
   vertical-align: middle;
   margin-bottom: 10px;
@@ -1169,7 +1168,7 @@ hr {
 #metronomeAutoSpeedupConfigurationCloseButton {
   font-size: 16px;
   font-weight: 500;
-  background: var(--highlight-color);
+  background: var(--accent);
   color: #fff;
   border: 0px;
   border-radius: 5px;
@@ -1221,7 +1220,7 @@ input[type='checkbox']:not(:checked) + label {
   bottom: 3px;
   right: 3px;
   margin-right: 20px;
-  color: var(--highlight-color);
+  color: var(--accent);
 }
 .totalTimeNum {
   color: #eee;

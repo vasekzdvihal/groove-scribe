@@ -25,22 +25,22 @@
 
 ## Tokens (exact values)
 
-| Token | Value | Replaces |
-| --- | --- | --- |
-| `--accent` | `#1f73a8` | `--bar-selected`, `--lp-accent`, `--dd-accent`, `--highlight-color`, `--highlight-color-on-white`, `--side-highlight-bg-color`, `--page-link`, `--lp-current`, literals `#63b1e6`, `#1b6fa8`, `#14689d` |
-| `--accent-hover` | `#1a6493` | `#2d97da`, `#68c2ff`, `#005483` |
-| `--accent-active` | `#155780` | new pressed state |
-| `--accent-text` | `#ffffff` | `--lp-accent-text`, `--dd-accent-text` (were dark text on light blue) |
-| `--accent-shade` | `rgba(31, 115, 168, 0.09)` | `--part-shade` |
-| `--surface-1` | `#222a2f` | `--bar-playback-bg`, `--lp-bg`, `--dd-bg` |
-| `--surface-2` | `#2a3238` | `--bar-tools-bg`, `--lp-surface`, `--dd-surface` |
-| `--surface-header` | `#243640` | `--bar-bg` (pages.css), the header colour |
-| `--text` | `#eef2f4` | `--bar-text`, `--lp-text`, `--dd-text` |
-| `--text-dim` | `#b4c0c7` | `--bar-dim`, `--lp-muted`, `--dd-muted` |
-| `--line` | `#46525a` | `--bar-line`, `--lp-border`, `--dd-border` |
-| `--danger` | `#a8261a` | `--bar-danger` (background) |
-| `--danger-text` | `#f08a8a` | `--lp-danger`, `--dd-danger` (text on dark) |
-| `--radius` | `6px` | radii 4, 5, 8, 22 px on buttons, popovers, menus, dialogs |
+| Token              | Value                      | Replaces                                                                                                                                                                                                |
+| ------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--accent`         | `#1f73a8`                  | `--bar-selected`, `--lp-accent`, `--dd-accent`, `--highlight-color`, `--highlight-color-on-white`, `--side-highlight-bg-color`, `--page-link`, `--lp-current`, literals `#63b1e6`, `#1b6fa8`, `#14689d` |
+| `--accent-hover`   | `#1a6493`                  | `#2d97da`, `#68c2ff`, `#005483`                                                                                                                                                                         |
+| `--accent-active`  | `#155780`                  | new pressed state                                                                                                                                                                                       |
+| `--accent-text`    | `#ffffff`                  | `--lp-accent-text`, `--dd-accent-text` (were dark text on light blue)                                                                                                                                   |
+| `--accent-shade`   | `rgba(31, 115, 168, 0.09)` | `--part-shade`                                                                                                                                                                                          |
+| `--surface-1`      | `#222a2f`                  | `--bar-playback-bg`, `--lp-bg`, `--dd-bg`                                                                                                                                                               |
+| `--surface-2`      | `#2a3238`                  | `--bar-tools-bg`, `--lp-surface`, `--dd-surface`                                                                                                                                                        |
+| `--surface-header` | `#243640`                  | `--bar-bg` (pages.css), the header colour                                                                                                                                                               |
+| `--text`           | `#eef2f4`                  | `--bar-text`, `--lp-text`, `--dd-text`                                                                                                                                                                  |
+| `--text-dim`       | `#b4c0c7`                  | `--bar-dim`, `--lp-muted`, `--dd-muted`                                                                                                                                                                 |
+| `--line`           | `#46525a`                  | `--bar-line`, `--lp-border`, `--dd-border`                                                                                                                                                              |
+| `--danger`         | `#a8261a`                  | `--bar-danger` (background)                                                                                                                                                                             |
+| `--danger-text`    | `#f08a8a`                  | `--lp-danger`, `--dd-danger` (text on dark)                                                                                                                                                             |
+| `--radius`         | `6px`                      | radii 4, 5, 8, 22 px on buttons, popovers, menus, dialogs                                                                                                                                               |
 
 Light page colours in `pages.css` (`--page-text`, `--page-dim`, `--page-bg`, `--page-soft`, `--page-line`) may stay as page-local light tokens; only `--page-link` becomes `--accent`. Embed-only layout colours in `groove_display_orange.css` (`--header-bg-*`, `--bpm-bg-color`, `--side-bg-color`, `--bottom-bg-color`, `--note-overlay-bg-color`) may stay; their blue highlight variables become `--accent`.
 
@@ -57,11 +57,13 @@ Light page colours in `pages.css` (`--page-text`, `--page-dim`, `--page-bg`, `--
 ### Task 1: Tokens
 
 **Files:**
+
 - Create: `css/tokens.css`
 - Modify: `css/editor-toolbars.css`, `css/side-panel.css`, `css/library-panel.css`, `css/confirm-dialog.css`, `css/pages.css`, `css/part-play.css`, `css/groove_display_orange.css`, `css/groove_display.css`, `css/groove_writer_orange.css`, `index.html`, `gscribe_help.html`, `gscribe_about.html`, `js/groove_display.js` (load `../css/tokens.css` before the other CSS)
 - Test: `tests/css-tokens.test.js` (new), `tests-e2e/visual-system.spec.js` (new)
 
 **Interfaces:**
+
 - Produces: the token names in the table above. Tasks 2-5 use only these names.
 
 - [ ] **Step 1: Write the failing Vitest** `tests/css-tokens.test.js`, reading every `css/*.css` except `share-button.min.css`, `groove_writer.css` and `groove_display_grey.css` (deleted in Task 5):
@@ -78,10 +80,12 @@ Light page colours in `pages.css` (`--page-text`, `--page-dim`, `--page-bg`, `--
 ### Task 2: One button
 
 **Files:**
+
 - Modify: `css/tokens.css` (add `.btn`, `.btn-primary`, `.btn-danger`), `css/side-panel.css`, `css/library-panel.css`, `css/confirm-dialog.css`, `css/part-play.css`, `css/groove_writer_orange.css`, `css/editor-toolbars.css`, and the HTML/JS that renders those buttons (`index.html`, `js/cloud/libraryPanel.js`, `js/editorChrome.js`, `js/sidePanel.js`, `js/partPlayControl.js` as needed)
 - Test: `tests-e2e/visual-system.spec.js`
 
 **Interfaces:**
+
 - Consumes: tokens from Task 1.
 - Produces: `.btn` (base: `border-radius: var(--radius)`, `min-height: var(--touch-size)`, Lato 600, neutral `--surface-2` fill, `--text`, 1px `--line` border), `.btn-primary` (`--accent` fill, `--accent-text`, hover `--accent-hover`, active `--accent-active`), `.btn-danger` (`--danger` fill, white text).
 
@@ -94,6 +98,7 @@ Light page colours in `pages.css` (`--page-text`, `--page-dim`, `--page-bg`, `--
 ### Task 3: Lato in the grid
 
 **Files:**
+
 - Modify: `css/groove_writer_orange.css` (`.notes-container` at about line 385, and the `#musicalInput` wrapper)
 - Test: `tests-e2e/visual-system.spec.js`
 
@@ -106,10 +111,12 @@ Light page colours in `pages.css` (`--page-text`, `--page-dim`, `--page-bg`, `--
 ### Task 4: Share button on demand
 
 **Files:**
+
 - Modify: `index.html` (remove the eager `share-button.min.css` link and `share-button.min.js` script; keep or create the `<share-button>` element as the library requires), `js/groove_writer.js` (`root.show_FullURLPopup`, about line 3802), `scripts/build-www.mjs` (precache `js/share-button.min.js`; `css/share-button.min.css` is already precached by the `css/*.css` pattern)
 - Test: `tests-e2e/visual-system.spec.js`, `tests/scripts/build-www.test.js`
 
 **Interfaces:**
+
 - Produces: `loadShareButton(): Promise<void>` — a module-private helper in `js/groove_writer.js` (or a new small module `js/shareButtonLoader.js` added to `eslint.config.js`) that injects the CSS link and the script once and resolves when the script has loaded; later calls return the same promise.
 
 - [ ] **Step 1: Write the failing e2e** `test('the share button loads only with the share popup')`: record requests; after page load there is no request for `share-button.min`. Open the share popup the way existing share tests do; exactly one request each for the JS and CSS, and the share control renders inside `#shareButtonContainer`. Close and open again: no new request.
@@ -122,6 +129,7 @@ Light page colours in `pages.css` (`--page-text`, `--page-dim`, `--page-bg`, `--
 ### Task 5: Dead files and smoke baselines
 
 **Files:**
+
 - Delete: `css/groove_writer.css`, `css/groove_display_grey.css`, `font-awesome/4.3.0/`, and in `font-awesome/4.7.0/` everything except `css/font-awesome.min.css` and the `fonts/` files the CSS references (keep woff2 and woff; delete `less/`, `scss/`, `css/font-awesome.css`, eot, ttf, svg, otf, HELP-US-OUT.txt). Keep the font licence text if one exists.
 - Modify: `js/groove_display.js:114` (load `../font-awesome/4.7.0/css/font-awesome.min.css`), comments that name the deleted CSS files, `tests/groove_display/loading.test.js`, `tests/scripts/build-www.test.js`, `tests/firebase-config.test.js` as needed
 - Regenerate: `tests-e2e/smoke.spec.js-snapshots/*-chromium-linux.png` in Docker

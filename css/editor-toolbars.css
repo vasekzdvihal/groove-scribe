@@ -5,13 +5,6 @@
   --bar-top-height: 56px;
   --bar-tools-height: 52px;
   --bar-playback-height: 96px;
-  --bar-text: #eef2f4;
-  --bar-dim: #b4c0c7;
-  --bar-tools-bg: #2a3238;
-  --bar-playback-bg: #222a2f;
-  --bar-line: #46525a;
-  --bar-selected: #1f73a8;
-  --bar-danger: #a8261a;
   --touch-size: 44px;
   /* The playback bar is the main control from the drum stool, so its targets are bigger. */
   --playback-touch: 56px;
@@ -48,7 +41,7 @@
   max-width: none;
   margin: 0;
   padding: 0 12px;
-  color: var(--bar-text);
+  color: var(--text);
 }
 
 #TopNav {
@@ -66,7 +59,7 @@
   flex-wrap: nowrap;
   overflow-x: auto;
   scroll-padding-inline: 8px;
-  background: var(--bar-tools-bg);
+  background: var(--surface-2);
   border-bottom: 1px solid #000;
 }
 
@@ -74,7 +67,7 @@
   bottom: 0;
   height: var(--bar-playback-height);
   gap: 8px;
-  background: var(--bar-playback-bg);
+  background: var(--surface-1);
   border-top: 1px solid #000;
 }
 
@@ -184,7 +177,7 @@
 }
 
 .tool-filled {
-  background: var(--bar-line);
+  background: var(--line);
 }
 
 .tool-filled:hover {
@@ -192,13 +185,17 @@
 }
 
 .tool-primary {
-  background: var(--bar-selected);
+  background: var(--accent);
   color: #fff;
   font-weight: 700;
 }
 
 .tool-primary:hover {
-  background: #2d97da;
+  background: var(--accent-hover);
+}
+
+.tool-primary:active {
+  background: var(--accent-active);
 }
 
 .tool-caret .tool-in::after {
@@ -213,7 +210,7 @@
   width: 1px;
   height: 28px;
   margin: 0 8px;
-  background: var(--bar-line);
+  background: var(--line);
 }
 
 .tool-grow {
@@ -246,7 +243,7 @@
 /* A control that is on: toms shown, stickings shown, note types on. */
 .tool.ClickToHide,
 .tool.buttonSelected {
-  background: var(--bar-selected);
+  background: var(--accent);
   color: #fff;
 }
 
@@ -315,7 +312,7 @@
   width: var(--touch-size);
   padding: 0;
   overflow: hidden;
-  background: var(--bar-selected);
+  background: var(--accent);
 }
 
 #helpAnchor.signedIn img {
@@ -570,7 +567,7 @@
 /* The keyboard focus on a note cell. Inset, so the ring does not cover the next cell and the
    bar's overflow clip does not cut it. */
 #musicalInput [role='gridcell']:focus-visible {
-  outline: 3px solid #1f73a8;
+  outline: 3px solid var(--accent);
   outline-offset: -3px;
 }
 
@@ -676,7 +673,7 @@
 
 #musicalInput .closeMeasureButton:focus-visible,
 #musicalInput #addMeasureButton:focus-visible {
-  outline: 2px solid var(--bar-selected);
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: 6px;
 }
@@ -776,13 +773,17 @@
   width: 68px;
   height: 68px;
   margin: 0;
-  background: var(--bar-selected);
+  background: var(--accent);
   font-size: 30px;
   line-height: 68px;
 }
 
 #midiPlayer .midiPlayImage:hover {
-  background: #2d97da;
+  background: var(--accent-hover);
+}
+
+#midiPlayer .midiPlayImage:active {
+  background: var(--accent-active);
 }
 
 #midiPlayer .MIDIPlayTime {
@@ -790,7 +791,7 @@
   width: 72px;
   margin: 0;
   padding: 0;
-  color: var(--bar-text);
+  color: var(--text);
   font-size: 26px;
   font-variant-numeric: tabular-nums;
   line-height: normal;
@@ -817,7 +818,7 @@
   height: auto;
   margin: 0;
   padding: 0;
-  color: var(--bar-dim);
+  color: var(--text-dim);
   font-size: 13px;
   font-weight: 400;
   letter-spacing: 0.05em;
@@ -845,8 +846,8 @@
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: var(--bar-tools-bg);
-  color: var(--bar-text);
+  background: var(--surface-2);
+  color: var(--text);
   cursor: grab;
   /* A drag turns the knob: the page must not scroll or zoom, and a long press must not select
      text or open a menu. */
@@ -882,17 +883,17 @@
 }
 
 .tempoKnobTrack {
-  stroke: var(--bar-dim);
+  stroke: var(--text-dim);
   stroke-opacity: 0.35;
 }
 
 .tempoKnobValueArc {
-  stroke: var(--bar-selected);
+  stroke: var(--accent);
 }
 
 .tempoKnobGrip {
   transform-origin: 28px 28px;
-  fill: var(--bar-text);
+  fill: var(--text);
 }
 
 /* After a drag the grip settles on the tempo. During a drag it follows the finger at once, and
@@ -926,7 +927,7 @@
 
 .tempoKnobCaption {
   margin-top: 1px;
-  color: var(--bar-dim);
+  color: var(--text-dim);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -942,9 +943,9 @@
   height: 100%;
   margin: 0;
   padding: 0;
-  color: var(--bar-text);
-  background: var(--bar-tools-bg);
-  border: 3px solid var(--bar-selected);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 3px solid var(--accent);
   border-radius: 50%;
   font-size: 22px;
   font-weight: 700;
@@ -995,7 +996,7 @@
 #metronomeChoices {
   display: inline-flex;
   padding: 2px;
-  background: var(--bar-line);
+  background: var(--line);
   border-radius: 6px;
 }
 
@@ -1024,7 +1025,7 @@
 }
 
 .metronomeButton.buttonSelected {
-  background: var(--bar-selected);
+  background: var(--accent);
 }
 
 .metronomeButton.Options {
@@ -1063,9 +1064,19 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+/* An option is on (Solo, Speed up or an offset): the cog is filled like the other buttons that
+   are on. */
 .metronomeButton.Options.selected {
-  color: #68c2ff;
-  background: none;
+  color: var(--accent-text);
+  background: var(--accent);
+}
+
+.metronomeButton.Options.selected:hover {
+  background: var(--accent-hover);
+}
+
+.metronomeButton.Options.selected:active {
+  background: var(--accent-active);
 }
 
 /* Popovers. */
@@ -1108,7 +1119,7 @@
 .tool-popover .subdivision.buttonSelected {
   color: #fff;
   font-weight: 700;
-  background: var(--bar-selected);
+  background: var(--accent);
 }
 
 .tool-popover .subdivision.disabled {
@@ -1118,7 +1129,7 @@
 }
 
 .tool-popover .tool-danger {
-  color: var(--bar-danger);
+  color: var(--danger);
 }
 
 /* Keeps Clear all notes apart from the other actions. */
@@ -1181,7 +1192,7 @@
 
 #KeyButton input:checked + #LegendLabel {
   color: #fff;
-  background: var(--bar-selected);
+  background: var(--accent);
 }
 
 #swingPopover {
@@ -1241,7 +1252,7 @@
 
 /* The keyboard focus on a menu item. Inset, so the round corners of the menu do not cut it. */
 .noteContextMenu > ul.list li:focus-visible {
-  outline: 2px solid #1f73a8;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 
@@ -1258,14 +1269,14 @@
 
 .grooveListUL {
   padding-bottom: 8px;
-  color: var(--lp-text);
+  color: var(--text);
   background: none;
 }
 
 .grooveListHeader {
   margin: 0;
   padding: 16px 16px 4px;
-  color: var(--lp-muted);
+  color: var(--text-dim);
   background: none;
   font: inherit;
   font-size: 14px;
@@ -1297,8 +1308,8 @@
 }
 
 .grooveListLI:hover {
-  color: var(--lp-text);
-  background: var(--lp-surface);
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 #undoButton {

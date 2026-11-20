@@ -2,15 +2,14 @@
    the grid, and the chip in the playback bar says what plays. js/partPlayControl.js. */
 
 #measureContainer {
-  /* The playhead blue. The playhead (0.2, an inline style) replaces the shade on its cell. */
-  --part-shade: rgba(50, 126, 173, 0.09);
   --ruler-track: #eef1f3;
   --ruler-text: #5b6870;
 }
 
-/* The selected beats in the grid. Lighter than the playhead, so the playhead shows on top. */
+/* The selected beats in the grid. Lighter than the playhead, so the playhead shows on top. The
+   playhead (0.2, an inline style) replaces the shade on its cell. */
 #musicalInput .bg-highlight.is-part-selected {
-  background: var(--part-shade);
+  background: var(--accent-shade);
 }
 
 /* The ruler is the 44 px header row above its bar. It takes no width from the bar. */
@@ -51,7 +50,7 @@
 }
 
 #musicalInput .bar-ruler-bar:focus-visible {
-  outline: 2px solid var(--bar-selected);
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: 6px;
 }
@@ -132,12 +131,12 @@
   }
 
   #musicalInput .bar-ruler-bar:hover {
-    color: var(--bar-selected);
+    color: var(--accent);
   }
 }
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-track {
-  background: var(--bar-selected);
+  background: var(--accent);
 }
 
 #musicalInput .bar-ruler-beat.is-selected .bar-ruler-num {
@@ -152,7 +151,7 @@
 }
 
 #musicalInput .bar-ruler-beat:focus-visible .bar-ruler-track {
-  outline: 2px solid var(--bar-selected);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
@@ -160,7 +159,7 @@
 #musicalInput .bar-ruler-beat.is-anchor .bar-ruler-track {
   box-shadow:
     inset 0 0 0 2px #fff,
-    0 0 0 2px var(--bar-selected);
+    0 0 0 2px var(--accent);
 }
 
 /* The Remove button stays on top of the ruler. */
@@ -181,8 +180,8 @@
   max-width: calc(100% - 24px);
   padding: 0 2px 0 14px;
   border-radius: 6px;
-  background: var(--bar-line);
-  color: var(--bar-text);
+  background: var(--line);
+  color: var(--text);
   font-size: 18px;
   white-space: nowrap;
 }
@@ -222,14 +221,14 @@
   border: 0;
   border-radius: 4px;
   background: none;
-  color: var(--bar-text);
+  color: var(--text);
   font-size: 20px;
   cursor: pointer;
 }
 
 @media (hover: hover) {
   #partPlayChip .part-play-clear:hover {
-    background: var(--bar-playback-bg);
+    background: var(--surface-1);
   }
 }
 
