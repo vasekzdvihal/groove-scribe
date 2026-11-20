@@ -32,9 +32,16 @@ Rules:
 - `css/tokens.css` holds the colours, the 6 px corner radius (`--radius`) and the focus ring
   colour (`--focus-ring`). It also has the one button shape: `.btn`, `.btn-primary` and
   `.btn-danger`. Use them for a button in the side panel, a dialog or a popup. A tool in a bar is
-  a `.tool` with the same corners. Every button has 6 px corners and is at least 44 px tall. Only
-  round controls, such as the tempo knob and the avatar, stay round.
-  `tests-e2e/visual-system.spec.js` checks it.
+  a `.tool` with the same corners. The buttons of the bars, the side panel, the dialogs and the
+  popups have 6 px corners and are at least 44 px tall (`tests-e2e/visual-system.spec.js`). So
+  does the sound Retry button under the player, in the editor and in the embed
+  (`tests/css-tokens.test.js`). Exceptions: round controls, such as the tempo knob and the
+  avatar, stay round. The rows of a popover menu and of the note menu fill the menu and have
+  square corners.
+- A hover fill is for a mouse only. Put each `:hover` fill in `@media (hover: hover)`: on a
+  tablet the hover fill stays on a tapped button until the next tap. A press shows with
+  `:active`. iPad Safari applies `:active` only when the page has a touch listener, so
+  `js/main.js` adds an empty, passive `touchstart` listener to the document.
 - View mode writes `display: block` or `none` on every `.edit-block`. A `.edit-block` button must
   not need another display value: put its layout on an inner `.tool-in` span.
 - The player markup is shared with the embed pages. `initPlaybackControls` in

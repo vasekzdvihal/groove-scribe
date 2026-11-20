@@ -394,7 +394,7 @@ input[type='range']:active::-webkit-slider-thumb {
   margin: 4px 6px;
   padding: 8px 16px;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: var(--danger);
   color: #ffffff;
   font-family: inherit;
@@ -405,14 +405,17 @@ input[type='range']:active::-webkit-slider-thumb {
   display: inline-block;
   margin: 4px 6px;
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: #333333;
   color: #ffffff;
   font-family: inherit;
   font-size: 16px;
 }
-.soundRetry:hover {
-  background: #c02e20;
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  .soundRetry:hover {
+    background: #c02e20;
+  }
 }
 .midiPlayImage:focus-visible {
   outline: 3px solid #ffffff;

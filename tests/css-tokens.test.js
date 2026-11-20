@@ -91,4 +91,18 @@ describe('the colour tokens', () => {
     expect(tokens).toBeGreaterThan(-1);
     expect(tokens).toBeLessThan(embed.indexOf("'../css/groove_display.css'"));
   });
+
+  // The sound status under the player: Retry is a button like every other, and the loading note
+  // in its place has the same shape. The embed (groove_display.css) and the editor copy
+  // (groove_display_orange.css) both load tokens.css.
+  it('gives Retry and the loading note the button corners in the embed and the editor', () => {
+    for (const file of ['css/groove_display.css', 'css/groove_display_orange.css']) {
+      for (const selector of ['.soundRetry', '.soundLoading']) {
+        const rule = new RegExp(`(^|\\n)${escape(selector)} \\{([^}]*)\\}`).exec(read(file));
+        expect(rule?.[2], `${file} ${selector}`).toMatch(/border-radius: var\(--radius\);/);
+      }
+      const retry = new RegExp(`(^|\\n)\\.soundRetry \\{([^}]*)\\}`).exec(read(file));
+      expect(retry?.[2], `${file} .soundRetry`).toMatch(/min-height: 44px;/);
+    }
+  });
 });
