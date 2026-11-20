@@ -381,7 +381,6 @@ body {
   display: table-cell;
 }
 .notes-container {
-  font-family: Times New Roman; /* parens around snare ghost note, R for Ride */
   position: relative;
   z-index: 4;
 }

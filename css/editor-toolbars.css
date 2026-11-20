@@ -371,6 +371,7 @@
 /* Nothing follows the grid, so it has no line below it, and it ends at the add-measure button. */
 #musicalInput {
   container: note-grid / inline-size;
+  font-family: 'Lato', Calibri, sans-serif;
   text-align: left;
   border-bottom: 0;
 }

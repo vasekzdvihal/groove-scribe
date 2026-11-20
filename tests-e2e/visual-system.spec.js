@@ -194,3 +194,16 @@ test('the note key shows its focus ring, on and off', async ({ page }) => {
     expect(contrastRatio(now.outline, now.fill), `checked: ${checked}`).toBeGreaterThanOrEqual(3);
   }
 });
+
+// The grid text is Lato like the rest of the editor. It does not keep the old Times New Roman.
+test('the grid text uses Lato', async ({ page }) => {
+  await page.goto('/index.html' + GROOVE);
+  await page.waitForSelector('#svgTarget svg');
+  for (const selector of ['.hh-label', '.sticking_count', '.sticking_left', '.notes-container']) {
+    const family = await page
+      .locator(selector)
+      .first()
+      .evaluate((node) => getComputedStyle(node).fontFamily);
+    expect(family, selector).toMatch(/^"?Lato"?,/);
+  }
+});
