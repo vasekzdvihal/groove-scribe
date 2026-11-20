@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
@@ -8,6 +16,29 @@ import {
   serviceWorkerVersion,
   writeServiceWorker,
 } from '../../scripts/build-www.mjs';
+
+// The build copies css/ and font-awesome/ whole, so a file in the source tree ships in www/.
+describe('the files the build copies', () => {
+  const root = process.cwd();
+
+  it.each(['css/groove_writer.css', 'css/groove_display_grey.css', 'font-awesome/4.3.0'])(
+    'has no unused %s',
+    (path) => {
+      expect(existsSync(join(root, path))).toBe(false);
+    }
+  );
+
+  it('keeps only the Font Awesome 4.7.0 stylesheet and its woff2 and woff fonts', () => {
+    const list = (path) => readdirSync(join(root, path)).sort();
+    expect(list('font-awesome')).toEqual(['4.7.0']);
+    expect(list('font-awesome/4.7.0')).toEqual(['css', 'fonts']);
+    expect(list('font-awesome/4.7.0/css')).toEqual(['font-awesome.min.css']);
+    expect(list('font-awesome/4.7.0/fonts')).toEqual([
+      'fontawesome-webfont.woff',
+      'fontawesome-webfont.woff2',
+    ]);
+  });
+});
 
 describe('checkWwwContents', () => {
   let dir;
@@ -111,6 +142,15 @@ describe('the service worker build', () => {
     ]);
   });
 
+  // The share popup loads these when it opens, so the editor needs them offline too.
+  it('precaches the share button script and stylesheet', () => {
+    put('js/share-button.min.js');
+    put('css/share-button.min.css');
+    expect(precacheList(dir)).toEqual(
+      expect.arrayContaining(['js/share-button.min.js', 'css/share-button.min.css'])
+    );
+  });
+
   it('picks up a new file without a list to update', () => {
     put('js/added.js');
     expect(precacheList(dir)).toContain('js/added.js');
@@ -119,9 +159,7 @@ describe('the service worker build', () => {
   it.each([
     'sw.js',
     'GrooveEmbed.html',
-    'font-awesome/4.3.0/css/font-awesome.min.css',
-    'font-awesome/4.7.0/fonts/fontawesome-webfont.ttf',
-    'font-awesome/4.7.0/less/core.less',
+    'font-awesome/4.7.0/fonts/fontawesome-webfont.woff',
     'MIDI.js/inc/SoundManager2/script/soundmanager2.js',
     'fonts/LATO-OFL-LICENSE.txt',
   ])('does not precache %s', (path) => {

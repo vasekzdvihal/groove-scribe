@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { axeScan, seriousOrWorse } from '../tests-e2e/a11y-helpers.js';
+import { axeScan, contrastRatio, seriousOrWorse } from '../tests-e2e/a11y-helpers.js';
 
 const QUERY = '?TimeSig=4/4&Div=16&Title=Paradiddle&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
 const EDITOR = '/index.html?emulator=1';
@@ -707,6 +707,28 @@ test.describe('the keyboard in a groove menu', () => {
     await expect(page.locator('.lp-groove .lp-actions')).toHaveCount(1);
     expect(seriousOrWorse(await axeScan(page, { include: '#sidePanel' }))).toEqual([]);
   });
+
+  // D2 of the visual system: 6 px corners and a 44 px touch target on every button. The
+  // avatar in the top bar stays round.
+  test('every library button has one shape', async ({ page }) => {
+    await signedInPanel(page);
+    await createLesson(page, 'Week 1');
+    await addLink(page, QUERY, 'Paradiddle');
+    await grooveMore(page).click();
+    await page.locator('#lpSaveToolButton').click();
+    await expect(page.locator('#lpSaveForm')).toBeVisible();
+    const offShape = await page.locator('#sidePanel').evaluate((panel) =>
+      [...panel.querySelectorAll('button')]
+        .filter((node) => node.getClientRects().length)
+        .map((node) => ({ node, style: getComputedStyle(node) }))
+        .filter(({ node, style }) => style.borderRadius !== '6px' || node.offsetHeight < 44)
+        .map(({ node, style }) => `${node.id || node.textContent.trim()}: ${style.borderRadius}`)
+    );
+    expect(offShape).toEqual([]);
+    expect(
+      await page.locator('#helpAnchor').evaluate((node) => getComputedStyle(node).borderRadius)
+    ).toBe('50%');
+  });
 });
 
 const UNTITLED_QUERY = '?TimeSig=4/4&Div=16&Tempo=95&Measures=1&H=|x-x-|&S=|--O-|&K=|o---|';
@@ -890,8 +912,8 @@ test.describe('updating a saved groove', () => {
 
     await saveTool(page).click();
     await expect(page.locator('#lpSaveTitle')).toHaveValue('Paradiddle');
-    await expect(updateButton(page)).toHaveClass(/lp-primary/);
-    await expect(saveAsNewButton(page)).not.toHaveClass(/lp-primary/);
+    await expect(updateButton(page)).toHaveClass(/btn-primary/);
+    await expect(saveAsNewButton(page)).not.toHaveClass(/btn-primary/);
     await expect(plainSaveButton(page)).toHaveCount(0);
     await updateButton(page).click();
     await expect(updateButton(page)).toBeHidden();
@@ -1097,7 +1119,7 @@ test.describe('updating a saved groove', () => {
     await signedInPanel(page);
     await editNote(page);
     await saveTool(page).click();
-    await expect(plainSaveButton(page)).toHaveClass(/lp-primary/);
+    await expect(plainSaveButton(page)).toHaveClass(/btn-primary/);
     await expect(updateButton(page)).toHaveCount(0);
     await expect(saveAsNewButton(page)).toHaveCount(0);
   });
@@ -1272,8 +1294,12 @@ test.describe('the Save button', () => {
 
     await saveButton(page).click();
     await expect(page.locator('#libraryPanel')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Sign in with Google' })).toBeFocused();
+    const signIn = page.getByRole('button', { name: 'Sign in with Google' });
+    await expect(signIn).toBeFocused();
     expect(sdkRequests).toHaveLength(1);
+    // The primary button has the accent of the editor (css/tokens.css) with white text.
+    await expect(signIn).toHaveCSS('background-color', 'rgb(31, 115, 168)');
+    await expect(signIn).toHaveCSS('color', 'rgb(255, 255, 255)');
   });
 
   test('signed in, it opens the panel at the save form, and the form saves', async ({ page }) => {
@@ -1285,6 +1311,17 @@ test.describe('the Save button', () => {
     await expect(page.locator('#lpSaveToolButton')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.locator('#lpSaveForm')).toBeVisible();
     await expect(page.locator('#lpSaveToolButton')).toBeFocused();
+    // The border and the underline show the open form. They need 3:1 on the panel.
+    const look = await page.locator('#lpSaveToolButton').evaluate((node) => {
+      const style = getComputedStyle(node);
+      return {
+        border: style.borderBottomColor,
+        underline: style.boxShadow,
+        panel: getComputedStyle(node.closest('.lp-tools')).backgroundColor,
+      };
+    });
+    expect(contrastRatio(look.border, look.panel)).toBeGreaterThanOrEqual(3);
+    expect(look.underline).toContain(look.border);
     await page.locator('#lpSaveTitle').fill('Mine');
     await page.getByRole('button', { name: 'Save groove' }).click();
     await expect(grooveButton(page, 'Mine')).toHaveAttribute('aria-current', 'true');

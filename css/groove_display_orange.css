@@ -1,15 +1,11 @@
 :root {
-  --header-bg-color: #243640;
+  --header-bg-color: var(--surface-header);
   --header-bg-start-color: #2a404d;
   --header-bg-end-color: #1c2b33;
   --bpm-bg-color: #222222;
   --side-bg-color: #393939;
   --bottom-bg-color: #393939;
-  --side-highlight-bg-color: #1f73a8;
   --note-overlay-bg-color: #bdebdd;
-
-  --highlight-color: #1f73a8;
-  --highlight-color-on-white: #1f73a8;
 }
 
 /* this is for debugging layout issues - puts a read border around everything */
@@ -28,7 +24,7 @@ body {
   display: block;
 }
 
-/* there is another .svgTarget definitiion in groove_writer.css */
+/* groove_writer_orange.css has another .svgTarget definition */
 .svgTarget {
   width: 100%;
 }
@@ -94,21 +90,24 @@ body {
   background: #666666;
   margin: 4px 4px 4px 4px;
 }
-.midiPlayImage:hover,
-.midiRepeatImage:hover {
-  color: #ffffff;
-  background: #777777;
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  .midiPlayImage:hover,
+  .midiRepeatImage:hover {
+    color: #ffffff;
+    background: #777777;
+  }
 }
 .midiExpandImage {
   font-size: 26px;
   transition: all 0.6s ease-in-out;
 }
 .midiExpandImage.small:hover {
-  color: #68c2ff;
+  color: var(--accent-hover);
   transform: scale(1.4);
 }
 .midiExpandImage.large:hover {
-  color: #68c2ff;
+  color: var(--accent-hover);
   transform: scale(0.8);
 }
 .midiPlayImage:before {
@@ -267,7 +266,7 @@ button {
   fill-opactity: 0.25;
 }
 .abcr.highlighted {
-  fill: var(--highlight-color) !important;
+  fill: var(--accent) !important;
   fill-opacity: 0.2;
 }
 #GrooveDB_MetaData,
@@ -309,7 +308,7 @@ input[type='range']:focus {
   outline: none;
 }
 input[type='range']:focus-visible {
-  outline: 2px solid #1f73a8;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 input[type='range']::-webkit-slider-runnable-track {
@@ -418,8 +417,8 @@ input[type='range']:active::-webkit-slider-thumb {
   margin: 4px 6px;
   padding: 8px 16px;
   border: 0;
-  border-radius: 4px;
-  background: #a8261a;
+  border-radius: var(--radius);
+  background: var(--danger);
   color: #ffffff;
   font-family: inherit;
   font-size: 16px;
@@ -429,24 +428,26 @@ input[type='range']:active::-webkit-slider-thumb {
   display: inline-block;
   margin: 4px 6px;
   padding: 8px 16px;
-  border-radius: 4px;
+  border-radius: var(--radius);
   background: #333333;
   color: #ffffff;
   font-family: inherit;
   font-size: 16px;
 }
-.soundRetry:hover {
-  background: #c02e20;
+@media (hover: hover) {
+  .soundRetry:hover {
+    background: #c02e20;
+  }
 }
 .midiPlayImage:focus-visible {
-  outline: 3px solid #ffffff;
+  outline: 3px solid var(--focus-ring, #ffffff);
   outline-offset: 2px;
-  box-shadow: 0 0 0 5px #1f73a8;
+  box-shadow: 0 0 0 5px var(--accent);
 }
 .soundRetry:focus-visible {
-  outline: 3px solid #ffffff;
+  outline: 3px solid var(--focus-ring, #ffffff);
   outline-offset: 2px;
-  box-shadow: 0 0 0 5px #1f73a8;
+  box-shadow: 0 0 0 5px var(--accent);
 }
 /* The small player is only 90 px wide, so the button goes beside it on one line. */
 .playerControl.small {

@@ -39,3 +39,34 @@ for (const [name, url] of [
     expect(requested.some((u) => /\/fonts\/lato-latin-ext-400-normal\.woff2/.test(u))).toBe(true);
   });
 }
+
+// The icons use Font Awesome 4.7.0. Only its woff2 and woff files ship, so the browser must load
+// the woff2. The embed and the editor load the same copy.
+for (const [name, url] of [
+  ['editor', '/index.html' + GROOVE],
+  ['embed', '/GrooveEmbed.html' + GROOVE],
+]) {
+  test(`${name} shows the Font Awesome 4.7.0 icons from the woff2 file`, async ({ page }) => {
+    const requested = [];
+    const failed = [];
+    page.on('request', (req) => requested.push(req.url()));
+    page.on('requestfailed', (req) => failed.push(req.url()));
+    page.on('response', (res) => {
+      if (res.status() >= 400) failed.push(res.url());
+    });
+    await page.goto(url);
+    await page.waitForSelector('svg');
+    const loaded = await page.evaluate(async () => {
+      await document.fonts.load('14px FontAwesome', '');
+      return document.fonts.check('14px FontAwesome', '');
+    });
+    expect(loaded).toBe(true);
+    const icons = requested.filter((u) => u.includes('font-awesome'));
+    expect(icons.some((u) => u.includes('font-awesome/4.7.0/css/font-awesome.min.css'))).toBe(true);
+    expect(
+      icons.some((u) => u.includes('font-awesome/4.7.0/fonts/fontawesome-webfont.woff2'))
+    ).toBe(true);
+    expect(icons.filter((u) => !u.includes('font-awesome/4.7.0/'))).toEqual([]);
+    expect(failed.filter((u) => u.includes('font-awesome'))).toEqual([]);
+  });
+}

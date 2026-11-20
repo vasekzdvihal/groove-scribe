@@ -49,6 +49,8 @@ groove is only its URL query string.
 - `js/` loads as native ES modules. There is no bundler: edit a file and refresh the page.
 - Modules run deferred, so there is no parse-time `document.write`. `main.js` and the inline
   module scripts build the DOM.
+- `main.js` starts the editor (`runsOnPageLoad`) as soon as it runs, not on the window load
+  event. That event waits for every image and font, so one stalled file kept the editor empty.
 - Use `import.meta.url` to find a script's own path. `document.currentScript` is null in modules.
 - In `eslint.config.js`, app source counts as classic script unless the file is in the module
   list. `tsconfig.json` `include` lists only the big files; small modules are checked through

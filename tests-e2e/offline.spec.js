@@ -123,6 +123,38 @@ test('an offline reload shows the editor and Play works', async ({ page, context
   expect(failed, failed.join('\n')).toEqual([]);
 });
 
+// The share popup loads its share button library when it opens. The worker precaches it, so
+// SHARE also shows offline, and the second opening loads nothing again.
+test('the share popup opens offline with the URL, Copy and Share', async ({
+  page,
+  context,
+  site,
+}) => {
+  await page.goto(`/index.html?sw=1&${GROOVE}`);
+  await page.waitForSelector('#svgTarget svg');
+  await waitForWorker(page);
+  await goOffline(context, site);
+  await page.reload();
+  await page.waitForSelector('#svgTarget svg');
+
+  // Only the site's own files count. The library asks for the Facebook SDK, which fails offline.
+  const failed = [];
+  page.on('requestfailed', (request) => {
+    if (request.url().startsWith(site.origin)) failed.push(request.url());
+  });
+  const popup = page.locator('#fullURLPopup');
+  for (const opening of [1, 2]) {
+    await page.click('#shareSaveButton');
+    await expect(popup, `opening ${opening}`).toBeVisible();
+    await expect(page.locator('#fullURLPopupTextField')).toHaveValue(/TimeSig=4\/4/);
+    await expect(page.locator('#fullURLPopupCopyButton')).toBeVisible();
+    await expect(page.locator('#shareButton')).toBeVisible();
+    await page.click('#fullURLPopupCloseButton');
+    await expect(popup).toBeHidden();
+  }
+  expect(failed, failed.join('\n')).toEqual([]);
+});
+
 for (const [name, path, heading] of [
   ['help', '/gscribe_help.html', 'Help'],
   ['about', '/gscribe_about.html', 'About'],

@@ -31,6 +31,9 @@ After you fix type errors, run `npm run typecheck -- --update` to lower the base
   sends a mouseenter by itself when the element under a still mouse changes (a dialog closes),
   and it takes the modifier keys from the real keyboard. A Ctrl held in a terminal during a run
   then painted a note under the mouse (`noteOnMouseEnter`) and failed a test now and then.
+- `tests-e2e/fixtures.js` attaches "page diagnostics" to a failed test: the console, page errors,
+  failed and unfinished requests, and the page state. The run output prints it under the error.
+  Read it before you call a failure flaky.
 - `npm run test:e2e` uses port 8010 and `npm run test:cloud` uses 8001. `reuseExistingServer` is
   false, so a busy port fails the run. Stop the other process first.
 

@@ -1,0 +1,104 @@
+/* The colours and the corner radius of the editor, the side panel, the dialogs, the Help and About
+   pages and the embed. Every page loads this file first. White text on each accent colour has a
+   contrast of 4.5:1 or more. The note colours of the grid are in js/constants.js, not here. */
+:root {
+  --accent: #1f73a8;
+  --accent-hover: #1a6493;
+  --accent-active: #155780;
+  --accent-text: #ffffff;
+  --accent-shade: rgba(31, 115, 168, 0.09);
+  --surface-1: #222a2f;
+  --surface-2: #2a3238;
+  --surface-header: #243640;
+  --text: #eef2f4;
+  --text-dim: #b4c0c7;
+  --line: #46525a;
+  --danger: #a8261a;
+  --danger-text: #f08a8a;
+  --radius: 6px;
+  /* The keyboard focus ring on the dark bars, the side panel and the dialogs. */
+  --focus-ring: #ffffff;
+}
+
+/* One button shape for the side panel, the dialogs and the popups. A neutral button has the
+   surface colour. .btn-primary is the one main action. .btn-danger loses data. The tool buttons
+   of the bars (.tool in css/editor-toolbars.css) have the same corners and height. */
+.btn {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--touch-size, 44px);
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--text);
+  font-family: Lato, system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+/* display above would show a button that has the hidden attribute. */
+.btn[hidden] {
+  display: none;
+}
+
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  .btn:hover {
+    background: color-mix(in srgb, var(--surface-2) 85%, var(--text));
+  }
+}
+
+/* A tablet shows no hover, so a press has its own, darker step. */
+.btn:active {
+  background: var(--surface-1);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  color: var(--accent-text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+@media (hover: hover) {
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+}
+
+.btn-primary:active {
+  background: var(--accent-active);
+  border-color: var(--accent-active);
+}
+
+/* White text on --danger has a contrast of 7:1. */
+.btn-danger {
+  color: #ffffff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+@media (hover: hover) {
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--danger) 85%, #000000);
+    border-color: color-mix(in srgb, var(--danger) 85%, #000000);
+  }
+}
+
+.btn-danger:active {
+  background: color-mix(in srgb, var(--danger) 72%, #000000);
+  border-color: color-mix(in srgb, var(--danger) 72%, #000000);
+}

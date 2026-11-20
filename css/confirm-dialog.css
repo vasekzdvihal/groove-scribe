@@ -1,25 +1,16 @@
 /* The questions before notes are lost: unsaved edits and Clear all notes (js/confirmDialog.js).
-   They sit in the top layer, in the middle of the screen, and have the colours of the library
-   panel. */
+   They sit in the top layer, in the middle of the screen, and have the colours of the side
+   panel (css/tokens.css). */
 .confirm-dialog {
-  --dd-bg: #22262a;
-  --dd-surface: #2d3237;
-  --dd-text: #eceef0;
-  --dd-muted: #a7b0b6;
-  --dd-border: #4a5157;
-  --dd-accent: #63b1e6;
-  --dd-accent-text: #0d1a23;
-  --dd-danger: #f08a8a;
-
   box-sizing: border-box;
   width: min(360px, calc(100vw - 32px));
   max-width: none;
   margin: auto;
   padding: 20px;
-  color: var(--dd-text);
-  background: var(--dd-bg);
-  border: 1px solid var(--dd-border);
-  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   box-shadow: 0 12px 32px rgb(0 0 0 / 50%);
   font-family: Lato, system-ui, sans-serif;
   font-size: 16px;
@@ -41,7 +32,7 @@
 
 .confirm-dialog p {
   margin: 0 0 20px;
-  color: var(--dd-muted);
+  color: var(--text-dim);
 }
 
 .confirm-actions {
@@ -50,33 +41,9 @@
   gap: 8px;
 }
 
-.confirm-dialog button {
-  box-sizing: border-box;
+/* The buttons are .btn (css/tokens.css). They share the row. */
+.confirm-dialog .btn {
   flex: 1 1 auto;
-  min-height: 44px;
-  margin: 0;
-  padding: 8px 12px;
-  color: var(--dd-text);
-  background: var(--dd-surface);
-  border: 1px solid var(--dd-border);
-  border-radius: 6px;
-  font: inherit;
-  cursor: pointer;
-}
-
-.confirm-dialog .confirm-danger {
-  color: var(--dd-danger);
-}
-
-.confirm-dialog .confirm-primary {
-  color: var(--dd-accent-text);
-  background: var(--dd-accent);
-  border-color: var(--dd-accent);
-}
-
-.confirm-dialog button:focus-visible {
-  outline: 2px solid var(--dd-accent);
-  outline-offset: 1px;
 }
 
 /* The editor page has no viewport tag, so a phone lays it out about 980 px wide. The library

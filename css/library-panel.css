@@ -14,16 +14,29 @@
   box-sizing: border-box;
 }
 
-#libraryPanel button,
 #libraryPanel input,
 #libraryPanel select {
   min-height: 44px;
   max-width: 100%;
   padding: 8px 12px;
-  color: var(--lp-text);
-  background: var(--lp-surface);
-  border: 1px solid var(--lp-border);
-  border-radius: 6px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font: inherit;
+  cursor: pointer;
+}
+
+/* Most buttons are .btn (css/tokens.css). The rows of the list (a groove, a lesson name, ⋯)
+   have no fill and no border. :where keeps this rule weaker than .btn. */
+:where(#libraryPanel) button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 12px;
+  color: var(--text);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
   font: inherit;
   cursor: pointer;
 }
@@ -35,16 +48,6 @@
 
 #libraryPanel select {
   width: 100%;
-}
-
-#libraryPanel .lp-primary {
-  color: var(--lp-accent-text);
-  background: var(--lp-accent);
-  border-color: var(--lp-accent);
-}
-
-#libraryPanel .lp-danger {
-  color: var(--lp-danger);
 }
 
 .lp-body {
@@ -62,14 +65,14 @@
 #lpMessage {
   overflow-wrap: anywhere;
   padding: 8px 12px;
-  background: var(--lp-surface);
-  border: 1px solid var(--lp-danger);
-  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--danger-text);
+  border-radius: var(--radius);
 }
 
 #lpLoading,
 .lp-body .lp-empty {
-  color: var(--lp-muted);
+  color: var(--text-dim);
 }
 
 /* The tool buttons stay at the top while the list scrolls. */
@@ -82,8 +85,8 @@
   gap: 8px;
   margin: -12px -16px 0;
   padding: 12px 16px;
-  background: var(--lp-bg);
-  border-bottom: 1px solid var(--lp-border);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--line);
 }
 
 #libraryPanel .lp-tool-button {
@@ -103,24 +106,24 @@
   font-size: 18px;
 }
 
-/* The button of the open form: accent outline and underline on a tinted background. It must
+/* The button of the open form: a light outline and underline on an accent tint. It must
    not look like the filled submit button of the form. */
 #libraryPanel .lp-tool-button[aria-expanded='true'] {
-  color: var(--lp-accent);
-  background: rgb(99 177 230 / 14%);
-  border-color: var(--lp-accent);
-  box-shadow: inset 0 -3px 0 var(--lp-accent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: var(--text);
+  box-shadow: inset 0 -3px 0 var(--text);
 }
 
 /* A form opens below the buttons. The margin keeps it clear of them when it scrolls in. */
 .lp-tool {
   scroll-margin-top: 80px;
   padding-top: 12px;
-  border-bottom: 1px solid var(--lp-border);
+  border-bottom: 1px solid var(--line);
 }
 
 .lp-lesson {
-  border-bottom: 1px solid var(--lp-border);
+  border-bottom: 1px solid var(--line);
 }
 
 .lp-lesson-head {
@@ -140,8 +143,6 @@
   padding: 8px 0;
   font-weight: 600;
   text-align: left;
-  background: none;
-  border-color: transparent;
   overflow-wrap: anywhere;
 }
 
@@ -149,7 +150,7 @@
 #libraryPanel .lp-lesson-toggle::before {
   flex: none;
   width: 12px;
-  color: var(--lp-muted);
+  color: var(--text-dim);
   font: normal 12px/1 FontAwesome;
   text-align: center;
   content: '\f054';
@@ -169,7 +170,7 @@
   min-width: 20px;
   /* Room for the focus ring of ⋯. */
   margin-right: 6px;
-  color: var(--lp-muted);
+  color: var(--text-dim);
   font-size: 14px;
   text-align: right;
 }
@@ -201,33 +202,32 @@
   flex: 1 1 0;
   min-width: 0;
   text-align: left;
-  background: none;
-  border-color: transparent;
   overflow-wrap: anywhere;
 }
 
-#libraryPanel .lp-open:hover {
-  background: var(--lp-surface);
+/* Only a mouse hovers. On a touch screen the hover fill would stay after a tap. */
+@media (hover: hover) {
+  #libraryPanel .lp-open:hover {
+    background: var(--surface-2);
+  }
 }
 
 #libraryPanel .lp-open[aria-current='true'] {
-  color: #fff;
-  background: var(--lp-current);
+  color: var(--accent-text);
+  background: var(--accent);
 }
 
 #libraryPanel .lp-more {
   flex: none;
   width: 44px;
   padding: 0;
-  color: var(--lp-muted);
-  background: none;
-  border-color: transparent;
+  color: var(--text-dim);
 }
 
 #libraryPanel .lp-sync {
   flex: none;
   align-self: center;
-  color: var(--lp-muted);
+  color: var(--text-dim);
   font-size: 13px;
   font-weight: 400;
   white-space: nowrap;
@@ -280,7 +280,7 @@
 
 #libraryPanel .lp-hint {
   margin: 4px 0 0;
-  color: var(--lp-muted);
+  color: var(--text-dim);
   font-size: 14px;
   overflow-wrap: anywhere;
 }

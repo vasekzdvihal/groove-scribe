@@ -126,18 +126,18 @@ describe('GrooveWriter url-export (js/groove_writer.js)', () => {
       expect(() => gw.close_FullURLPopup()).not.toThrow();
     });
 
-    it('show_FullURLPopup throws because it constructs `new ShareButton(...)`, a vendored global (js/share-button.min.js) never loaded by this module-based test harness', async () => {
-      // show_FullURLPopup is a classic-script function that assumes
-      // share-button.min.js has already run as a <script> tag (as it does in
-      // index.html) to define the global `ShareButton`. Our test harness only
-      // loads groove_writer.js/groove_utils.js through the ES-module
-      // transform, so `ShareButton` is undefined here -- this is a test
-      // environment gap, not a groove_writer.js bug.
+    it('show_FullURLPopup opens the popup with the URL at once and starts to load the share button', async () => {
+      // jsdom loads no scripts, so the share button library never arrives here. The popup must
+      // not wait for it.
       const gw = await newGrooveWriter();
       buildGridDOM(gw, 1);
       buildURLPopupDOM();
 
-      expect(() => gw.show_FullURLPopup()).toThrow(/ShareButton is not defined/);
+      gw.show_FullURLPopup();
+
+      expect(document.getElementById('fullURLPopup').style.display).toBe('block');
+      expect(document.getElementById('fullURLPopupTextField').value).toContain('TimeSig=4/4');
+      expect(document.head.querySelector('script[src="js/share-button.min.js"]')).not.toBeNull();
     });
   });
 
