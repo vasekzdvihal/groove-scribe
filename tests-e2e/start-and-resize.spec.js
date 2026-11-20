@@ -101,3 +101,25 @@ test('the sound file is requested once, before the app asks for it', async ({ pa
     await page.locator('head link[rel="preload"][href$="soundfont/gunshot-ogg.js"]').count()
   ).toBe(1);
 });
+
+// The music and the note grid do not wait for the page's images and fonts. A slow or stalled
+// logo, Lato or icon font file (a weak network in the rehearsal room) once kept the editor
+// empty: it started on the window load event, and that event waits for every file. Each file
+// here never arrives.
+for (const [name, pattern] of [
+  ['the logo', '**/images/GScribe_Logo_word_stack.svg'],
+  ['Lato', '**/fonts/lato-latin-*.woff2'],
+  ['the icon font', '**/font-awesome/4.7.0/fonts/fontawesome-webfont.woff2*'],
+]) {
+  test(`the editor starts while ${name} still loads`, async ({ page }) => {
+    const held = [];
+    await page.route(pattern, (route) => held.push(route));
+    await page.goto('/index.html' + GROOVE, { waitUntil: 'commit' });
+    await expect(page.locator('#svgTarget svg')).toBeVisible();
+    await expect(page.locator('#hi-hat0')).toBeAttached();
+    await expect(page.locator('[id^="midiPlayImage"]')).toHaveClass(/Stopped/);
+    expect(await page.evaluate(() => document.readyState)).not.toBe('complete');
+    // Let the page close without waiting for the held files.
+    await Promise.all(held.map((route) => route.abort()));
+  });
+}

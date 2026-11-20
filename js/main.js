@@ -276,13 +276,13 @@ window.addEventListener('pageshow', (event) => {
   if (event.persisted) dirtyState.remember(window.location.search);
 });
 
-// Initialize the notes/player once the page has fully loaded (matches the
-// original window.onload handler).
-window.addEventListener('load', function () {
-  myGrooveWriter.runsOnPageLoad();
-  // The groove the page starts with, from a link or the default, is clean until it is edited.
-  // A reloaded page keeps the clean groove it had, also signed out.
-  dirtyState.markStart(baseline ?? editor.currentQuery());
-  dirtyState.remember(window.location.search);
-  initPlaybackControls(utils);
-});
+// Start the notes and the player now. A module runs when the page is parsed, after the
+// stylesheets and the classic scripts in <head>. Do not wait for the window load event: it
+// waits for every image and font too, and one slow or stalled file (the logo, a font on a
+// weak network) then kept the editor empty (tests-e2e/start-and-resize.spec.js).
+myGrooveWriter.runsOnPageLoad();
+// The groove the page starts with, from a link or the default, is clean until it is edited.
+// A reloaded page keeps the clean groove it had, also signed out.
+dirtyState.markStart(baseline ?? editor.currentQuery());
+dirtyState.remember(window.location.search);
+initPlaybackControls(utils);
