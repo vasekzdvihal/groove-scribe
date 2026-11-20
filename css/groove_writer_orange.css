@@ -213,7 +213,7 @@ body {
 .left-button.buttonSelected:hover {
   /* is subdivision and is selected */
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   cursor: auto;
   transform: scale(1.1);
 }
@@ -1036,6 +1036,10 @@ hr {
 :is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration) .btn:not(.btn-primary):hover {
   background: #dce3e7;
 }
+:is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration)
+  .btn:not(.btn-primary):active {
+  background: #c3ccd2;
+}
 :is(#timeSigPopup, #fullURLPopup, #metronomeAutoSpeedupConfiguration) .btn:focus-visible {
   outline-color: var(--accent);
 }
@@ -1130,6 +1134,9 @@ hr {
 #shareButton:hover {
   color: #14191c;
   background: #dce3e7;
+}
+#shareButton:active {
+  background: #c3ccd2;
 }
 #shareButton::before {
   top: calc(50% - 0.5em);
