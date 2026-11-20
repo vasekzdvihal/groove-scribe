@@ -577,6 +577,39 @@
   margin-top: 7px;
 }
 
+/* The hi-hat symbols are Font Awesome glyphs. Each one has a line box in its own font, so the
+   text font of the grid does not move it. The X and the other hi-hat sounds sit in the middle of
+   the lane, like the circles in the other lanes. The open, close and accent marks sit above the
+   X (tests-e2e/visual-system.spec.js measures the glyphs). */
+#musicalInput .hi-hat .note_part {
+  font-family: FontAwesome;
+  line-height: 1;
+}
+
+#musicalInput
+  .hi-hat
+  :is(
+    .hh_cross,
+    .hh_crash,
+    .hh_ride,
+    .hh_ride_bell,
+    .hh_cow_bell,
+    .hh_stacker,
+    .hh_metronome_normal,
+    .hh_metronome_accent
+  ) {
+  /* A Font Awesome glyph sits about 0.05 em below the middle of its box. */
+  top: calc(50% - 0.55em);
+}
+
+#musicalInput .hi-hat :is(.hh_open, .hh_close) {
+  top: -1px;
+}
+
+#musicalInput .hi-hat .hh_accent {
+  top: -6px;
+}
+
 /* The keyboard focus on a note cell. Inset, so the ring does not cover the next cell and the
    bar's overflow clip does not cut it. */
 #musicalInput [role='gridcell']:focus-visible {
@@ -633,11 +666,6 @@
 /* Labels start at the left edge, also when a name goes onto two lines. */
 #musicalInput .line-labels > div {
   text-align: left;
-}
-
-/* The hi-hat symbols sit low in their lane. */
-#musicalInput .line-labels .hh-label {
-  padding-top: 8px;
 }
 
 #musicalInput .line-labels .kick-label {

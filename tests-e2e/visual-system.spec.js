@@ -353,3 +353,87 @@ test('the share button is built once and its flyout opens after reopens', async 
   await expect(networks.first()).toBeVisible();
   expect(await page.evaluate(() => window.__shareButtonBuilds)).toBe(1);
 });
+
+// A note symbol is centred in its lane, like the circles of the snare, toms and kick. The hi-hat
+// X is a Font Awesome glyph, so its place depends on the line box of its cell, not on the glyph
+// alone. The test measures the ink of the glyph: the box of the <i> has empty space above the
+// X. The open, close and accent marks sit above the X and do not touch it.
+const glyphInk = (icon) => {
+  const probe = document.createElement('span');
+  probe.style.cssText = 'display: inline-block; width: 0; height: 0';
+  icon.append(probe);
+  const baseline = probe.getBoundingClientRect().bottom;
+  probe.remove();
+  // A scaled cell (a note that is off, a narrow 1/32 cell) scales the glyph too.
+  const scale = icon.getBoundingClientRect().height / icon.offsetHeight;
+  const style = getComputedStyle(icon);
+  const context = document.createElement('canvas').getContext('2d');
+  context.font = `${style.fontSize} ${style.fontFamily}`;
+  const glyph = getComputedStyle(icon, '::before').content.replace(/"/g, '');
+  const metrics = context.measureText(glyph);
+  return {
+    top: baseline - metrics.actualBoundingBoxAscent * scale,
+    bottom: baseline + metrics.actualBoundingBoxDescent * scale,
+  };
+};
+
+const HIHAT_GROOVES = {
+  '1/16':
+    '?TimeSig=4/4&Div=16&Measures=1&H=|xoX+-xxxxxxxxxxx|&S=|----O-------O---|&K=|o-------o-------|',
+  '1/32':
+    '?TimeSig=4/4&Div=32&Measures=2&H=|xoX+-xxxxxxxxxxxxxxxxxxxxxxxxxxx|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|&S=|--------O---------------O-------|--------O---------------O-------|&K=|o---------------o---------------|o---------------o---------------|',
+};
+
+for (const [width, height] of [
+  [1024, 768],
+  [768, 1024],
+  [1440, 900],
+]) {
+  for (const [division, query] of Object.entries(HIHAT_GROOVES)) {
+    test(`the hi-hat X is centred in its lane, ${division} at ${width}x${height}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height });
+      await page.goto('/index.html' + query);
+      await page.waitForSelector('#svgTarget svg');
+      await page.evaluate(() => document.fonts.ready);
+      const result = await page.evaluate(
+        ({ inkSource }) => {
+          const ink = new Function(`return ${inkSource}`)();
+          const lane = document.getElementById('hi-hat0').parentElement;
+          const box = lane.getBoundingClientRect();
+          // The lane above its line: the content box, without the bottom border.
+          const laneMiddle = box.top + lane.clientTop + lane.clientHeight / 2;
+          const marks = {};
+          for (const [cell, mark] of [
+            [1, 'hh_open'],
+            [2, 'hh_accent'],
+            [3, 'hh_close'],
+          ]) {
+            const x = ink(document.querySelector(`#hh_cross${cell} i`));
+            const m = ink(document.querySelector(`#${mark}${cell} i`));
+            marks[mark] = { gap: x.top - m.bottom, aboveLane: box.top - m.top };
+          }
+          const offset = (cell) => {
+            const x = ink(document.querySelector(`#hh_cross${cell} i`));
+            return (x.top + x.bottom) / 2 - laneMiddle;
+          };
+          return { on: offset(0), off: offset(4), marks };
+        },
+        { inkSource: glyphInk.toString() }
+      );
+      expect(
+        Math.abs(result.on),
+        `X on, ${result.on.toFixed(1)} px off centre`
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(result.off),
+        `X off, ${result.off.toFixed(1)} px off centre`
+      ).toBeLessThanOrEqual(1);
+      for (const [mark, { gap, aboveLane }] of Object.entries(result.marks)) {
+        expect(gap, `${mark} touches the X`).toBeGreaterThanOrEqual(1.5);
+        expect(aboveLane, `${mark} goes out of the lane`).toBeLessThanOrEqual(0);
+      }
+    });
+  }
+}
