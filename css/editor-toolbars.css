@@ -758,8 +758,9 @@
 #musicalInput #addMeasureButton:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
-  /* Only the ring is round. A radius on the button would cut its corners out of the 44 px tap
-     area (tests-e2e/part-play.spec.js). */
+  /* The radius applies only while the keyboard focus shows, so the ring is round. A tap still
+     gets the square 44 px box: a radius at rest would cut its corners out of the tap area
+     (tests-e2e/part-play.spec.js). */
   border-radius: var(--radius);
 }
 
