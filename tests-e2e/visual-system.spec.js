@@ -534,3 +534,73 @@ test('the editor listens for touches, so pressed buttons show on an iPad', async
   const listeners = await page.evaluate(() => window.__documentTouchListeners);
   expect(listeners).toContainEqual({ passive: true });
 });
+
+// The other glyphs of the grid are centred too: the cross stick X, the buzz bars and the ghost
+// note "( · )" in the snare lane, the accent chevron in its circle, and the hi-hat foot splash X
+// below the kick circle.
+const GLYPH_GROOVE =
+  '?TimeSig=4/4&Div=16&Measures=1&H=|x-x-x-x-x-x-x-x-|&S=|gxbO------------|&K=|x-X-------------|';
+
+for (const [width, height] of [
+  [1024, 768],
+  [768, 1024],
+]) {
+  test(`the snare and kick glyphs are centred, at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto('/index.html' + GLYPH_GROOVE);
+    await page.waitForSelector('#svgTarget svg');
+    await page.evaluate(() => document.fonts.ready);
+    const offsets = await page.evaluate(
+      ({ inkSource }) => {
+        const faInk = new Function(`return ${inkSource}`)();
+        // The ink of plain text, such as the brackets of the ghost note.
+        const textInk = (node, text) => {
+          const probe = document.createElement('span');
+          probe.style.cssText = 'display: inline-block; width: 0; height: 0';
+          node.append(probe);
+          const baseline = probe.getBoundingClientRect().bottom;
+          probe.remove();
+          const style = getComputedStyle(node);
+          const context = document.createElement('canvas').getContext('2d');
+          context.font = `${style.fontSize} ${style.fontFamily}`;
+          const metrics = context.measureText(text);
+          return {
+            top: baseline - metrics.actualBoundingBoxAscent,
+            bottom: baseline + metrics.actualBoundingBoxDescent,
+          };
+        };
+        const centre = ({ top, bottom }) => (top + bottom) / 2;
+        const laneMiddle = (id) => {
+          const lane = document.getElementById(id).parentElement;
+          const box = lane.getBoundingClientRect();
+          return box.top + lane.clientTop + lane.clientHeight / 2;
+        };
+        const snare = laneMiddle('snare0');
+        // The splash X crosses the kick line. It sits in the middle between the bottom of the
+        // kick circle and the bottom of the kick lane, so the X and a kick in one cell do not
+        // touch.
+        const kickCell = document.getElementById('kick0').getBoundingClientRect();
+        const kickCircle = document.getElementById('kick_circle2').getBoundingClientRect();
+        const belowCircle = (kickCircle.bottom + kickCell.bottom) / 2;
+        const circle = document.getElementById('snare_circle3').getBoundingClientRect();
+        const icon = (selector) => document.querySelector(`${selector} i`);
+        return {
+          'ghost dot': centre(faInk(icon('#snare_ghost0'))) - snare,
+          'ghost brackets': centre(textInk(document.getElementById('snare_ghost0'), '(')) - snare,
+          'cross stick X': centre(faInk(icon('#snare_xstick1'))) - snare,
+          'buzz bars': centre(faInk(icon('#snare_buzz2'))) - snare,
+          'accent chevron in its circle':
+            centre(faInk(icon('#snare_accent3'))) - (circle.top + circle.bottom) / 2,
+          'splash X': centre(faInk(icon('#kick_splash0'))) - belowCircle,
+          'splash X of a kick and splash': centre(faInk(icon('#kick_splash2'))) - belowCircle,
+        };
+      },
+      { inkSource: glyphInk.toString() }
+    );
+    for (const [glyph, offset] of Object.entries(offsets)) {
+      expect
+        .soft(Math.abs(offset), `${glyph}, ${offset.toFixed(1)} px off centre`)
+        .toBeLessThanOrEqual(1);
+    }
+  });
+}

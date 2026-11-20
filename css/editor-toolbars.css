@@ -623,6 +623,35 @@
   top: -6px;
 }
 
+/* The cross stick X, the buzz bars and the splash X are Font Awesome glyphs too, with the same
+   line box as the hi-hat symbols. The X and the bars sit in the middle of the snare lane. The
+   splash X crosses the kick line, in the middle between the bottom of the kick circle (34 px
+   below the top of the cell) and the bottom of the cell, so it does not touch a kick in the
+   same cell. The 1 px is the cell border. */
+#musicalInput :is(.snare, .kick) :is(.snare_xstick, .snare_buzz, .kick_splash) {
+  margin-top: 0;
+  font-family: FontAwesome;
+  line-height: 1;
+}
+
+#musicalInput :is(.snare_xstick, .snare_buzz) {
+  top: calc(50% - 0.55em);
+}
+
+#musicalInput .kick_splash {
+  top: calc((34px + var(--kick-height)) / 2 - 1px - 0.55em);
+}
+
+/* The ghost note is "( · )": brackets in the grid font round a Font Awesome dot. The dot sits
+   in the middle of the brackets, and both in the middle of the lane. */
+#musicalInput .snare_ghost {
+  top: -3px;
+}
+
+#musicalInput .snare_ghost .dot_in_snare_ghost_note {
+  top: -3px;
+}
+
 /* The keyboard focus on a note cell. Inset, so the ring does not cover the next cell and the
    bar's overflow clip does not cut it. */
 #musicalInput [role='gridcell']:focus-visible {
